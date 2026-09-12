@@ -92,3 +92,37 @@ node_modules/
 .env.local
 *.keystore
 !Assets/**/*.keystore
+
+# ---------------------------------------------------------------------------
+# Правила из стандартного Unity.gitignore перенесённых проектов
+# ---------------------------------------------------------------------------
+.utmp/
+*.log
+mono_crash.*
+[Cc]aptures/
+.consulo/
+*.slnx
+*.pidb.meta
+
+# Blender сохраняет резервную копию рядом с файлом
+*.blend1
+*.blend1.meta
+
+# JetBrains Rider
+[Aa]ssets/Plugins/Editor/JetBrains*
+*.DotSettings.user
+
+# Addressables
+[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/link.xml*
+[Aa]ssets/Addressables_Temp*
+
+# Visual Scripting генерирует эти файлы сам
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
+[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
+
+# Сцены и кэш, создаваемые прогоном тестов
+InitTestScene*.unity*
+[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+[Aa]ssets/[Ss]ceneDependencyCache*

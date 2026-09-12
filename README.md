@@ -10,14 +10,19 @@
 
 ```
 .
-├── projects/           # Unity-проекты, по одному на папку
-│   ├── game-a/
-│   └── game-b/
-├── shared/             # Общие пакеты и ассеты между проектами
-├── tools/              # Скрипты сборки и служебные утилиты
-├── .gitattributes      # Правила Git LFS и правила слияния Unity YAML
+├── projects/                      # Unity-проекты, по одному на папку
+│   ├── First Learning Project/
+│   ├── GameShow_v4/
+│   └── SelfLearning/
+├── art-sources/                   # Исходники DCC вне Unity-проектов
+│   └── GameShow_v4/               # .blend, из которого экспортируются модели
+├── shared/                        # Общие пакеты и ассеты между проектами
+├── tools/                         # Скрипты сборки и служебные утилиты
+├── .gitattributes                 # Правила Git LFS и слияния Unity YAML
 └── .gitignore
 ```
+
+Папка `art-sources/` лежит вне `projects/` намеренно. Unity импортирует всё, что находит внутри `Assets/`, и на тяжёлом `.blend` тратит время при каждом запуске редактора.
 
 ---
 
@@ -64,7 +69,7 @@ git lfs pull
 
 ### 4. Откройте проект в Unity Hub
 
-Добавьте в Unity Hub папку конкретного проекта — например `projects/game-a`, а не корень репозитория.
+Добавьте в Unity Hub папку конкретного проекта — например `projects/GameShow_v4`, а не корень репозитория.
 
 ---
 
@@ -153,13 +158,13 @@ git lfs migrate import --include="*.fbx" --include-ref=HEAD~3..HEAD
 ```bash
 GIT_LFS_SKIP_SMUDGE=1 git clone <URL репозитория>
 cd unity-repo
-git lfs pull --include="projects/game-a/**"
+git lfs pull --include="projects/GameShow_v4/**"
 ```
 
 ### Постоянное правило для репозитория
 
 ```bash
-git config lfs.fetchinclude "projects/game-a/**,shared/**"
+git config lfs.fetchinclude "projects/GameShow_v4/**,shared/**"
 ```
 
 После этого `git pull` будет скачивать бинарники только указанных папок.
@@ -203,9 +208,9 @@ git config --global merge.unityyamlmerge.driver 'C:/Program Files/Unity/Hub/Edit
 Бинарный ассет нельзя слить. Два человека, правившие одну модель, получат конфликт, и одну из версий придётся выбросить. Для длинных правок берите блокировку.
 
 ```bash
-git lfs lock projects/game-a/Assets/Art/Character.fbx   # взять
+git lfs lock projects/GameShow_v4/Assets/Models/CrazyTime_Wheel.fbx   # взять
 git lfs locks                                            # посмотреть занятое
-git lfs unlock projects/game-a/Assets/Art/Character.fbx  # отпустить
+git lfs unlock projects/GameShow_v4/Assets/Models/CrazyTime_Wheel.fbx  # отпустить
 ```
 
 Блокировки работают только на хостинге с поддержкой LFS File Locking — GitHub, GitLab, Azure DevOps.
