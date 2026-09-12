@@ -29,26 +29,6 @@
 | Git LFS | 3.0 | `git lfs version` |
 | Unity Hub | любая | — |
 
-### Установка Git LFS
-
-**macOS**
-
-```bash
-brew install git-lfs
-```
-
-**Windows**
-
-```powershell
-winget install GitHub.GitLFS
-```
-
-**Linux (Debian/Ubuntu)**
-
-```bash
-sudo apt install git-lfs
-```
-
 ---
 
 ## Первый запуск
