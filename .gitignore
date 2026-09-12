@@ -126,3 +126,7 @@ mono_crash.*
 InitTestScene*.unity*
 [Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 [Aa]ssets/[Ss]ceneDependencyCache*
+
+# Отчёты прогона тестов
+test-results.xml
+*test-results.xml

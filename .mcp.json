@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "unity-ostrov": {
+      "command": "${HOME}/.unity/bin/unity",
+      "args": [
+        "mcp",
+        "--project-path",
+        "${HOME}/Projects/unity-repo/projects/Ostrov"
+      ],
+      "env": {}
+    },
+    "unity-gameshow": {
+      "command": "${HOME}/.unity/bin/unity",
+      "args": [
+        "mcp",
+        "--project-path",
+        "${HOME}/Projects/unity-repo/projects/GameShow_v4"
+      ],
+      "env": {}
+    },
+    "unity-selflearning": {
+      "command": "${HOME}/.unity/bin/unity",
+      "args": [
+        "mcp",
+        "--project-path",
+        "${HOME}/Projects/unity-repo/projects/SelfLearning"
+      ],
+      "env": {}
+    }
+  }
+}

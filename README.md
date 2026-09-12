@@ -11,15 +11,14 @@
 ```
 .
 ├── projects/                      # Unity-проекты, по одному на папку
-│   ├── First Learning Project/
-│   ├── GameShow_v4/
-│   └── SelfLearning/
+│   ├── <Project Name>/
 ├── art-sources/                   # Исходники DCC вне Unity-проектов
-│   └── GameShow_v4/               # .blend, из которого экспортируются модели
+│   └── <Project Name>/            # .blend, из которого экспортируются модели
 ├── shared/                        # Общие пакеты и ассеты между проектами
 ├── tools/                         # Скрипты сборки и служебные утилиты
 ├── .gitattributes                 # Правила Git LFS и слияния Unity YAML
-└── .gitignore
+├── .gitignore
+└── .mcp.json                      # MCP-серверы Unity, по одному на проект
 ```
 
 Папка `art-sources/` лежит вне `projects/` намеренно. Unity импортирует всё, что находит внутри `Assets/`, и на тяжёлом `.blend` тратит время при каждом запуске редактора.
@@ -81,6 +80,31 @@ git lfs pull
 
 - `Asset Serialization → Mode` = **Force Text**
 - `Version Control → Mode` = **Visible Meta Files**
+
+---
+
+## Unity MCP
+
+Файл `.mcp.json` в корне описывает по одному MCP-серверу на проект: `unity-ostrov`,
+`unity-gameshow`, `unity-selflearning`. Каждый сервер закреплён за своим проектом флагом
+`--project-path`, поэтому он всегда попадает в нужный редактор. Все редакторы можно держать
+открытыми одновременно.
+
+Сервер запускается командой `unity mcp` из Unity CLI. Установите CLI, если его нет:
+
+```bash
+curl -fsSL https://cli.unity.com/install.sh | sh
+```
+
+Редактор отвечает MCP-серверу только с пакетом `com.unity.pipeline`. В новый проект пакет
+добавляется командой:
+
+```bash
+unity pipeline install --project-path projects/<Проект>
+```
+
+Проверьте связку перед длинной сессией: выполните через MCP сниппет, который логирует
+`Application.dataPath`. Путь должен заканчиваться на `projects/<Проект>/Assets`.
 
 ---
 
