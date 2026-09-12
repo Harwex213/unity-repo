@@ -1,62 +1,37 @@
 ## ---------------------------------------------------------------------------
-## Общие правила
+## Слияние YAML-файлов Unity
+## Unity пишет .meta, .asset, .prefab, .unity и т.д. в YAML. Обычный merge
+## ломает такие файлы, поэтому для них указан драйвер UnityYAMLMerge.
+## Настройка драйвера описана в README.
 ## ---------------------------------------------------------------------------
-# Автоопределение текстовых файлов, в репозитории всегда LF.
-* text=auto eol=lf
+*.cs               diff=csharp
 
-## ---------------------------------------------------------------------------
-## Текстовые файлы Unity
-## Unity пишет .meta, .asset, .prefab, .unity и т.д. в YAML. Их нужно держать
-## текстом, иначе Git будет считать их бинарными и сломает diff/merge.
-## ---------------------------------------------------------------------------
-*.cs               text diff=csharp
-*.cginc            text
-*.shader           text
-*.hlsl             text
-*.compute          text
-*.uss              text
-*.uxml             text
-*.json             text
-*.xml              text
-*.yml              text
-*.yaml             text
-*.md               text
-*.txt              text
-*.asmdef           text
-*.asmref           text
-
-*.meta             text merge=unityyamlmerge eol=lf
-*.unity            text merge=unityyamlmerge eol=lf
-*.prefab           text merge=unityyamlmerge eol=lf
-*.asset            text merge=unityyamlmerge eol=lf
-*.mat              text merge=unityyamlmerge eol=lf
-*.anim             text merge=unityyamlmerge eol=lf
-*.controller       text merge=unityyamlmerge eol=lf
-*.overrideController text merge=unityyamlmerge eol=lf
-*.physicMaterial   text merge=unityyamlmerge eol=lf
-*.physicsMaterial2D text merge=unityyamlmerge eol=lf
-*.playable         text merge=unityyamlmerge eol=lf
-*.mask             text merge=unityyamlmerge eol=lf
-*.brush            text merge=unityyamlmerge eol=lf
-*.flare            text merge=unityyamlmerge eol=lf
-*.fontsettings     text merge=unityyamlmerge eol=lf
-*.guiskin          text merge=unityyamlmerge eol=lf
-*.giparams         text merge=unityyamlmerge eol=lf
-*.lighting         text merge=unityyamlmerge eol=lf
-*.mixer            text merge=unityyamlmerge eol=lf
-*.preset           text merge=unityyamlmerge eol=lf
-*.renderTexture    text merge=unityyamlmerge eol=lf
-*.shadervariants   text merge=unityyamlmerge eol=lf
-*.signal           text merge=unityyamlmerge eol=lf
-*.spriteatlas      text merge=unityyamlmerge eol=lf
-*.spriteatlasv2    text merge=unityyamlmerge eol=lf
-*.terrainlayer     text merge=unityyamlmerge eol=lf
-
-# Скрипты
-*.sh               text eol=lf
-*.bat              text eol=crlf
-*.cmd              text eol=crlf
-*.ps1              text eol=crlf
+*.meta             merge=unityyamlmerge
+*.unity            merge=unityyamlmerge
+*.prefab           merge=unityyamlmerge
+*.asset            merge=unityyamlmerge
+*.mat              merge=unityyamlmerge
+*.anim             merge=unityyamlmerge
+*.controller       merge=unityyamlmerge
+*.overrideController merge=unityyamlmerge
+*.physicMaterial   merge=unityyamlmerge
+*.physicsMaterial2D merge=unityyamlmerge
+*.playable         merge=unityyamlmerge
+*.mask             merge=unityyamlmerge
+*.brush            merge=unityyamlmerge
+*.flare            merge=unityyamlmerge
+*.fontsettings     merge=unityyamlmerge
+*.guiskin          merge=unityyamlmerge
+*.giparams         merge=unityyamlmerge
+*.lighting         merge=unityyamlmerge
+*.mixer            merge=unityyamlmerge
+*.preset           merge=unityyamlmerge
+*.renderTexture    merge=unityyamlmerge
+*.shadervariants   merge=unityyamlmerge
+*.signal           merge=unityyamlmerge
+*.spriteatlas      merge=unityyamlmerge
+*.spriteatlasv2    merge=unityyamlmerge
+*.terrainlayer     merge=unityyamlmerge
 
 ## ---------------------------------------------------------------------------
 ## Git LFS: изображения
