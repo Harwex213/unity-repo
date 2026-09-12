@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------------------
+# Unity-монорепозиторий.
+# Пути без ведущего слэша, поэтому правила работают на любой глубине —
+# в каждом проекте вида projects/<name>/.
+# ---------------------------------------------------------------------------
+
+# Генерируемые Unity папки
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Asset Store и загруженные пакеты
+[Aa]ssets/AssetStoreTools*
+[Aa]ssets/[Ss]treamingAssets/aa.meta
+[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Addressables
+[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+ServerData/
+
+# Файлы проектов IDE
+.vs/
+.vscode/
+.idea/
+.gradle/
+ExportedObj/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb.meta
+*.mdb
+*.mdb.meta
+*.opendb
+*.VC.db
+*.vsconfig
+
+# Автогенерируемые файлы Unity
+sysinfo.txt
+crashlytics-build.properties
+*.unitypackage.meta
+
+# Сборки и артефакты
+*.apk
+*.aab
+*.app
+*.ipa
+*.unitypackage
+*.xcarchive
+Builds/
+
+# Crash-репорты
+*.stackdump
+
+# JetBrains Rider
+*.sln.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# Node (инструменты, CI-скрипты)
+node_modules/
+
+# Локальные переменные окружения и секреты
+.env
+.env.local
+*.keystore
+!Assets/**/*.keystore
