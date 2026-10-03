@@ -6,6 +6,7 @@ import { getBuilding } from "../../core/buildings";
 import { HEX_ART } from "../../core/hex-art";
 import { canPlaceStronghold, STRONGHOLD_HEX_ART } from "../../core/stronghold";
 import { isRuinedStronghold } from "../../core/structure-hp";
+import { purifyRefusal, sacrificeRefusal } from "../../core/soil-cleanse";
 import { isDead } from "../../core/tax";
 import { findRoll } from "../../core/tax-plan";
 import {
@@ -21,12 +22,15 @@ import { useStore } from "../../store/store";
 import { useIslandGround } from "../ground/use-island-ground";
 import { HexHpBar } from "./hex-hp-bar";
 import { HexPlates } from "./hex-plates";
-import type { FC, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, FC, PointerEvent as ReactPointerEvent } from "react";
 import type { TBuildingId, TGameStage, THex, TIsland, TPlayer } from "../../core/types";
+import type { TSoilCleanseMode } from "../../store/ui-state";
 import type {
   TBuildOnHexAction,
+  TCancelSoilCleanseAction,
   THoverHexAction,
   TOpenTaxPickAction,
+  TPickSoilHexAction,
   TPlaceStrongholdAction,
   TRequestDemolishAction,
   TSelectHexAction,
@@ -67,6 +71,39 @@ const OUTLINE_WIDTH = 4;
  * shrinks by w / sqrt(3), so each edge moves inwards by w / 2.
  */
 const OUTLINE_POINTS = hexCornerPoints(HEX_SIZE - OUTLINE_WIDTH / Math.sqrt(3));
+/** Must match the stroke-width of `.hex-outline--candidate` in app.css. */
+const CANDIDATE_WIDTH = 4;
+/**
+ * A stronghold candidate draws its ring with a gap to the hex edge. Two
+ * touching candidates then show two equal rings, not one doubled band.
+ */
+const CANDIDATE_INSET = CANDIDATE_WIDTH / 2 + 2;
+const CANDIDATE_RADIUS = HEX_SIZE - CANDIDATE_INSET * (2 / Math.sqrt(3));
+/** The share of the island width that the shimmer band covers. */
+const SHIMMER_BAND = 0.3;
+/** One sweep, then a pause before the next. */
+const SHIMMER_SECONDS = 3.2;
+/** The share of the cycle the band spends moving. The rest is the pause. */
+const SHIMMER_SWEEP_SHARE = 0.7;
+const SHIMMER_ID = "hex-candidate-shimmer";
+
+/**
+ * The candidate ring in island coordinates, not in the hex's own translated
+ * space. The shimmer gradient uses island coordinates, so one band of light
+ * crosses every candidate at once.
+ */
+const candidatePoints = (q: number, r: number) => {
+  const center = hexToPixel(q, r, HEX_SIZE);
+
+  return hexCornerPoints(CANDIDATE_RADIUS)
+    .split(" ")
+    .map((corner) => {
+      const [x = 0, y = 0] = corner.split(",").map(Number);
+
+      return `${(center.x + x).toFixed(2)},${(center.y + y).toFixed(2)}`;
+    })
+    .join(" ");
+};
 
 /** The hex grid toggle is remembered per browser. */
 const GRID_STORAGE_KEY = "ostrov-v6:hex-grid";
@@ -97,6 +134,8 @@ type TIslandCanvasRegistrySlice = {
   buildOnHexAction: TBuildOnHexAction;
   hoverHexAction: THoverHexAction;
   openTaxPickAction: TOpenTaxPickAction;
+  pickSoilHexAction: TPickSoilHexAction;
+  cancelSoilCleanseAction: TCancelSoilCleanseAction;
   placeStrongholdAction: TPlaceStrongholdAction;
   requestDemolishAction: TRequestDemolishAction;
   selectHexAction: TSelectHexAction;
@@ -115,6 +154,7 @@ type THexStateContext = {
   readonly strongholdHexId: string | null;
   readonly armedBuildingId: TBuildingId | null;
   readonly demolishMode: boolean;
+  readonly soilCleanse: TSoilCleanseMode | null;
   readonly player: TPlayer | null;
   readonly stoneDiscount: number;
 };
@@ -127,11 +167,26 @@ const hexStateClass = (hex: THex, context: THexStateContext) => {
       return "";
     }
 
-    return canPlaceStronghold(context.island, hex.id) ? "hex--buildable" : "hex--blocked";
+    return canPlaceStronghold(context.island, hex.id) ? "hex--candidate" : "hex--blocked";
   }
 
   if (context.stage !== "play") {
     return "";
+  }
+
+  // The soil cleansing: first the hexes that can be destroyed, then the
+  // hexes that can be purified. The stronghold hex may be purified too.
+  if (context.soilCleanse && context.player) {
+    const sacrificeHexId = context.soilCleanse.sacrificeHexId;
+    if (sacrificeHexId === null) {
+      return sacrificeRefusal(context.player, hex) === null ? "hex--sacrificable" : "hex--blocked";
+    }
+
+    if (hex.id === sacrificeHexId) {
+      return "hex--sacrificed";
+    }
+
+    return purifyRefusal(hex, sacrificeHexId) === null ? "hex--purifiable" : "hex--blocked";
   }
 
   // The stronghold keeps its full biome colour: its gold outline already
@@ -182,6 +237,8 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
   const player = store.derived.viewedPlayer.value;
   const armedBuildingId = store.ui.armedBuilding.value;
   const demolishMode = store.ui.demolishMode.value;
+  const soilCleanse = store.ui.soilCleanse.value;
+  const soilFx = store.ui.soilCleanseFx.value;
   const hoveredHexId = store.ui.hoveredHexId.value;
   const selectedHexId = store.ui.selectedHexId.value;
   const isReadonly = store.derived.isReadonly.value;
@@ -189,8 +246,10 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
   const stoneDiscount = store.derived.techEffects.value.stoneDiscount;
   const taxPlan = store.derived.humanTaxPlan.value;
   const isTaxOpen = store.game.tax.value?.status === "rolled";
+  const reveal = store.ui.productionReveal.value;
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const shimmerRef = useRef<SVGLinearGradientElement>(null);
   const dragRef = useRef<{ x: number; y: number; moved: number; captured: boolean } | null>(null);
   /** How far the pointer travelled in the gesture that just ended. */
   const lastMovedRef = useRef(0);
@@ -206,6 +265,7 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
     strongholdHexId,
     armedBuildingId,
     demolishMode,
+    soilCleanse,
     player,
     stoneDiscount,
   };
@@ -373,6 +433,12 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       return;
     }
 
+    if (!isReadonly && soilCleanse) {
+      registry.pickSoilHexAction(hex.id);
+
+      return;
+    }
+
     if (!isReadonly && demolishMode) {
       registry.requestDemolishAction(hex.id);
 
@@ -413,10 +479,13 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
         });
       }
 
-      if (stateClass || isHovered || isSelected) {
+      // A candidate draws its own ring in the shimmer layer below.
+      const outlineClass = stateClass === "hex--candidate" ? "" : stateClass;
+
+      if (outlineClass || isHovered || isSelected) {
         entries.push({
           key: `outline-${hex.id}`,
-          className: `hex-outline ${stateClass} ${isHovered ? "hex--hovered" : ""} ${isSelected ? "hex--selected" : ""}`,
+          className: `hex-outline ${outlineClass} ${isHovered ? "hex--hovered" : ""} ${isSelected ? "hex--selected" : ""}`,
           rank: isHovered ? 3 : isSelected ? 2 : 0,
           x: center.x,
           y: center.y,
@@ -426,6 +495,39 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       return entries;
     })
     .sort((left, right) => left.rank - right.rank);
+
+  const candidates = isReadonly
+    ? []
+    : hexes.filter((hex) => hexStateClass(hex, stateContext) === "hex--candidate");
+  // The shimmer band starts left of the island and ends right of it.
+  const shimmerBounds = candidates.length > 0 ? hexBounds(candidates, HEX_SIZE) : null;
+  const shimmerWidth = shimmerBounds ? shimmerBounds.maxX - shimmerBounds.minX : 0;
+  const shimmerFrom = shimmerBounds ? shimmerBounds.minX - shimmerWidth * (0.5 + SHIMMER_BAND) : 0;
+  const shimmerTo = shimmerBounds ? shimmerBounds.maxX + shimmerWidth * (SHIMMER_BAND - 0.5) : 0;
+
+  // One loop moves the one gradient. The phase comes from the page clock, so
+  // a candidate that appears later joins the same sweep. Reduced motion keeps
+  // the static gold ring from the stylesheet.
+  useEffect(() => {
+    const gradient = shimmerRef.current;
+    if (!gradient || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    let frame = 0;
+    const tick = (now: number) => {
+      const phase = (now / 1000 / SHIMMER_SECONDS) % 1;
+      const progress = Math.min(phase / SHIMMER_SWEEP_SHARE, 1);
+      gradient.setAttribute("gradientTransform", `translate(${shimmerFrom + (shimmerTo - shimmerFrom) * progress} 0)`);
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [shimmerFrom, shimmerTo]);
 
   const present = new Set(hexes.map((hex) => hex.id));
   const rimEdges = hexes.flatMap((hex) =>
@@ -449,6 +551,13 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onPointerLeave={() => registry.hoverHexAction(null, null)}
+      onContextMenu={(event) => {
+        // A right click is the way out of the soil cleansing.
+        if (soilCleanse) {
+          event.preventDefault();
+          registry.cancelSoilCleanseAction();
+        }
+      }}
     >
       <svg
         className={`island-canvas__svg ${isGridVisible ? "" : "island-canvas__svg--grid-off"}`}
@@ -506,6 +615,10 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
             const isHovered = hex.id === hoveredHexId;
             const isSelected = hex.id === selectedHexId;
             const isStronghold = hex.id === strongholdHexId;
+            // The production pulse of the tax phase's reveal, in its turn.
+            const pulseDelay = !isReadonly && reveal && !reveal.done ? reveal.delays[hex.id] : undefined;
+            const pulseClass = pulseDelay === undefined ? "" : "hex__art--producing";
+            const pulseStyle = pulseDelay === undefined ? undefined : { animationDelay: `${pulseDelay}ms` };
 
             return (
               <g
@@ -529,6 +642,17 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
                   />
                 ) : null}
 
+                {/* The old tint of a hex the stronghold just purified fades out. */}
+                {soilFx?.hexId === hex.id ? (
+                  <polygon
+                    key={soilFx.id}
+                    className="hex__toxicity hex__toxicity--cleansed"
+                    points={CORNER_POINTS}
+                    fill="#9bff4f"
+                    style={{ "--soil-from": soilFx.toxicity / 160 } as CSSProperties}
+                  />
+                ) : null}
+
                 {isDead(hex) ? (
                   <image
                     className="hex__dead"
@@ -542,7 +666,8 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
 
                 {building ? (
                   <image
-                    className="hex__art"
+                    className={`hex__art ${pulseClass}`}
+                    style={pulseStyle}
                     href={building.hexArt}
                     x={-ART_SPAN / 2}
                     y={-ART_SPAN / 2 - ART_LIFT}
@@ -554,7 +679,8 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
 
                 {isStronghold ? (
                   <image
-                    className={`hex__art hex__art--stronghold ${isRuinedStronghold(player, hex) ? "hex__art--ruined" : ""}`}
+                    className={`hex__art hex__art--stronghold ${isRuinedStronghold(player, hex) ? "hex__art--ruined" : ""} ${pulseClass}`}
+                    style={pulseStyle}
                     href={STRONGHOLD_HEX_ART}
                     x={-ART_SPAN / 2}
                     y={-ART_SPAN / 2 - ART_LIFT}
@@ -568,6 +694,47 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
               </g>
             );
           })}
+
+          {/* Stronghold candidates share one gradient in island coordinates.
+              One loop moves it, so the glint sweeps across all of them as one
+              band of light. */}
+          {shimmerBounds ? (
+            <g className="hex-candidates">
+              <defs>
+                <linearGradient
+                  ref={shimmerRef}
+                  id={SHIMMER_ID}
+                  gradientUnits="userSpaceOnUse"
+                  x1={0}
+                  y1={0}
+                  x2={shimmerWidth}
+                  y2={0}
+                >
+                  <stop className="hex-shimmer__base" offset={0} />
+                  <stop className="hex-shimmer__base" offset={0.5 - SHIMMER_BAND / 2} />
+                  <stop className="hex-shimmer__glint" offset={0.5} />
+                  <stop className="hex-shimmer__base" offset={0.5 + SHIMMER_BAND / 2} />
+                  <stop className="hex-shimmer__base" offset={1} />
+                </linearGradient>
+              </defs>
+
+              {candidates.map((hex) => (
+                <polygon
+                  key={`back-${hex.id}`}
+                  className="hex-outline hex-outline--candidate-back"
+                  points={candidatePoints(hex.q, hex.r)}
+                />
+              ))}
+
+              {candidates.map((hex) => (
+                <polygon
+                  key={hex.id}
+                  className="hex-outline hex-outline--candidate"
+                  points={candidatePoints(hex.q, hex.r)}
+                />
+              ))}
+            </g>
+          ) : null}
 
           {/* Highlight outlines go above every hex face, so no neighbour face
               covers them. Hover and selection go last, so they stay on top. */}

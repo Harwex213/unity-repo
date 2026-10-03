@@ -2,6 +2,7 @@ import { signal } from "@preact/signals-react";
 import { HUMAN_PLAYER_ID } from "../core/island-gen";
 import type { TTaxPlan } from "../core/tax-plan";
 import type { TSlotSpin } from "../core/toxic-slot";
+import type { TGameOutcome } from "../core/game-over";
 import type { TTechId } from "../core/techs";
 import type { TGameStage, TPhase, TPlayer } from "../core/types";
 
@@ -64,6 +65,10 @@ const createGameState = () => ({
   ready: signal<readonly string[]>([]),
   /** The player's toxicity slot. The bots spin silently and keep no state. */
   slot: signal<TSlotState>(INITIAL_SLOT),
+  /** The turn the player last cleansed soil from the stronghold: once per turn. */
+  soilCleansedTurn: signal<number | null>(null),
+  /** Set once the game has ended. The end screen shows it, and the turn stops. */
+  outcome: signal<TGameOutcome | null>(null),
 });
 
 type TGameState = ReturnType<typeof createGameState>;

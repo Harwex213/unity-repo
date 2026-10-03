@@ -97,6 +97,8 @@ type TLevelSetup = {
   readonly cellBiome: TBiomeId;
   readonly toxicTrail: number;
   readonly roster: readonly TUnitId[];
+  /** The cell is the boss's lair: the level is its one big island. */
+  readonly boss?: boolean;
 };
 
 /**
@@ -109,6 +111,16 @@ type TAnnexedHex = {
   readonly biome: TBiomeId;
   readonly toxicity: number;
 };
+
+/** The boss's lair: the largest island, the top tier, and a heavy guard. */
+const BOSS_LABEL = "Логово Повелителя Мора";
+const BOSS_GARRISON = 8;
+/**
+ * The lair does not grow with the turns, unlike a raid: the boss is a fixed
+ * goal. A raid reaches this strength around turn 5.
+ */
+const BOSS_GROWTH = 1.5;
+const BOSS_GUARD: readonly TEnemyId[] = ["ogre", "vampire", "witch", "zombie", "skeleton"];
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -236,9 +248,10 @@ const islandExtent = (hexes: readonly TCleanupHex[]) => {
  * islands stand on a ring around it, spread by angle, so none overlaps another.
  */
 const createLevel = (setup: TLevelSetup, rng: TRng): TLevelSpec => {
-  const tier = raidTier(setup.turn, setup.toxicTrail);
-  const growth = 1 + (setup.turn - 1) * ENEMY_GROWTH_PER_TURN;
-  const pool = enemyPoolForTier(tier);
+  const isBoss = setup.boss === true;
+  const tier = isBoss ? MAX_TIER : raidTier(setup.turn, setup.toxicTrail);
+  const growth = isBoss ? BOSS_GROWTH : 1 + (setup.turn - 1) * ENEMY_GROWTH_PER_TURN;
+  const pool = isBoss ? BOSS_GUARD : enemyPoolForTier(tier);
   const ownHexes = playerHexes(setup.player);
   const own = islandExtent(ownHexes);
   const islands: TIslandSpec[] = [
@@ -256,14 +269,16 @@ const createLevel = (setup: TLevelSetup, rng: TRng): TLevelSpec => {
 
   const placedRings: { x: number; y: number; radius: number }[] = [{ x: 0, y: 0, radius: own.radius }];
   const startAngle = rng() * Math.PI * 2;
-  const count = Math.max(0, setup.islandCount);
+  const count = isBoss ? 1 : Math.max(0, setup.islandCount);
 
   for (let index = 0; index < count; index += 1) {
-    const size = Math.min(MAX_ENEMY_HEXES, 5 + tier * 2 + randomInt(rng, 0, 3));
+    const size = isBoss ? MAX_ENEMY_HEXES : Math.min(MAX_ENEMY_HEXES, 5 + tier * 2 + randomInt(rng, 0, 3));
     const hexes = growEnemyHexes(rng, size, setup.cellBiome, setup.toxicTrail);
     const extent = islandExtent(hexes);
-    const garrisonSize = Math.min(MAX_GARRISON, 2 + tier + randomInt(rng, 0, 1));
-    const garrison = Array.from({ length: garrisonSize }, () => pick(rng, pool));
+    const garrisonSize = isBoss ? BOSS_GARRISON : Math.min(MAX_GARRISON, 2 + tier + randomInt(rng, 0, 1));
+    const guard = Array.from({ length: garrisonSize }, () => pick(rng, pool));
+    // The boss stands first, so it takes the island's first node.
+    const garrison: readonly TEnemyId[] = isBoss ? ["plague_lord", ...guard] : guard;
     const angle = startAngle + (index / count) * Math.PI * 2 + (rng() - 0.5) * 0.5;
     let distance = own.radius + extent.radius + SPAWN_GAP_MIN + rng() * SPAWN_GAP_SPREAD;
     let x = Math.cos(angle) * distance;
@@ -286,9 +301,10 @@ const createLevel = (setup: TLevelSetup, rng: TRng): TLevelSpec => {
 
     islands.push({
       id: `enemy-${index}`,
-      label: `Остров ${index + 1}`,
+      label: isBoss ? BOSS_LABEL : `Остров ${index + 1}`,
       side: "enemy",
-      behavior: rng() < approachChance ? "approach" : "drift",
+      // The lair does not sail: the player has to come to it.
+      behavior: !isBoss && rng() < approachChance ? "approach" : "drift",
       hexes,
       x: x - extent.cx,
       y: y - extent.cy,

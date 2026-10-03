@@ -6,6 +6,7 @@ import type {
   TBuilding,
   TBuildingId,
   TFace,
+  TPlayer,
   TResourcePool,
   TYieldResourceId,
 } from "./types";
@@ -43,6 +44,13 @@ const settlementBiomeFaces = (resource: TYieldResourceId): Readonly<Partial<Reco
   badlands: face(resource, 1, 4),
   cliffs: face(resource, 1, 0),
 });
+
+/** The converter stands on any biome, and no face leaves toxicity. */
+const CONVERTER_FACE = face("mana", 2, 0);
+const ALL_BIOMES: readonly TBiomeId[] = [
+  "grassland", "plains", "forrest", "savanna", "rainforest", "taiga", "tundra", "desert",
+  "polar_desert", "swamp", "badlands", "crater", "volcano", "hills", "mountains", "cliffs",
+];
 
 const BUILDINGS: readonly TBuilding[] = [
   {
@@ -132,6 +140,19 @@ const BUILDINGS: readonly TBuilding[] = [
     baseFaces: settlementBaseFaces("science"),
     biomeFaces: settlementBiomeFaces("science"),
   },
+  {
+    // The win condition. It turns the toxicity of every building of its
+    // owner off, and building it is the victory over the poison.
+    id: "converter",
+    label: "Центральный конвертер",
+    yields: "mana",
+    art: ICONS.converter,
+    hexArt: HEX_ART.converter,
+    cost: { stone: 10, wood: 10, hammers: 6 },
+    trophy: true,
+    baseFaces: [face("mana", 1, 0), face("mana", 2, 0), face("mana", 3, 0), face("mana", 2, 0)],
+    biomeFaces: Object.fromEntries(ALL_BIOMES.map((biomeId) => [biomeId, CONVERTER_FACE])),
+  },
 ];
 
 const BUILDING_BY_ID = new Map(BUILDINGS.map((building) => [building.id, building]));
@@ -150,8 +171,19 @@ const canBuildOn = (building: TBuilding, biomeId: TBiomeId) => {
   return building.biomeFaces[biomeId] !== undefined;
 };
 
+/** The regular buildings a biome can host. Trophy buildings are left out. */
 const buildingsForBiome = (biomeId: TBiomeId) => {
-  return BUILDINGS.filter((building) => canBuildOn(building, biomeId));
+  return BUILDINGS.filter((building) => !building.trophy && canBuildOn(building, biomeId));
+};
+
+/** The player owns a central converter: their buildings leave no toxicity. */
+const hasConverter = (player: TPlayer) => {
+  return player.island.hexes.some((hex) => hex.building === "converter");
+};
+
+/** A trophy building is locked until its owner has defeated the boss. */
+const isBuildingUnlocked = (player: TPlayer, building: TBuilding) => {
+  return !building.trophy || player.bossSlain;
 };
 
 /** The die a building becomes once it stands on a biome: base faces plus one. */
@@ -233,4 +265,6 @@ export {
   effectiveCost,
   facesOn,
   getBuilding,
+  hasConverter,
+  isBuildingUnlocked,
 };

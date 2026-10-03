@@ -1,4 +1,5 @@
 import { distancesFrom, getCell } from "./world-gen";
+import type { TPlayer } from "./types";
 import type { TWorld, TWorldCell } from "./world-gen";
 
 /**
@@ -99,9 +100,16 @@ const moveCheck = (world: TWorld, fromCellId: string, cellId: string, movedThisT
   return { ok: true, reason: "" };
 };
 
-/** The wild islands the cleanup phase fights in this cell. */
-const pendingIslands = (cell: TWorldCell | null) => {
+/**
+ * The wild islands the cleanup phase fights in this cell. The boss's lair
+ * stays a fight for every player who has not defeated the boss yet.
+ */
+const pendingIslands = (cell: TWorldCell | null, player: TPlayer | null = null) => {
   if (!cell || cell.kind !== "island" || !cell.activated || cell.cleared) {
+    return 0;
+  }
+
+  if (cell.boss && player?.bossSlain) {
     return 0;
   }
 

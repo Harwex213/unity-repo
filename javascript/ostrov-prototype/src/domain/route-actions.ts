@@ -1,3 +1,4 @@
+import { isPageSwitchPhase } from "../core/phases";
 import type { TStore } from "../store/store";
 import type { TPage } from "../store/route-state";
 
@@ -16,14 +17,31 @@ const PAGE_BY_HASH: Readonly<Record<string, TPage>> = {
 };
 
 const navigateToIslandAction = (store: TStore, playerId: string | null) => {
-  // The other phases own their own page, and the tax phase flies its motes to
-  // the HUD of the player's own island. Before the game starts the players
-  // list is locked on the player's own island.
-  if (store.ui.busy.peek() || store.game.phase.peek() !== "build" || store.game.stage.peek() !== "play") {
+  // The tax phase flies its motes to the HUD of the player's own island, and
+  // the clearing phase owns the battle page. Before the game starts the
+  // players list is locked on the player's own island.
+  if (store.ui.busy.peek() || !isPageSwitchPhase(store.game.phase.peek()) || store.game.stage.peek() !== "play") {
     return;
   }
 
   window.location.hash = playerId ? `${ISLAND_PREFIX}/${playerId}` : ISLAND_PREFIX;
+};
+
+/**
+ * The build and scout phases let the player switch to the global map. The map
+ * opens on the last selected cell, or on the player's own cell. The phase does
+ * not change, and scouting and the flight stay locked outside the scout phase.
+ */
+const navigateToWorldAction = (store: TStore) => {
+  if (store.ui.busy.peek() || !isPageSwitchPhase(store.game.phase.peek()) || store.game.stage.peek() !== "play") {
+    return;
+  }
+
+  if (store.world.selectedCellId.peek() === null) {
+    store.world.selectedCellId.value = store.derived.humanPlayer.peek()?.cellId ?? null;
+  }
+
+  window.location.hash = WORLD_HASH;
 };
 
 /** Reads the address bar into the store. Also runs once on a cold load. */
@@ -33,6 +51,7 @@ const syncRouteFromHash = (store: TStore) => {
   // Leaving a page must not leave its popups and armed cards behind.
   store.ui.armedBuilding.value = null;
   store.ui.demolishMode.value = false;
+  store.ui.soilCleanse.value = null;
   store.ui.selectedHexId.value = null;
   store.ui.hoveredHexId.value = null;
   store.ui.demolishTargetHexId.value = null;
@@ -89,4 +108,4 @@ const syncRouteFromHash = (store: TStore) => {
   store.route.islandPlayerId.value = rest === "" ? null : rest;
 };
 
-export { navigateToIslandAction, syncRouteFromHash };
+export { navigateToIslandAction, navigateToWorldAction, syncRouteFromHash };

@@ -11,13 +11,18 @@ import { hexCornerPoints } from "../../core/hex";
 import { ICONS } from "../../core/icons";
 import { getResource } from "../../core/resources";
 import { hexDie } from "../../core/dice";
+import { soilCleanseRefusal } from "../../core/soil-cleanse";
 import { isStrongholdHex, POWER_PER_TURN, STRONGHOLD_LABEL } from "../../core/stronghold";
 import { useStore } from "../../store/store";
 import { DieAverage, DieFaces } from "./die-faces";
 import { StructureHpLine } from "./hex-hp-bar";
 import { Icon } from "./icon";
 import type { FC } from "react";
-import type { TArmBuildingAction, TCloseHexModalAction } from "../../domain/registry";
+import type {
+  TArmBuildingAction,
+  TCloseHexModalAction,
+  TToggleSoilCleanseAction,
+} from "../../domain/registry";
 
 /** Radius of the biome emblem drawn in the modal header. */
 const EMBLEM_SIZE = 46;
@@ -26,6 +31,7 @@ const EMBLEM_POINTS = hexCornerPoints(EMBLEM_SIZE);
 type THexModalRegistrySlice = {
   armBuildingAction: TArmBuildingAction;
   closeHexModalAction: TCloseHexModalAction;
+  toggleSoilCleanseAction: TToggleSoilCleanseAction;
 };
 
 type THexModalProps = {
@@ -44,6 +50,15 @@ const HexModal: FC<THexModalProps> = ({ registry }) => {
   const isReadonly = store.derived.isReadonly.value;
   const player = store.derived.viewedPlayer.value;
 
+  // Read every signal before the early return, so the hooks keep their order.
+  const soilMode = store.ui.soilCleanse.value;
+  const isBuildPhase =
+    store.game.stage.value === "play" &&
+    store.game.phase.value === "build" &&
+    !store.ui.busy.value &&
+    !store.derived.isHumanReady.value;
+  const isSoilUsed = store.game.soilCleansedTurn.value === store.game.turn.value;
+
   if (!hex) {
     return null;
   }
@@ -57,6 +72,12 @@ const HexModal: FC<THexModalProps> = ({ registry }) => {
   const die = hexDie(player, hex);
   const hint = best ? `Лучше всего здесь встанет: ${best.label}` : "Строить здесь нечего";
   const subtitle = isStronghold ? "Твердыня занимает гекс: строить здесь нельзя" : hint;
+  const canCleanseHere = isStronghold && !isReadonly && player !== null;
+  const soilBlock = !canCleanseHere || !player
+    ? null
+    : !isBuildPhase
+      ? { message: "Доступно только в фазе строительства" }
+      : soilCleanseRefusal(player, isSoilUsed);
 
   return (
     <aside className="panel hex-modal">
@@ -99,6 +120,27 @@ const HexModal: FC<THexModalProps> = ({ registry }) => {
               {`+${POWER_PER_TURN} власть в конце каждой фазы налогов`}
             </p>
           ) : null}
+        </div>
+      ) : null}
+
+      {canCleanseHere ? (
+        <div className="hex-modal__soil">
+          <button
+            type="button"
+            className={`button soil-button ${soilMode ? "soil-button--active" : ""}`}
+            disabled={soilBlock !== null && !soilMode}
+            aria-pressed={soilMode !== null}
+            onClick={registry.toggleSoilCleanseAction}
+          >
+            <Icon src={ICONS.toxicity} label="" />
+            {soilMode ? "Отменить очистку" : "Очистить почву"}
+          </button>
+
+          <p className="hex-modal__soil-note">
+            {soilBlock && !soilMode
+              ? soilBlock.message
+              : "Уничтожьте один гекс острова вместе со зданием на нём, и токсичность другого гекса упадёт до 0. Раз в ход."}
+          </p>
         </div>
       ) : null}
 

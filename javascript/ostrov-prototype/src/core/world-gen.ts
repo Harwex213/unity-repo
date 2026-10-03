@@ -60,6 +60,12 @@ type TWorldCell = {
   readonly toxicTrail: number;
   /** True once the clearing phase has emptied this cell of enemies. */
   readonly cleared: boolean;
+  /**
+   * The boss's lair. There is one per world, far from every starting island.
+   * Its fight never clears for good: every player who flies in fights the
+   * boss on their own, until they have defeated it (`TPlayer.bossSlain`).
+   */
+  readonly boss: boolean;
 };
 
 type TWorld = {
@@ -260,6 +266,7 @@ const buildCells = (rng: TRng): TWorldCell[] => {
       ownerId: null,
       toxicTrail: 0,
       cleared: false,
+      boss: false,
     };
   });
 };
@@ -332,6 +339,32 @@ const placePlayers = (cells: TWorldCell[], playerIds: readonly string[], rng: TR
   return placed;
 };
 
+/**
+ * The boss's lair: the island cell farthest from the nearest starting island.
+ * A tie is broken by the cell index, so the same seed always picks the same cell.
+ * Returns `null` only for a world with no free island cell.
+ */
+const pickBossCell = (cells: readonly TWorldCell[], startCellIds: readonly string[]) => {
+  const starts = cells.filter((cell) => startCellIds.includes(cell.id));
+  const distances = starts.map((cell) => distancesFrom(cells, cell.index));
+  let best: TWorldCell | null = null;
+  let bestDistance = -1;
+
+  for (const cell of cells) {
+    if (cell.kind !== "island" || startCellIds.includes(cell.id)) {
+      continue;
+    }
+
+    const nearest = distances.reduce((min, list) => Math.min(min, list[cell.index] ?? 0), Number.MAX_SAFE_INTEGER);
+    if (nearest > bestDistance) {
+      best = cell;
+      bestDistance = nearest;
+    }
+  }
+
+  return best;
+};
+
 const createWorld = (seed: string, playerIds: readonly string[]) => {
   const rng = createRng(hashSeed(`${seed}:world`));
   const land = buildCells(rng);
@@ -341,6 +374,7 @@ const createWorld = (seed: string, playerIds: readonly string[]) => {
   const humanCellId = placement.get(playerIds[0] ?? "") ?? cells[0]?.id ?? "c0";
   const humanCell = cells.find((cell) => cell.id === humanCellId);
   const homeRing = new Set([humanCellId, ...(humanCell?.neighbors ?? [])]);
+  const bossCellId = pickBossCell(cells, [...placement.values()])?.id ?? null;
 
   const world: TWorld = {
     seed,
@@ -354,6 +388,11 @@ const createWorld = (seed: string, playerIds: readonly string[]) => {
       // home, with no wild islands left to fight.
       if (ownerId) {
         return { ...cell, kind: "island" as const, ownerId, revealed, islandCount: 0, activated: true, cleared: true };
+      }
+
+      // The lair holds one island: the boss's own.
+      if (cell.id === bossCellId) {
+        return { ...cell, ownerId, revealed, boss: true, islandCount: 1, biome: "volcano" as const };
       }
 
       return { ...cell, ownerId, revealed };
@@ -371,4 +410,7 @@ const getCell = (world: TWorld, cellId: string) => {
 };
 
 export type { TCellKind, TVec3, TWorld, TWorldCell };
-export { CELL_VARIANTS, createWorld, distancesFrom, getCell, GRID_FREQUENCY };
+/** The boss's lair, or `null` for a world without one. */
+const findBossCell = (world: TWorld) => world.cells.find((cell) => cell.boss) ?? null;
+
+export { CELL_VARIANTS, createWorld, distancesFrom, findBossCell, getCell, GRID_FREQUENCY };

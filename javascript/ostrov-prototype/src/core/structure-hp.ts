@@ -23,6 +23,7 @@ const BUILDING_MAX_HP: Readonly<Record<TBuildingId, number>> = {
   university: 170,
   mine: 180,
   masons_guild: 200,
+  converter: 300,
 };
 
 const STRONGHOLD_MAX_HP = 600;

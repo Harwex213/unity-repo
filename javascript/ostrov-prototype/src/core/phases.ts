@@ -21,6 +21,13 @@ const PHASES: readonly TPhaseMeta[] = [
   { id: "clear", label: "Фаза зачистки", short: "Зачистка", icon: ICONS.army },
 ];
 
+/**
+ * The phases in which the player may switch between the own island and the
+ * world map. The tax phase stays on the island: its motes fly to the island's
+ * HUD. The clearing phase owns the battle page.
+ */
+const isPageSwitchPhase = (id: TPhase) => id === "build" || id === "scout";
+
 const phaseIndex = (id: TPhase) => PHASES.findIndex((phase) => phase.id === id);
 
 const getPhase = (id: TPhase) => {
@@ -33,4 +40,4 @@ const getPhase = (id: TPhase) => {
 };
 
 export type { TPhaseMeta };
-export { getPhase, phaseIndex, PHASES };
+export { getPhase, isPageSwitchPhase, phaseIndex, PHASES };

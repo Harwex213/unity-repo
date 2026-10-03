@@ -8,5 +8,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Hexworld.unity
     guid: 36544cdc88cbb4980be9a2d4008c415f
+  - enabled: 1
+    path: Assets/Scenes/FloatingIsland.unity
+    guid: fa9732ffa00984fe29537eda33c3cfc1
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

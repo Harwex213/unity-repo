@@ -54,24 +54,22 @@ const WorldCellPanel: FC<TWorldCellPanelProps> = ({ registry }) => {
   const scout = scoutCheck(world, player.cellId, cell.id, player.resources.scouting);
   const move = moveCheck(world, player.cellId, cell.id, moved);
   const owner = cell.revealed && cell.ownerId ? players.find((candidate) => candidate.id === cell.ownerId) : null;
-  const title = isHere
-    ? "Ваш гекс"
-    : owner
-      ? `Остров: ${owner.nickname}`
-      : visibility === "revealed"
-        ? KIND_TITLE[cell.kind]
-        : VISIBILITY_TITLE[visibility];
+  const isLair = cell.revealed && cell.boss;
+  const title = isLair
+    ? "Логово Повелителя Мора"
+    : isHere
+      ? "Ваш гекс"
+      : owner
+        ? `Остров: ${owner.nickname}`
+        : visibility === "revealed"
+          ? KIND_TITLE[cell.kind]
+          : VISIBILITY_TITLE[visibility];
 
   return (
     <aside className="panel world-panel">
-      <h2 className="world-panel__title">
+      <h2 className={`world-panel__title ${isLair ? "world-panel__title--boss" : ""}`}>
         {title}
       </h2>
-
-      <p className={`world-cell__state world-cell__state--${visibility}`}>
-        {visibility === "revealed" ? "Разведан" : visibility === "frontier" ? "Можно разведать" : "Туман войны"}
-        {scout.distance > 0 ? ` · перелётов до острова: ${scout.distance}` : ""}
-      </p>
 
       {cell.revealed && cell.kind === "void" ? (
         <p className="world-panel__row">
@@ -86,7 +84,22 @@ const WorldCellPanel: FC<TWorldCellPanelProps> = ({ registry }) => {
         </p>
       ) : null}
 
-      {cell.revealed && cell.kind === "island" ? (
+      {isLair ? (
+        <>
+          <p className="world-panel__row world-cell__row world-cell__boss">
+            <Icon src={ICONS.boss} label="Босс" size="m" />
+            {player.bossSlain ? "Повелитель Мора повержен вами" : "Здесь ждёт босс — Повелитель Мора"}
+          </p>
+
+          <p className="world-panel__hint">
+            {player.bossSlain
+              ? "Трофей получен: стройте Центральный конвертер на своём острове."
+              : "Прилетите сюда — в конце хода начнётся бой с боссом. Победа даёт технологию «Центральная конверсия» и Центральный конвертер."}
+          </p>
+        </>
+      ) : null}
+
+      {cell.revealed && cell.kind === "island" && !cell.boss ? (
         <>
           <p className="world-panel__row">
             {`Остров · ${getBiome(cell.biome).label}`}
@@ -165,21 +178,7 @@ const WorldCellPanel: FC<TWorldCellPanelProps> = ({ registry }) => {
             {moved ? "Уже перелетали" : "Перелететь сюда"}
           </button>
         )}
-
-        {isHere || move.ok || moved ? null : (
-          <p className="world-panel__hint world-cell__reason">
-            {move.reason}
-          </p>
-        )}
       </div>
-
-      <p className="world-panel__hint">
-        {`Разведка: ${player.resources.scouting}. Цена гекса растёт на 1 каждые 2 перелёта от острова.`}
-      </p>
-
-      <p className="world-panel__hint">
-        {"Остался на месте — вся токсичность острова уходит в шлейф этого гекса."}
-      </p>
     </aside>
   );
 };

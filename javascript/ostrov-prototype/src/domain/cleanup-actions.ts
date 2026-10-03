@@ -11,7 +11,10 @@ import { createRng, hashSeed } from "../core/rng";
 import { pendingIslands } from "../core/world-rules";
 import { repairIsland, structureHp, withStructureHp } from "../core/structure-hp";
 import { buildRoster, getUnit } from "../core/units";
+import { BOSS_TECH_ID } from "../core/techs";
+import { getCell } from "../core/world-gen";
 import { replacePlayer, withIslandHexes } from "./player-updates";
+import { showNotice } from "./ui-actions";
 import type { TCleanupResult } from "../core/cleanup-sim";
 import type { TPlayer } from "../core/types";
 import type { TStore } from "../store/store";
@@ -63,10 +66,11 @@ const enterClearingAction = (store: TStore) => {
     {
       player,
       turn,
-      islandCount: pendingIslands(cell),
+      islandCount: pendingIslands(cell, player),
       cellBiome: cell?.biome ?? "swamp",
       toxicTrail: cell?.toxicTrail ?? 0,
       roster,
+      boss: cell?.boss === true,
     },
     rng,
   );
@@ -153,6 +157,21 @@ const applyStructureDamage = (player: TPlayer, result: TCleanupResult) => {
   return { hexes, ruinedNow };
 };
 
+/** The player has defeated the boss and holds its trophy. */
+const withBossSlain = (player: TPlayer): TPlayer => ({
+  ...player,
+  bossSlain: true,
+  techs: player.bossSlain ? player.techs : player.techs + 1,
+});
+
+/** The trophy joins the player's researched technologies, once. */
+const grantBossTech = (store: TStore) => {
+  const researched = store.game.researched.peek();
+  if (!researched.includes(BOSS_TECH_ID)) {
+    store.game.researched.value = [...researched, BOSS_TECH_ID];
+  }
+};
+
 /**
  * Hands the result back to the island and closes the turn. The dead cost
  * their people, the battle's damage stays on the buildings, the annexed hexes
@@ -192,7 +211,17 @@ const finishClearingAction = (store: TStore) => {
     };
 
     const world = store.world.world.peek();
-    if (world && result.totalIslands > 0) {
+    const lair = world ? getCell(world, player.cellId) : null;
+
+    // The lair never clears: the boss waits for every other player. Its
+    // defeat gives this player the trophy technology instead.
+    if (lair?.boss) {
+      if (result.totalIslands > 0 && result.clearedIslands >= result.totalIslands) {
+        next = withBossSlain(next);
+        grantBossTech(store);
+        showNotice(store, "Повелитель Мора повержен! Открыт «Центральный конвертер»");
+      }
+    } else if (world && result.totalIslands > 0) {
       const standing = result.totalIslands - result.clearedIslands;
       store.world.world.value = {
         ...world,

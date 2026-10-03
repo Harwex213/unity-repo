@@ -40,7 +40,8 @@ type TEnemyId =
   | "witch"
   | "vampire"
   | "moth"
-  | "bat";
+  | "bat"
+  | "plague_lord";
 
 /** What a ranged attacker throws. It only changes how the shot is drawn and how fast it flies. */
 type TProjectile = "stone" | "arrow" | "bullet" | "hex" | "bolt";
@@ -113,6 +114,8 @@ const ENEMIES: readonly TEnemy[] = [
   { id: "vampire", label: "Вампир", icon: ICONS.vampire, hp: 88, damage: 16, cooldown: 0.9, speed: 1.4, ...MELEE },
   { id: "moth", label: "Моль", icon: ICONS.moth, hp: 30, damage: 7, cooldown: 0.9, speed: 2.2, ...AIR },
   { id: "bat", label: "Летучая мышь", icon: ICONS.bat, hp: 24, damage: 5, cooldown: 0.7, speed: 2.6, ...AIR },
+  // The boss. It only lives in its lair on the world map.
+  { id: "plague_lord", label: "Повелитель Мора", icon: ICONS.boss, hp: 450, damage: 20, cooldown: 1.5, range: 2.5, speed: 0.55, flying: false, projectile: "hex" },
 ];
 
 const UNIT_BY_ID = new Map(UNITS.map((unit) => [unit.id, unit]));

@@ -2,6 +2,7 @@ import { useSignals } from "@preact/signals-react/runtime";
 import { BattlePage } from "./pages/battle-page";
 import { IslandPage } from "./pages/island-page";
 import { WorldPage } from "./pages/world-page";
+import { EndGameModal } from "./components/end-game-modal";
 import { SlotModal } from "./components/slot-modal";
 import { useStore } from "../store/store";
 import type { FC } from "react";
@@ -29,6 +30,8 @@ const App: FC<TAppProps> = ({ registry }) => {
       {pageView}
 
       <SlotModal registry={registry} />
+
+      <EndGameModal registry={registry} />
     </>
   );
 };

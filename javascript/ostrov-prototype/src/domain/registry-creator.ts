@@ -7,8 +7,8 @@ import {
   requestDemolishAction,
   toggleDemolishModeAction,
 } from "./build-actions";
-import { endPhaseAction, startGameAction } from "./game-actions";
-import { navigateToIslandAction } from "./route-actions";
+import { endPhaseAction, newGameAction, startGameAction } from "./game-actions";
+import { navigateToIslandAction, navigateToWorldAction } from "./route-actions";
 import { placeStrongholdAction } from "./setup-actions";
 import { closeSlotModalAction } from "./slot-actions";
 import {
@@ -17,6 +17,7 @@ import {
   stepCleanupAction,
   toggleCleanupPauseAction,
 } from "./cleanup-actions";
+import { cancelSoilCleanseAction, pickSoilHexAction, toggleSoilCleanseAction } from "./soil-actions";
 import { researchTechAction } from "./tech-actions";
 import {
   closeTaxPickAction,
@@ -46,7 +47,9 @@ const createRegistry = (store: TStore) => {
     placeStrongholdAction,
     startGameAction,
     endPhaseAction,
+    newGameAction,
     navigateToIslandAction,
+    navigateToWorldAction,
     armBuildingAction,
     disarmAction,
     toggleDemolishModeAction,
@@ -54,6 +57,9 @@ const createRegistry = (store: TStore) => {
     requestDemolishAction,
     confirmDemolishAction,
     cancelDemolishAction,
+    toggleSoilCleanseAction,
+    pickSoilHexAction,
+    cancelSoilCleanseAction,
     hoverHexAction,
     selectHexAction,
     closeHexModalAction,

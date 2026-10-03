@@ -1,8 +1,10 @@
+import { checkGameOver } from "../core/game-over";
 import { createPlayers } from "../core/island-gen";
 import { PHASES } from "../core/phases";
 import { createWorld } from "../core/world-gen";
 import { pendingIslands } from "../core/world-rules";
 import { enterClearingAction, finishClearingAction } from "./cleanup-actions";
+import { playRivalBuild, playRivalClear, playRivalScout } from "./rival-actions";
 import { scheduleRivalStrongholds, startGameAction as startSetupGame } from "./setup-actions";
 import { resetSlot, spinSlotAtTaxEnd } from "./slot-actions";
 import { clearTaxState, collectRivalTaxAction, collectTaxAction, startTaxPhaseAction } from "./tax-actions";
@@ -44,7 +46,22 @@ const createSession = (store: TStore) => {
     cellId: placement.get(player.id) ?? "",
   }));
   store.world.world.value = world;
+  store.world.selectedCellId.value = null;
+  store.world.movedThisTurn.value = false;
+  store.world.trailEvent.value = null;
+  store.battle.sim.value = null;
+  store.battle.hud.value = null;
+  store.battle.result.value = null;
+  store.battle.resolved.value = false;
+  store.ui.armedBuilding.value = null;
+  store.ui.demolishMode.value = false;
+  store.ui.soilCleanse.value = null;
+  store.ui.selectedHexId.value = null;
+  store.ui.techModalOpen.value = false;
+  store.ui.notice.value = null;
+  store.game.outcome.value = null;
   store.game.researched.value = [];
+  store.game.soilCleansedTurn.value = null;
   clearTaxState(store);
   resetSlot(store);
   resetReadiness(store);
@@ -55,6 +72,7 @@ const createSession = (store: TStore) => {
   goToPage(store, "island");
   scheduleRivalStrongholds(store);
 };
+
 
 /**
  * The hand-over from the tax phase to the scout phase. The player's toxicity
@@ -79,6 +97,33 @@ const enterScoutPhase = (store: TStore) => {
 };
 
 /**
+ * The end-of-game check. It runs twice a turn: when the build phase ends, so
+ * a converter built this turn wins at once, and when the turn ends, after the
+ * battle's damage. Every player has finished the phase by then, so players
+ * who build the converter in the same turn win together. The rules live in
+ * `core/game-over.ts`. Returns `true` when the game is over: the turn loop
+ * stops, and the end screen opens.
+ */
+const concludeIfGameOver = (store: TStore) => {
+  const check = checkGameOver(store.game.players.peek(), store.game.humanPlayerId.peek(), store.game.turn.peek());
+  store.game.players.value = check.players;
+
+  if (!check.outcome) {
+    return false;
+  }
+
+  resetReadiness(store);
+  store.ui.busy.value = false;
+  store.ui.armedBuilding.value = null;
+  store.ui.demolishMode.value = false;
+  store.ui.soilCleanse.value = null;
+  store.ui.techModalOpen.value = false;
+  store.game.outcome.value = check.outcome;
+
+  return true;
+};
+
+/**
  * Moves the turn on by one phase and takes the player to the page that phase
  * happens on. Only `advanceIfEveryoneReady` calls it. The readiness is reset
  * first, so a late timer or a second press cannot advance the same phase twice.
@@ -89,6 +134,10 @@ const advancePhase = (store: TStore) => {
   resetReadiness(store);
 
   if (current === "build") {
+    if (concludeIfGameOver(store)) {
+      return;
+    }
+
     store.game.phase.value = "tax";
     goToPage(store, "island");
     startTaxPhaseAction(store);
@@ -112,9 +161,11 @@ const advancePhase = (store: TStore) => {
 
     // A cell with no wild islands has nothing to clear. The player stays on
     // the world map, is ready at once and waits for the rivals' cleanup.
-    if (pendingIslands(store.derived.currentCell.peek()) === 0) {
+    if (pendingIslands(store.derived.currentCell.peek(), store.derived.humanPlayer.peek()) === 0) {
       store.battle.sim.value = null;
       store.battle.result.value = null;
+      // The scout phase can end from the island page too.
+      goToPage(store, "world");
       markHumanReady(store);
 
       return;
@@ -127,6 +178,11 @@ const advancePhase = (store: TStore) => {
   }
 
   finishClearingAction(store);
+
+  if (concludeIfGameOver(store)) {
+    return;
+  }
+
   store.game.turn.value = store.game.turn.peek() + 1;
   store.game.phase.value = PHASES[0]?.id ?? "build";
   goToPage(store, "island");
@@ -134,7 +190,7 @@ const advancePhase = (store: TStore) => {
 };
 
 const advanceIfEveryoneReady = (store: TStore) => {
-  if (store.game.stage.peek() !== "play" || !isEveryoneReady(store)) {
+  if (store.game.stage.peek() !== "play" || store.game.outcome.peek() || !isEveryoneReady(store)) {
     return;
   }
 
@@ -142,13 +198,32 @@ const advanceIfEveryoneReady = (store: TStore) => {
 };
 
 /**
- * One rival plays the current phase and turns ready. The bots do not build,
- * scout or fight yet, so only the tax phase has work for them: their dice are
- * paid and their slot spins, once.
+ * One rival plays the current phase and turns ready. In the tax phase its
+ * dice are paid and its slot spins, once. The other phases play its endgame
+ * plan: the flight to the boss's lair, the fight, the central converter (see
+ * `rival-actions.ts`).
  */
 const finishRivalPhase = (store: TStore, rivalId: string) => {
-  if (store.game.phase.peek() === "tax") {
+  if (store.game.outcome.peek()) {
+    return;
+  }
+
+  const phase = store.game.phase.peek();
+
+  if (phase === "tax") {
     collectRivalTaxAction(store, rivalId);
+  }
+
+  if (phase === "build") {
+    playRivalBuild(store, rivalId);
+  }
+
+  if (phase === "scout") {
+    playRivalScout(store, rivalId);
+  }
+
+  if (phase === "clear") {
+    playRivalClear(store, rivalId);
   }
 
   setPlayerReady(store, rivalId, true);
@@ -191,7 +266,7 @@ const startGameAction = (store: TStore) => {
 const endPhaseAction = (store: TStore) => {
   // An animation owns the turn until it finishes, and the turn does not run
   // before the game has started.
-  if (store.ui.busy.peek() || store.game.stage.peek() !== "play") {
+  if (store.ui.busy.peek() || store.game.stage.peek() !== "play" || store.game.outcome.peek()) {
     return;
   }
 
@@ -219,6 +294,7 @@ const endPhaseAction = (store: TStore) => {
 
   store.ui.armedBuilding.value = null;
   store.ui.demolishMode.value = false;
+  store.ui.soilCleanse.value = null;
   store.ui.selectedHexId.value = null;
   store.ui.demolishTargetHexId.value = null;
   store.ui.taxPickHexId.value = null;
@@ -239,4 +315,9 @@ const endPhaseAction = (store: TStore) => {
   markHumanReady(store);
 };
 
-export { createSession, endPhaseAction, startGameAction };
+/** "Новая игра" on the end screen: a fresh session with the same seed. */
+const newGameAction = (store: TStore) => {
+  createSession(store);
+};
+
+export { createSession, endPhaseAction, newGameAction, startGameAction };

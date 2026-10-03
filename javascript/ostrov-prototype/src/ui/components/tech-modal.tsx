@@ -76,7 +76,7 @@ const TechModal: FC<TTechModalProps> = ({ registry }) => {
                       </span>
 
                       <span className={affordable || isOwned ? "tech-card__cost" : "tech-card__cost cost--short"}>
-                        {isOwned ? "изучено" : (
+                        {isOwned ? (tech.trophy ? "трофей" : "изучено") : tech.trophy ? "победите босса" : (
                           <>
                             <Icon src={ICONS.science} label="Наука" />
                             {tech.cost}

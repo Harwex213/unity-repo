@@ -1,5 +1,6 @@
 import { HEX_SIZE, hexToPixel } from "../core/hex";
 import { ICONS } from "../core/icons";
+import { revealDelays, revealDurationMs } from "../core/production-reveal";
 import { getResource } from "../core/resources";
 import {
   collectTaxPlan,
@@ -24,7 +25,10 @@ import type { TStore } from "../store/store";
 import type { TCamera, TFlight, THudAnchorId, TPointerAnchor } from "../store/ui-state";
 
 /**
- * The tax phase. It opens with every die on every island rolled once. The
+ * The tax phase. It opens with every die on every island rolled once. Each of
+ * the player's buildings plays a short production pulse, top to bottom, and its
+ * roll pops up above it (see `core/production-reveal.ts`). The reveal owns the
+ * turn (`ui.busy`) until the last plate lands; the wheel can skip it. The
  * player reads the rolls on the hexes and may spend power to change them. The
  * payouts wait until the player ends the phase: then the yield flies to the
  * resources panel and the toxicity to the meter, along a bezier, each mote
@@ -135,6 +139,57 @@ const startTaxPhaseAction = (store: TStore) => {
   });
 
   store.game.tax.value = { turn, status: "rolled", plans, paidRivalIds: [] };
+  startProductionReveal(store);
+};
+
+/** The reveal is over, by its timer or by a skip: the plates stand still. */
+const finishProductionReveal = (store: TStore) => {
+  const reveal = store.ui.productionReveal.peek();
+  if (!reveal || reveal.done) {
+    return;
+  }
+
+  store.ui.productionReveal.value = { ...reveal, done: true };
+  store.ui.busy.value = false;
+};
+
+/**
+ * Starts the production reveal of the player's buildings. The plates show the
+ * plan, so they follow any face the player picks later.
+ */
+const startProductionReveal = (store: TStore) => {
+  store.ui.productionReveal.value = null;
+
+  const player = store.derived.humanPlayer.peek();
+  const plan = store.derived.humanTaxPlan.peek();
+  if (!player || !plan) {
+    return;
+  }
+
+  const hexes = player.island.hexes.filter((hex) => findRoll(plan, hex.id) !== null);
+  if (hexes.length === 0) {
+    return;
+  }
+
+  const delays = revealDelays(hexes);
+  store.ui.productionReveal.value = { delays, done: false, leaving: null };
+  store.ui.busy.value = true;
+  later(() => finishProductionReveal(store), revealDurationMs(delays));
+};
+
+/**
+ * Each building's plates fade out as its first mote leaves. A building that
+ * sends no mote fades at once.
+ */
+const plateLeaveDelays = (plan: TTaxPlan, flights: readonly TFlight[]) => {
+  const leaving: Record<string, number> = {};
+
+  for (const roll of plan.rolls) {
+    const delays = flights.filter((flight) => flight.hexId === roll.hexId).map((flight) => flight.delayMs);
+    leaving[roll.hexId] = delays.length > 0 ? Math.min(...delays) : 0;
+  }
+
+  return leaving;
 };
 
 /** A click on a hex with a die opens the face popup; any other click does not. */
@@ -339,6 +394,11 @@ const collectTaxAction = (store: TStore, onDone: () => void) => {
 
   const flights = flightsFor(store, plan);
   store.ui.flights.value = flights;
+  store.ui.productionReveal.value = {
+    delays: store.ui.productionReveal.peek()?.delays ?? {},
+    done: true,
+    leaving: plateLeaveDelays(plan, flights),
+  };
 
   for (const flight of flights) {
     later(() => landFlight(store, flight), flight.delayMs + FLIGHT_DURATION_MS);
@@ -353,7 +413,19 @@ const collectTaxAction = (store: TStore, onDone: () => void) => {
 
 /** Skips straight to the end of the collection, for a player who has seen it enough. */
 const skipTaxAnimationAction = (store: TStore) => {
-  if (!store.ui.busy.peek() || store.game.tax.peek()?.status !== "collecting") {
+  if (!store.ui.busy.peek()) {
+    return;
+  }
+
+  // The production reveal: the plates land at once, and the phase is open.
+  if (store.game.tax.peek()?.status === "rolled") {
+    clearTimers();
+    finishProductionReveal(store);
+
+    return;
+  }
+
+  if (store.game.tax.peek()?.status !== "collecting") {
     return;
   }
 
@@ -392,6 +464,13 @@ const collectRivalTaxAction = (store: TStore, playerId: string) => {
 const clearTaxState = (store: TStore) => {
   clearTimers();
   onCollected = null;
+
+  // A reveal cut short must not leave the turn owned by an animation.
+  if (store.ui.productionReveal.peek()?.done === false) {
+    store.ui.busy.value = false;
+  }
+
+  store.ui.productionReveal.value = null;
   store.game.tax.value = null;
   store.ui.taxPickHexId.value = null;
   store.ui.flights.value = [];

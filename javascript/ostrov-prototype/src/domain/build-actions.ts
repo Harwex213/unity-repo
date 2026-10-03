@@ -1,6 +1,6 @@
 import { buildRefusal } from "../core/build-check";
-import { canAfford, effectiveCost, getBuilding } from "../core/buildings";
-import { isStrongholdHex } from "../core/stronghold";
+import { canAfford, effectiveCost, getBuilding, isBuildingUnlocked } from "../core/buildings";
+import { demolishedHex, demolishRefusal } from "../core/demolish";
 import { updateHex } from "./player-updates";
 import { showNotice } from "./ui-actions";
 import type { TStore } from "../store/store";
@@ -32,14 +32,24 @@ const armBuildingAction = (store: TStore, buildingId: TBuildingId) => {
     return;
   }
 
+  const player = store.derived.humanPlayer.peek();
+  const building = getBuilding(buildingId);
+  if (player && !isBuildingUnlocked(player, building)) {
+    showNotice(store, `«${building.label}» откроется после победы над боссом`);
+
+    return;
+  }
+
   const armed = store.ui.armedBuilding.peek();
   store.ui.armedBuilding.value = armed === buildingId ? null : buildingId;
   store.ui.demolishMode.value = false;
+  store.ui.soilCleanse.value = null;
 };
 
 const disarmAction = (store: TStore) => {
   store.ui.armedBuilding.value = null;
   store.ui.demolishMode.value = false;
+  store.ui.soilCleanse.value = null;
 };
 
 /** Arming a building and arming the wrecking ball are mutually exclusive. */
@@ -53,6 +63,7 @@ const toggleDemolishModeAction = (store: TStore) => {
 
   if (next) {
     store.ui.armedBuilding.value = null;
+    store.ui.soilCleanse.value = null;
   }
 };
 
@@ -108,7 +119,7 @@ const demolishHex = (store: TStore, hexId: string) => {
     return;
   }
 
-  updateHex(store, player, hexId, (target) => ({ ...target, building: null, toxicity: 0 }));
+  updateHex(store, player, hexId, demolishedHex);
   store.ui.demolishTargetHexId.value = null;
 };
 
@@ -128,14 +139,9 @@ const requestDemolishAction = (store: TStore, hexId: string) => {
     return;
   }
 
-  if (isStrongholdHex(player, hex.id)) {
-    showNotice(store, "Твердыню снести нельзя");
-
-    return;
-  }
-
-  if (hex.building === null) {
-    showNotice(store, "Здесь нечего сносить");
+  const refusal = demolishRefusal(player, hex);
+  if (refusal) {
+    showNotice(store, refusal.message);
 
     return;
   }
@@ -165,6 +171,7 @@ const cancelDemolishAction = (store: TStore) => {
 };
 
 export {
+  isBuildingAllowed,
   armBuildingAction,
   buildOnHexAction,
   cancelDemolishAction,

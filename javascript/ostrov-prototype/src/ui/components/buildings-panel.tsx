@@ -1,5 +1,5 @@
 import { useSignals } from "@preact/signals-react/runtime";
-import { BUILDINGS, canAfford, effectiveCost } from "../../core/buildings";
+import { BUILDINGS, canAfford, effectiveCost, isBuildingUnlocked } from "../../core/buildings";
 import { ICONS } from "../../core/icons";
 import { getResource } from "../../core/resources";
 import { useStore } from "../../store/store";
@@ -23,12 +23,13 @@ type TBuildingsPanelProps = {
 const BuildingsPanel: FC<TBuildingsPanelProps> = ({ registry }) => {
   useSignals();
   const store = useStore();
-  const pool = store.derived.humanPlayer.value?.resources;
+  const player = store.derived.humanPlayer.value;
+  const pool = player?.resources;
   const armedId = store.ui.armedBuilding.value;
   const locked = store.game.phase.value !== "build" || store.ui.busy.value || store.derived.isHumanReady.value;
   const discount = store.derived.techEffects.value.stoneDiscount;
 
-  if (!pool) {
+  if (!pool || !player) {
     return null;
   }
 
@@ -38,12 +39,14 @@ const BuildingsPanel: FC<TBuildingsPanelProps> = ({ registry }) => {
         const affordable = canAfford(pool, building, discount);
         const cost = effectiveCost(building, discount);
         const yields = getResource(building.yields);
+        const isLocked = !isBuildingUnlocked(player, building);
+        const stateClass = `${building.trophy ? "building-card--trophy" : ""} ${isLocked ? "building-card--locked" : ""}`;
 
         return (
           <button
             key={building.id}
             type="button"
-            className={`building-card has-hint ${armedId === building.id ? "building-card--armed" : ""} ${affordable ? "" : "building-card--poor"}`}
+            className={`building-card has-hint ${armedId === building.id ? "building-card--armed" : ""} ${affordable ? "" : "building-card--poor"} ${stateClass}`}
             onClick={() => registry.armBuildingAction(building.id)}
           >
             <img className="building-card__art" src={building.art} alt={building.label} />
@@ -98,9 +101,17 @@ const BuildingsPanel: FC<TBuildingsPanelProps> = ({ registry }) => {
                 ))}
               </span>
 
-              <span className="hint__note">
-                {"Биом острова добавляет зданию ещё одну грань"}
-              </span>
+              {building.trophy ? (
+                <span className="hint__note">
+                  {isLocked
+                    ? "Нужна технология «Центральная конверсия»: найдите и победите босса на карте мира"
+                    : "Отключает токсичность всех ваших зданий. Построить его — победить"}
+                </span>
+              ) : (
+                <span className="hint__note">
+                  {"Биом острова добавляет зданию ещё одну грань"}
+                </span>
+              )}
             </span>
           </button>
         );

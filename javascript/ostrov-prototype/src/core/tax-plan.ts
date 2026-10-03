@@ -1,3 +1,4 @@
+import { hasConverter } from "./buildings";
 import { hexDie } from "./dice";
 import { createRng, hashSeed, randomInt } from "./rng";
 import { POWER_PER_TURN } from "./stronghold";
@@ -184,6 +185,8 @@ const withPick = (plan: TTaxPlan, hexId: string, index: number): TTaxPlan => ({
  */
 const planPayouts = (player: TPlayer, plan: TTaxPlan, effects: TPayoutEffects): readonly TTaxPayout[] => {
   const payouts: TTaxPayout[] = [];
+  // The central converter turns the toxicity of every building of its owner off.
+  const isConverted = hasConverter(player);
 
   for (const roll of plan.rolls) {
     const hex = findHex(player, roll.hexId);
@@ -193,7 +196,7 @@ const planPayouts = (player: TPlayer, plan: TTaxPlan, effects: TPayoutEffects): 
     }
 
     const paid = facePayout(face, hex, effects);
-    payouts.push({ hexId: hex.id, resource: face.resource, amount: paid.amount, toxicity: paid.toxicity });
+    payouts.push({ hexId: hex.id, resource: face.resource, amount: paid.amount, toxicity: isConverted ? 0 : paid.toxicity });
 
     if (roll.dieKey === "stronghold") {
       payouts.push({ hexId: hex.id, resource: "power", amount: POWER_PER_TURN, toxicity: 0 });

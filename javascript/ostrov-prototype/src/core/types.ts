@@ -44,8 +44,12 @@ type TResourceId = TYieldResourceId | "power" | "mad";
 
 type TResourcePool = Readonly<Record<TResourceId, number>>;
 
-/** The seven buildings of the spec. */
+/**
+ * The seven buildings of the spec, and the central converter: the building
+ * that ends the game. Only the boss's trophy technology unlocks it.
+ */
 type TBuildingId =
+  | "converter"
   | "farm"
   | "mine"
   | "sawmill"
@@ -82,6 +86,11 @@ type TBuilding = {
   /** The 256px sprite the island canvas draws on the hex. */
   readonly hexArt: string;
   readonly cost: TBuildCost;
+  /**
+   * A trophy building is unlocked by defeating the boss, not by research. It
+   * is left out of the hex modal's suggestions and of the rivals' starting islands.
+   */
+  readonly trophy?: boolean;
   /** Faces every copy of this building has, whatever it stands on. */
   readonly baseFaces: readonly TFace[];
   /** The extra face a biome adds. A biome missing here cannot host the building. */
@@ -142,6 +151,18 @@ type TPlayer = {
    * it. See `core/toxic-slot.ts`.
    */
   readonly toxicMeter: number;
+  /**
+   * The player has defeated the boss and holds its trophy technology, the
+   * central conversion. It unlocks the central converter.
+   */
+  readonly bossSlain: boolean;
+  /**
+   * The player has had at least one building. Losing every building is a
+   * defeat only for a player who had something to lose.
+   */
+  readonly hasHadBuildings: boolean;
+  /** A defeated rival is out of the game: it no longer plays its phases. */
+  readonly eliminated: boolean;
 };
 
 /** The four phases of the core loop. Only `build` is implemented so far. */

@@ -33,8 +33,10 @@ const selectHexAction = (store: TStore, hexId: string) => {
   store.ui.selectedHexId.value = hexId;
 };
 
+/** The soil cleansing is armed from the hex panel, so closing the panel cancels it. */
 const closeHexModalAction = (store: TStore) => {
   store.ui.selectedHexId.value = null;
+  store.ui.soilCleanse.value = null;
 };
 
 const openTechModalAction = (store: TStore) => {

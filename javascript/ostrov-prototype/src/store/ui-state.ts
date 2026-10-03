@@ -42,6 +42,40 @@ type TFlight = {
   readonly delayMs: number;
 };
 
+/**
+ * The production reveal at the start of the tax phase. Each building plays a
+ * short "production" pulse, then its rolled payout pops up above it. The
+ * buildings start top to bottom, one after another, and the pulses overlap.
+ */
+type TProductionReveal = {
+  /** When each building starts, in ms after the phase opened. */
+  readonly delays: Readonly<Record<string, number>>;
+  /** The reveal is over (or skipped): the plates stand still. */
+  readonly done: boolean;
+  /**
+   * Set when the collection starts: when each building's plates fade out, in
+   * ms after the collection started. A building fades as its first mote leaves.
+   */
+  readonly leaving: Readonly<Record<string, number>> | null;
+};
+
+/**
+ * The stronghold's soil cleansing in progress. `sacrificeHexId` is `null`
+ * while the player picks the hex to destroy. Once it is set, the
+ * player picks the hex to purify. Nothing changes on the island until then.
+ */
+type TSoilCleanseMode = {
+  readonly sacrificeHexId: string | null;
+};
+
+/** The short fade of the toxicity tint on a hex that was just purified. */
+type TSoilCleanseFx = {
+  readonly id: number;
+  readonly hexId: string;
+  /** The toxicity the hex had before, for the tint that fades out. */
+  readonly toxicity: number;
+};
+
 const createUiState = () => ({
   /** The building card clicked in the buildings panel, waiting for a hex. */
   armedBuilding: signal<TBuildingId | null>(null),
@@ -57,6 +91,8 @@ const createUiState = () => ({
   demolishTargetHexId: signal<string | null>(null),
   /** The toggle inside that modal, remembered for the rest of the session. */
   skipDemolishConfirm: signal<boolean>(false),
+  soilCleanse: signal<TSoilCleanseMode | null>(null),
+  soilCleanseFx: signal<TSoilCleanseFx | null>(null),
   /** One-line feedback over the canvas: why the last click did nothing. */
   notice: signal<string | null>(null),
   /** The island layer's transform, mirrored here for the flight animation. */
@@ -67,11 +103,21 @@ const createUiState = () => ({
    */
   hudAnchors: signal<Readonly<Partial<Record<THudAnchorId, TPointerAnchor>>>>({}),
   flights: signal<readonly TFlight[]>([]),
+  productionReveal: signal<TProductionReveal | null>(null),
   /** The turn is owned by an animation: end-turn is refused while this is set. */
   busy: signal<boolean>(false),
 });
 
 type TUiState = ReturnType<typeof createUiState>;
 
-export type { TCamera, TFlight, THudAnchorId, TPointerAnchor, TUiState };
+export type {
+  TCamera,
+  TFlight,
+  THudAnchorId,
+  TPointerAnchor,
+  TProductionReveal,
+  TSoilCleanseFx,
+  TSoilCleanseMode,
+  TUiState,
+};
 export { createUiState };

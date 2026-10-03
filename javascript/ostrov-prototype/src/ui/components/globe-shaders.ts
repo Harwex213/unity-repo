@@ -143,6 +143,7 @@ void main() {
   int flags = int(state.a * 255.0 + 0.5);
   bool reachable = (flags & 1) != 0;
   bool isHome = (flags & 2) != 0;
+  bool isBoss = (flags & 4) != 0;
 
   vec3 ink = fromSrgb(vec3(0.16, 0.12, 0.08));
   vec3 cream = fromSrgb(vec3(0.91, 0.85, 0.71));
@@ -184,6 +185,15 @@ void main() {
   color = mix(color, fromSrgb(vec3(0.72, 0.63, 0.45)), edgeBand(0.025) * uGridAlpha * (0.45 + 0.55 * visibility));
 
   float pulse = 0.5 + 0.5 * sin(uTime * 3.0);
+
+  // The boss's lair: a smouldering crimson glow and a pulsing blood-red rim.
+  if (isBoss) {
+    float ember = valueNoise(p * 40.0 + vec3(0.0, uTime * 0.6, 0.0));
+    float glow = 0.3 + 0.35 * ember + 0.25 * vEdge;
+    color = mix(color, fromSrgb(vec3(0.5, 0.05, 0.03)), glow * (0.65 + 0.35 * pulse));
+    color = mix(color, fromSrgb(vec3(0.95, 0.35, 0.12)), edgeBand(0.14) * (0.6 + 0.4 * pulse));
+    color = mix(color, ink, edgeBand(0.025) * 0.9);
+  }
 
   if (reachable) {
     float dash = step(0.5, fract(atan(vLocal.y, vLocal.x) / (2.0 * PI) * 18.0 + uTime * 0.25));

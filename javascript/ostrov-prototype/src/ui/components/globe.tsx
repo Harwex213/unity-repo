@@ -23,6 +23,9 @@ const TOXIC_FULL = 400;
 const FOG_LEVEL = { revealed: 255, frontier: 128, fogged: 0 } as const;
 const FLAG_REACHABLE = 1;
 const FLAG_HOME = 2;
+const FLAG_BOSS = 4;
+/** The boss's lair: a blood-red ring, the largest badge on the globe. */
+const BOSS_RING = "#c0281e";
 const BRASS = "#8a6a32";
 const MONSTER_RING = "#7a5a3a";
 /** An activated island: its fight is on. */
@@ -57,6 +60,10 @@ const markerFor = (cell: TWorldCell, players: readonly TPlayer[]): TGlobeMarker 
 
   if (cell.kind !== "island") {
     return null;
+  }
+
+  if (cell.boss) {
+    return { key: `${cell.id}:boss`, cellIndex: cell.index, icon: ICONS.boss, ring: BOSS_RING, size: 1.15 };
   }
 
   if (cell.cleared || cell.islandCount === 0) {
@@ -122,6 +129,11 @@ const buildView = (
 
     if (cell.id === homeCellId) {
       flags |= FLAG_HOME;
+    }
+
+    // Fog of war hides the lair too.
+    if (cell.boss && cell.revealed) {
+      flags |= FLAG_BOSS;
     }
 
     state[offset + 3] = flags;

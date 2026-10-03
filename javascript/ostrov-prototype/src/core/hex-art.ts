@@ -1,3 +1,4 @@
+import converterHexArt from "../assets/hex-buildings/converter.png";
 import deadHexArt from "../assets/hex-buildings/dead.png";
 import farmHexArt from "../assets/hex-buildings/farm.png";
 import masonsGuildHexArt from "../assets/hex-buildings/masons-guild.png";
@@ -18,6 +19,7 @@ import villageHexArt from "../assets/hex-buildings/village.png";
  * across the lower part of the frame. So every building sits on a hex the same way.
  */
 const HEX_ART = {
+  converter: converterHexArt,
   dead: deadHexArt,
   farm: farmHexArt,
   masonsGuild: masonsGuildHexArt,

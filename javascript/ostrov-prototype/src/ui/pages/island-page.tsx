@@ -10,6 +10,7 @@ import { IslandCanvas } from "../components/island-canvas";
 import { NoticeToast } from "../components/notice-toast";
 import { PlayersPanel } from "../components/players-panel";
 import { ResourcesPanel } from "../components/resources-panel";
+import { SoilCleanseHint } from "../components/soil-cleanse-hint";
 import { StartPanel } from "../components/start-panel";
 import { TaxPickModal } from "../components/tax-pick-modal";
 import { TechModal } from "../components/tech-modal";
@@ -18,6 +19,7 @@ import { ToxicPanel } from "../components/toxic-panel";
 import { TurnPanel } from "../components/turn-panel";
 import { Vignette } from "../components/vignette";
 import { WaitingOverlay } from "../components/waiting-overlay";
+import { WorldMinimap } from "../components/world-minimap";
 import { useStore } from "../../store/store";
 import type { FC } from "react";
 import type { TAppRegistry } from "../../domain/registry";
@@ -55,6 +57,7 @@ const IslandPage: FC<TIslandPageProps> = ({ registry }) => {
       registry.closeHexModalAction();
       registry.closeTechModalAction();
       registry.cancelDemolishAction();
+      registry.cancelSoilCleanseAction();
       registry.closeTaxPickAction();
     };
 
@@ -119,7 +122,11 @@ const IslandPage: FC<TIslandPageProps> = ({ registry }) => {
             <BuildingsPanel registry={registry} />
           </div>
 
-          <EndTurnPanel registry={registry} />
+          <div className="island-page__end">
+            <WorldMinimap registry={registry} />
+
+            <EndTurnPanel registry={registry} />
+          </div>
         </div>
       ) : null}
 
@@ -130,6 +137,8 @@ const IslandPage: FC<TIslandPageProps> = ({ registry }) => {
       <FlightsLayer />
 
       <HexModal registry={registry} />
+
+      <SoilCleanseHint />
 
       <NoticeToast />
 

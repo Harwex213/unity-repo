@@ -1,5 +1,5 @@
 import { getBiome } from "./biomes";
-import { canAfford, canBuildOn } from "./buildings";
+import { canAfford, canBuildOn, hasConverter, isBuildingUnlocked } from "./buildings";
 import { isStrongholdHex, STRONGHOLD_LABEL } from "./stronghold";
 import type { TBuilding, THex, TPlayer } from "./types";
 
@@ -9,7 +9,7 @@ import type { TBuilding, THex, TPlayer } from "./types";
  * that the click then refuses.
  */
 
-type TBuildRefusalCode = "stronghold" | "occupied" | "biome" | "cost";
+type TBuildRefusalCode = "locked" | "unique" | "stronghold" | "occupied" | "biome" | "cost";
 
 type TBuildRefusal = {
   readonly code: TBuildRefusalCode;
@@ -23,6 +23,14 @@ const buildRefusal = (
   building: TBuilding,
   stoneDiscount: number,
 ): TBuildRefusal | null => {
+  if (!isBuildingUnlocked(player, building)) {
+    return { code: "locked", message: `«${building.label}» откроется после победы над боссом` };
+  }
+
+  if (building.id === "converter" && hasConverter(player)) {
+    return { code: "unique", message: `«${building.label}» уже построен` };
+  }
+
   if (isStrongholdHex(player, hex.id)) {
     return { code: "stronghold", message: `Здесь стоит ${STRONGHOLD_LABEL.toLowerCase()}` };
   }

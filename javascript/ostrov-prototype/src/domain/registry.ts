@@ -11,8 +11,10 @@ import type { TCamera, THudAnchorId, TPointerAnchor } from "../store/ui-state";
 type TPlaceStrongholdAction = (hexId: string) => void;
 type TStartGameAction = () => void;
 type TEndPhaseAction = () => void;
+type TNewGameAction = () => void;
 
 type TNavigateToIslandAction = (playerId: string | null) => void;
+type TNavigateToWorldAction = () => void;
 
 type TArmBuildingAction = (buildingId: TBuildingId) => void;
 type TDisarmAction = () => void;
@@ -21,6 +23,9 @@ type TBuildOnHexAction = (hexId: string) => void;
 type TRequestDemolishAction = (hexId: string) => void;
 type TConfirmDemolishAction = (skipNextTime: boolean) => void;
 type TCancelDemolishAction = () => void;
+type TToggleSoilCleanseAction = () => void;
+type TPickSoilHexAction = (hexId: string) => void;
+type TCancelSoilCleanseAction = () => void;
 
 type THoverHexAction = (hexId: string | null, anchor: TPointerAnchor | null) => void;
 type TSelectHexAction = (hexId: string) => void;
@@ -49,7 +54,9 @@ type TAppRegistry = {
   placeStrongholdAction: TPlaceStrongholdAction;
   startGameAction: TStartGameAction;
   endPhaseAction: TEndPhaseAction;
+  newGameAction: TNewGameAction;
   navigateToIslandAction: TNavigateToIslandAction;
+  navigateToWorldAction: TNavigateToWorldAction;
   armBuildingAction: TArmBuildingAction;
   disarmAction: TDisarmAction;
   toggleDemolishModeAction: TToggleDemolishModeAction;
@@ -57,6 +64,9 @@ type TAppRegistry = {
   requestDemolishAction: TRequestDemolishAction;
   confirmDemolishAction: TConfirmDemolishAction;
   cancelDemolishAction: TCancelDemolishAction;
+  toggleSoilCleanseAction: TToggleSoilCleanseAction;
+  pickSoilHexAction: TPickSoilHexAction;
+  cancelSoilCleanseAction: TCancelSoilCleanseAction;
   hoverHexAction: THoverHexAction;
   selectHexAction: TSelectHexAction;
   closeHexModalAction: TCloseHexModalAction;
@@ -94,6 +104,7 @@ export type {
   TArmBuildingAction,
   TBuildOnHexAction,
   TCancelDemolishAction,
+  TCancelSoilCleanseAction,
   TCloseHexModalAction,
   TCloseSlotModalAction,
   TCloseTaxPickAction,
@@ -103,8 +114,11 @@ export type {
   TEndPhaseAction,
   THoverHexAction,
   TNavigateToIslandAction,
+  TNavigateToWorldAction,
+  TNewGameAction,
   TOpenTaxPickAction,
   TOpenTechModalAction,
+  TPickSoilHexAction,
   TPickTaxFaceAction,
   TPlaceStrongholdAction,
   TRequestDemolishAction,
@@ -114,4 +128,5 @@ export type {
   TSkipTaxAnimationAction,
   TStartGameAction,
   TToggleDemolishModeAction,
+  TToggleSoilCleanseAction,
 };

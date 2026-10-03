@@ -44,7 +44,8 @@ const PlayersPanel: FC<TPlayersPanelProps> = ({ registry }) => {
           <button
             key={player.id}
             type="button"
-            className={`player-row ${isViewed ? "player-row--viewed" : ""}`}
+            className={`player-row ${isViewed ? "player-row--viewed" : ""} ${player.eliminated ? "player-row--out" : ""}`}
+            title={player.eliminated ? "Выбыл из игры" : undefined}
             disabled={isSetup}
             onClick={() => registry.navigateToIslandAction(player.id === humanId ? null : player.id)}
           >

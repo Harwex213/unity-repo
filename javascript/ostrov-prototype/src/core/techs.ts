@@ -25,7 +25,8 @@ type TTechId =
   | "masonry"
   | "irrigation"
   | "filters"
-  | "asylums";
+  | "asylums"
+  | "central_conversion";
 
 type TTech = {
   readonly id: TTechId;
@@ -35,7 +36,12 @@ type TTech = {
   readonly requires: readonly TTechId[];
   readonly description: string;
   readonly unlocks: readonly TUnitId[];
+  /** A trophy is not researched: the boss drops it. Science cannot buy it. */
+  readonly trophy?: boolean;
 };
+
+/** The boss's trophy. It unlocks the central converter. */
+const BOSS_TECH_ID: TTechId = "central_conversion";
 
 const TECHS: readonly TTech[] = [
   {
@@ -182,6 +188,16 @@ const TECHS: readonly TTech[] = [
     description: "Каждый ход один сумасшедший возвращается к работе.",
     unlocks: [],
   },
+  {
+    id: "central_conversion",
+    label: "Центральная конверсия",
+    branch: "ecology",
+    cost: 0,
+    requires: [],
+    description: "Трофей босса. Открывает Центральный конвертер: он отключает токсичность всех ваших зданий.",
+    unlocks: [],
+    trophy: true,
+  },
 ];
 
 const TECH_BY_ID = new Map(TECHS.map((tech) => [tech.id, tech]));
@@ -222,8 +238,8 @@ const techEffects = (researched: readonly TTechId[]): TTechEffects => {
 const isAvailable = (tech: TTech, researched: readonly TTechId[]) => {
   const owned = new Set(researched);
 
-  return !owned.has(tech.id) && tech.requires.every((required) => owned.has(required));
+  return !tech.trophy && !owned.has(tech.id) && tech.requires.every((required) => owned.has(required));
 };
 
 export type { TTech, TTechBranch, TTechEffects, TTechId };
-export { getTech, isAvailable, TECHS, techEffects };
+export { BOSS_TECH_ID, getTech, isAvailable, TECHS, techEffects };

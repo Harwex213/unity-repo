@@ -1,9 +1,11 @@
 import archerIcon from "../assets/icons/archer.png";
 import armyIcon from "../assets/icons/army.png";
 import batIcon from "../assets/icons/bat.png";
+import bossIcon from "../assets/icons/boss.png";
 import buildingIcon from "../assets/icons/building.png";
 import cavalryIcon from "../assets/icons/cavalry.png";
 import checkIcon from "../assets/icons/check.png";
+import converterIcon from "../assets/icons/converter.png";
 import closeIcon from "../assets/icons/close.png";
 import coinIcon from "../assets/icons/coin.png";
 import crowIcon from "../assets/icons/crow.png";
@@ -58,6 +60,8 @@ import zombieIcon from "../assets/icons/zombie.png";
 const ICONS = {
   archer: archerIcon,
   army: armyIcon,
+  boss: bossIcon,
+  converter: converterIcon,
   bat: batIcon,
   building: buildingIcon,
   cavalry: cavalryIcon,

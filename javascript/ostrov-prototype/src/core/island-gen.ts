@@ -207,6 +207,9 @@ const createRival = (
     cellId: "",
     strongholdHexId: null,
     toxicMeter: 0,
+    bossSlain: false,
+    hasHadBuildings: built > 0,
+    eliminated: false,
   };
 };
 
@@ -226,6 +229,9 @@ const createPlayers = (nickname: string): readonly TPlayer[] => {
     cellId: "",
     strongholdHexId: null,
     toxicMeter: 0,
+    bossSlain: false,
+    hasHadBuildings: false,
+    eliminated: false,
   };
 
   return [human, ...RIVALS.map((rival) => createRival(rival, nickname))];
