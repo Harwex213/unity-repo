@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals-react";
 import type { TFactionId } from "../core/factions";
+import type { TDifficulty } from "../core/main-menu";
 import type { TBuildingId, TResourceId } from "../core/types";
 
 /**
@@ -65,6 +66,12 @@ type TProductionReveal = {
  * while the player picks the hex to destroy. Once it is set, the
  * player picks the hex to purify. Nothing changes on the island until then.
  */
+/**
+ * The main menu over the game. `leaving` is the fade-out after a start: the
+ * game page is mounted under the menu, and the menu still holds the input.
+ */
+type TMainMenuState = "closed" | "open" | "leaving";
+
 type TSoilCleanseMode = {
   readonly sacrificeHexId: string | null;
 };
@@ -78,6 +85,12 @@ type TSoilCleanseFx = {
 };
 
 const createUiState = () => ({
+  /** The main menu, open at boot only with the `?menu` flag. */
+  mainMenu: signal<TMainMenuState>("closed"),
+  /** The credits panel of the main menu. */
+  menuCreditsOpen: signal<boolean>(false),
+  /** The difficulty picked in the main menu. A preference only: no rule reads it yet. */
+  difficulty: signal<TDifficulty>("normal"),
   /** The building card clicked in the buildings panel, waiting for a hex. */
   armedBuilding: signal<TBuildingId | null>(null),
   demolishMode: signal<boolean>(false),
@@ -117,6 +130,7 @@ export type {
   TCamera,
   TFlight,
   THudAnchorId,
+  TMainMenuState,
   TPointerAnchor,
   TProductionReveal,
   TSoilCleanseFx,

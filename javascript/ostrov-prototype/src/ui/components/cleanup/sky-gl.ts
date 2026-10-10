@@ -452,5 +452,6 @@ const createSkyRenderer = (canvas: HTMLCanvasElement, mode: TSkyMode, seed: numb
   return { render, dispose };
 };
 
-export type { TSkyFrame, TSkyRenderer };
-export { createSkyRenderer };
+export type { TProgram, TSkyFrame, TSkyRenderer };
+// The shader helpers are shared with the main menu background.
+export { createProgram, createSkyRenderer, NOISE, QUAD_VERTEX, uniform };

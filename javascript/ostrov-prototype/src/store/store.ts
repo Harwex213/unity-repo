@@ -110,7 +110,9 @@ const createDerived = (
    * phase has its own page, so the card waits for its page and its phase.
    */
   const guideContextStep = computed((): TGuideStepId | null => {
-    if (!guide.enabled.value || game.outcome.value) {
+    // The guide waits for the main menu to close: the intro card opens over
+    // the island, after the start.
+    if (!guide.enabled.value || game.outcome.value || ui.mainMenu.value !== "closed") {
       return null;
     }
 

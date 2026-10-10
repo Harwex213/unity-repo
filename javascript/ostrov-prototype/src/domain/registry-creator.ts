@@ -9,6 +9,14 @@ import {
 } from "./build-actions";
 import { endPhaseAction, newGameAction, startGameAction } from "./game-actions";
 import { nextGuideStepAction, prevGuideStepAction, reachGuideStepAction, skipGuideAction } from "./guide-actions";
+import {
+  closeMenuCreditsAction,
+  exitMenuAction,
+  openMainMenuAction,
+  openMenuCreditsAction,
+  setDifficultyAction,
+  startFromMenuAction,
+} from "./menu-actions";
 import { navigateToIslandAction, navigateToWorldAction } from "./route-actions";
 import { placeStrongholdAction } from "./setup-actions";
 import { closeSlotModalAction } from "./slot-actions";
@@ -98,6 +106,12 @@ const createRegistry = (store: TStore) => {
     openFactionsModalAction,
     selectFactionAction,
     closeFactionsModalAction,
+    openMainMenuAction,
+    startFromMenuAction,
+    exitMenuAction,
+    setDifficultyAction,
+    openMenuCreditsAction,
+    closeMenuCreditsAction,
   };
 
   // The actions differ in arity, so the store is bound through one shared shape.

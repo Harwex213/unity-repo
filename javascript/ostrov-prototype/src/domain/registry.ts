@@ -4,6 +4,8 @@ import type { TSkillId } from "../core/skills";
 import type { TFactionId } from "../core/factions";
 import type { TTechId } from "../core/techs";
 import type { TBuildingId } from "../core/types";
+import type { TDifficulty } from "../core/main-menu";
+import type { TStartFromMenuOptions } from "./menu-actions";
 import type { TCamera, THudAnchorId, TPointerAnchor } from "../store/ui-state";
 
 /**
@@ -65,6 +67,13 @@ type TNextGuideStepAction = () => void;
 type TPrevGuideStepAction = () => void;
 type TSkipGuideAction = () => void;
 
+type TOpenMainMenuAction = () => void;
+type TStartFromMenuAction = (options: TStartFromMenuOptions) => void;
+type TExitMenuAction = () => void;
+type TSetDifficultyAction = (difficulty: TDifficulty) => void;
+type TOpenMenuCreditsAction = () => void;
+type TCloseMenuCreditsAction = () => void;
+
 type TAppRegistry = {
   placeStrongholdAction: TPlaceStrongholdAction;
   startGameAction: TStartGameAction;
@@ -113,6 +122,12 @@ type TAppRegistry = {
   openFactionsModalAction: TOpenFactionsModalAction;
   selectFactionAction: TSelectFactionAction;
   closeFactionsModalAction: TCloseFactionsModalAction;
+  openMainMenuAction: TOpenMainMenuAction;
+  startFromMenuAction: TStartFromMenuAction;
+  exitMenuAction: TExitMenuAction;
+  setDifficultyAction: TSetDifficultyAction;
+  openMenuCreditsAction: TOpenMenuCreditsAction;
+  closeMenuCreditsAction: TCloseMenuCreditsAction;
 };
 
 export type {
@@ -135,6 +150,12 @@ export type {
   TCancelSoilCleanseAction,
   TCloseFactionsModalAction,
   TCloseHexModalAction,
+  TCloseMenuCreditsAction,
+  TExitMenuAction,
+  TOpenMainMenuAction,
+  TOpenMenuCreditsAction,
+  TSetDifficultyAction,
+  TStartFromMenuAction,
   TCloseSlotModalAction,
   TCloseTaxPickAction,
   TCloseTechModalAction,

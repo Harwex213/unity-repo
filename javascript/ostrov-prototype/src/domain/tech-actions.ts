@@ -7,6 +7,11 @@ import type { TTechId } from "../core/techs";
 
 /** Science buys technologies. Nothing else spends it. */
 const researchTechAction = (store: TStore, techId: TTechId) => {
+  // The main menu shows the tree to read only: no game is running yet.
+  if (store.ui.mainMenu.peek() !== "closed") {
+    return;
+  }
+
   const player = store.derived.humanPlayer.peek();
   if (!player) {
     return;
