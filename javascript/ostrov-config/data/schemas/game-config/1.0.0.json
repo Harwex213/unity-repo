@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ostrov.game/schemas/game-config/1.0.0.json",
+  "title": "GameConfig",
+  "description": "Ostrov game balance manifest. The web prototype writes this file and Unity reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "configVersion", "resources", "biomes", "buildings", "units"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path to this schema. IDEs use it for autocomplete."
+    },
+    "schemaVersion": {
+      "description": "Version of the schema format. Unity runs migrations when the file has an older major version.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "configVersion": {
+      "description": "Version of the balance data. It grows on every export from the web editor.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "meta": { "$ref": "#/$defs/Meta" },
+    "resources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Resource" }
+    },
+    "biomes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Biome" }
+    },
+    "buildings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Building" }
+    },
+    "units": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Unit" }
+    }
+  },
+  "$defs": {
+    "Id": {
+      "description": "Snake_case identifier. Other entries reference an entry by this id.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "Meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "author": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "comment": { "type": "string" }
+      }
+    },
+    "Resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "label": { "type": "string" },
+        "startAmount": { "type": "integer", "minimum": 0, "default": 0 },
+        "negative": {
+          "description": "True for a resource that hurts the player, for example madness.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "Biome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "label": { "type": "string" }
+      }
+    },
+    "Face": {
+      "description": "One face of a building die. The tax phase rolls one face.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource", "amount", "toxicity"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/Id" },
+        "amount": { "type": "integer", "minimum": 0 },
+        "toxicity": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Cost": {
+      "description": "Map from resource id to amount.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/Id" },
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "Building": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "yields", "cost", "baseFaces"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "label": { "type": "string" },
+        "yields": { "$ref": "#/$defs/Id" },
+        "cost": { "$ref": "#/$defs/Cost" },
+        "baseFaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Face" }
+        },
+        "biomeFaces": {
+          "description": "Map from biome id to the extra face the biome adds.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/Id" },
+          "additionalProperties": { "$ref": "#/$defs/Face" }
+        }
+      }
+    },
+    "Unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "unitClass", "hp", "damage", "cooldown", "range", "speed", "flying", "upkeep"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "label": { "type": "string" },
+        "unitClass": { "enum": ["melee", "ranged", "cavalry", "air"] },
+        "hp": { "type": "integer", "minimum": 1 },
+        "damage": {
+          "description": "Damage of one hit before the ±15% roll.",
+          "type": "number",
+          "minimum": 0
+        },
+        "cooldown": {
+          "description": "Seconds between two hits.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "range": {
+          "description": "Reach in hex steps. Melee is 1.",
+          "type": "number",
+          "minimum": 1
+        },
+        "speed": {
+          "description": "Hex steps per second.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "flying": { "type": "boolean" },
+        "projectile": {
+          "description": "Null for melee units.",
+          "enum": ["stone", "arrow", "bullet", "hex", "bolt", null]
+        },
+        "upkeep": {
+          "description": "How many people the unit costs to field.",
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "if": { "properties": { "unitClass": { "enum": ["ranged", "cavalry"] } } },
+      "then": { "required": ["projectile"], "properties": { "projectile": { "type": "string" } } }
+    }
+  }
+}

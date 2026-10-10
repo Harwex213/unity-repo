@@ -1,8 +1,17 @@
-import { ATTACH_PULL_SECONDS, RETREAT_BAND, TICK_SECONDS } from "../../../core/cleanup-sim";
+import { pixelToAxial, roundAxial } from "../../../core/cleanup-attach";
+import {
+  isWindowClosing,
+  isWindowOpen,
+  sidePoint,
+  windowCenter,
+  windowSecondsLeft,
+} from "../../../core/cleanup-border";
+import { ATTACH_PULL_SECONDS, TICK_HZ, TICK_SECONDS } from "../../../core/cleanup-sim";
 import { HEX_SIZE, hexToPixel } from "../../../core/hex";
 import { getBuilding } from "../../../core/buildings";
 import { ICONS } from "../../../core/icons";
 import { STRONGHOLD_HEX_ART } from "../../../core/stronghold";
+import type { TBorderRock, TBorderSide, TBorderWindow } from "../../../core/cleanup-border";
 import type { TCleanupSim, TSimEvent, TSimIsland, TSimProjectile, TSimUnit } from "../../../core/cleanup-sim";
 import type { TBuildingId } from "../../../core/types";
 import type { TIslandSprite } from "./island-sprites";
@@ -47,9 +56,14 @@ const BOB_AMPLITUDE = 4;
 const BOB_SPEED = 0.9;
 /** A cleared island falls this far while it fades into the haze. */
 const FALL_DISTANCE = 160;
-const LABEL_SPACING = 900;
 const LOST_FADE_SECONDS = 2.5;
 const STITCH_SECONDS = 3;
+const POISON_SECONDS = 1.2;
+const CRUMBLE_SECONDS = 1.4;
+/** One toxic wisp of the border plumes every this many world units along the border. */
+const WISP_STEP = 85;
+/** A window clears and fills its plumes over this many seconds. */
+const WINDOW_FADE_SECONDS = 1.2;
 
 /* The palette of the antique map. */
 const INK = "#2a1f14";
@@ -59,6 +73,7 @@ const RUST = "#a8432c";
 const PLAYER_COLOR = "#93c25c";
 const ENEMY_COLOR = "#b8432e";
 const GOLD = "#d8b45c";
+const WARN = "#e0644a";
 const SERIF = "Georgia, \"Times New Roman\", serif";
 
 type TCamera = {
@@ -72,18 +87,62 @@ type TEffect =
   | { readonly kind: "death"; readonly x: number; readonly y: number; readonly born: number; readonly icon: string; readonly side: string }
   | { readonly kind: "ring"; readonly x: number; readonly y: number; readonly born: number; readonly color: string }
   | { readonly kind: "banner"; readonly island: number; readonly born: number; readonly text: string }
-  | { readonly kind: "razed"; readonly x: number; readonly y: number; readonly born: number };
+  | { readonly kind: "razed"; readonly x: number; readonly y: number; readonly born: number }
+  | { readonly kind: "poison"; readonly x: number; readonly y: number; readonly born: number }
+  | {
+      readonly kind: "crumble";
+      readonly x: number;
+      readonly y: number;
+      readonly born: number;
+      readonly island: number;
+      readonly lx: number;
+      readonly ly: number;
+      readonly shape: number;
+      readonly target: boolean;
+    };
+
+/** One puff of the border plumes. It drifts around its spot. */
+type TWisp = {
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly phase: number;
+  readonly side: TBorderSide;
+  readonly along: number;
+  readonly front: boolean;
+  readonly dark: boolean;
+};
+
+/** What the targeting cursor points at, worked out by the canvas every frame. */
+type TTargetHover = {
+  readonly island: number;
+  readonly hex: number;
+  /** Hex indices the cast would destroy: the target first, then the pieces that break off. */
+  readonly removed: readonly number[];
+  /** Why the cast would be refused, or `null`. */
+  readonly refusal: string | null;
+};
+
+type TTargeting = {
+  /** Reach of the skill past the rim of the player's island. */
+  readonly reach: number;
+  readonly hover: TTargetHover | null;
+};
 
 type TScene = {
   /** One sprite per sim island, `null` while it bakes. */
   readonly sprites: (TIslandSprite | null)[];
-  /** How many hexes the player's current sprite was baked with. */
-  playerBakedHexes: number;
+  /** The shape number each island's current sprite was baked with, -1 while none is. */
+  readonly bakedShape: number[];
   /** The player's island position this frame, for islands drawn relative to it. */
   playerAt: { x: number; y: number } | null;
   effects: TEffect[];
-  /** Diagonal ink hatching for the retreat band, made on first use. */
-  hatch: CanvasPattern | null;
+  /** The puffs of the border plumes, laid out on first use. */
+  wisps: readonly TWisp[] | null;
+  /** Soft cloud blobs the wisps are drawn with: a light and a dark one. */
+  wispArt: readonly HTMLCanvasElement[] | null;
+  /** Set while a skill waits for a target. */
+  targeting: TTargeting | null;
 };
 
 type TFrame = {
@@ -133,6 +192,20 @@ const absorbEvents = (scene: TScene, sim: TCleanupSim, events: readonly TSimEven
       scene.effects.push({ kind: "ring", x: event.x, y: event.y, born: time, color: CREAM });
     } else if (event.type === "razed") {
       scene.effects.push({ kind: "razed", x: event.x, y: event.y, born: time });
+    } else if (event.type === "poison") {
+      scene.effects.push({ kind: "poison", x: event.x, y: event.y, born: time });
+    } else if (event.type === "crumble") {
+      scene.effects.push({
+        kind: "crumble",
+        x: event.x,
+        y: event.y,
+        born: time,
+        island: event.island,
+        lx: event.lx,
+        ly: event.ly,
+        shape: event.shape,
+        target: event.target,
+      });
     } else if (event.type === "cleared") {
       scene.effects.push({ kind: "banner", island: event.island, born: time, text: "Зачищено — пристыкуйте" });
     } else if (event.type === "attached") {
@@ -186,7 +259,7 @@ const placementOf = (island: TSimIsland, scene: TScene, frame: TFrame, time: num
 
   const attach = island.attach;
   const base = scene.playerAt;
-  if (!attach || !base || scene.playerBakedHexes >= attach.hexCountAfter) {
+  if (!attach || !base || (scene.bakedShape[0] ?? -1) >= attach.shapeAfter) {
     return null;
   }
 
@@ -284,36 +357,325 @@ const drawStitches = (context: CanvasRenderingContext2D, sim: TCleanupSim, frame
   context.globalAlpha = 1;
 };
 
-const ensureHatch = (context: CanvasRenderingContext2D, scene: TScene) => {
-  if (scene.hatch) {
-    return scene.hatch;
-  }
+/** A stable pseudo-random number in 0..1 for a wisp or a rock vertex. */
+const hash01 = (value: number) => {
+  const x = Math.sin(value * 127.1 + 311.7) * 43758.5453;
 
-  const tile = document.createElement("canvas");
-  tile.width = 18;
-  tile.height = 18;
-  const tileContext = tile.getContext("2d");
-  if (tileContext) {
-    tileContext.strokeStyle = "rgba(201, 180, 138, 0.32)";
-    tileContext.lineWidth = 1.4;
-    tileContext.beginPath();
-    for (const offset of [-18, 0, 18]) {
-      tileContext.moveTo(offset, 18);
-      tileContext.lineTo(offset + 18, 0);
-    }
-
-    tileContext.stroke();
-  }
-
-  scene.hatch = context.createPattern(tile, "repeat");
-
-  return scene.hatch;
+  return x - Math.floor(x);
 };
 
-/** The map border: open sky beyond it, a hatched retreat band and a dashed ink line. */
+/** A soft cloud blob, drawn once and scaled for every wisp. */
+const makeWispArt = (core: string, rim: string) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const glow = context.createRadialGradient(64, 64, 4, 64, 64, 64);
+    glow.addColorStop(0, core);
+    glow.addColorStop(0.55, rim);
+    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    context.fillStyle = glow;
+    context.fillRect(0, 0, 128, 128);
+  }
+
+  return canvas;
+};
+
+/** Lays the plume puffs out along the four sides, in three rows across the band. */
+const layoutWisps = (sim: TCleanupSim) => {
+  const wisps: TWisp[] = [];
+  const depth = sim.border.depth;
+  let seed = 1;
+
+  for (const side of [0, 1, 2, 3] as const) {
+    const half = side % 2 === 0 ? sim.bounds.halfWidth : sim.bounds.halfHeight - depth;
+
+    for (let along = -half; along <= half; along += WISP_STEP) {
+      for (const row of [0.18, 0.5, 0.82]) {
+        seed += 1;
+        const jitterAlong = (hash01(seed) - 0.5) * WISP_STEP * 0.8;
+        const jitterIn = (hash01(seed + 0.5) - 0.5) * depth * 0.25;
+        const point = sidePoint(sim.bounds, side, along + jitterAlong, row * depth + jitterIn);
+        wisps.push({
+          x: point.x,
+          y: point.y,
+          radius: (row > 0.7 ? 70 : 95) + hash01(seed + 0.25) * 55,
+          phase: hash01(seed + 0.75) * Math.PI * 2,
+          side,
+          along: along + jitterAlong,
+          front: row < 0.6 && hash01(seed + 0.33) < 0.55,
+          dark: hash01(seed + 0.66) < 0.35,
+        });
+      }
+    }
+  }
+
+  return wisps;
+};
+
+/** 0..1: how open a window is now. It clears as it opens and fills again as it closes. */
+const windowOpenness = (window: TBorderWindow, tick: number) => {
+  if (!isWindowOpen(window, tick)) {
+    return 0;
+  }
+
+  const sinceOpen = (tick - window.openTick) / TICK_HZ;
+  const untilClose = (window.closeTick - tick) / TICK_HZ;
+
+  return Math.min(1, sinceOpen / WINDOW_FADE_SECONDS, untilClose / WINDOW_FADE_SECONDS);
+};
+
+/** How clear of plumes a spot along a side is: 1 in the middle of an open window, 0 elsewhere. */
+const clearAt = (sim: TCleanupSim, side: TBorderSide, along: number) => {
+  let clear = 0;
+
+  for (const window of sim.border.windows) {
+    if (window.side !== side) {
+      continue;
+    }
+
+    const edge = (window.half - Math.abs(along - window.at)) / 70;
+    if (edge > 0) {
+      clear = Math.max(clear, Math.min(1, edge) * windowOpenness(window, sim.tick));
+    }
+  }
+
+  return clear;
+};
+
+/** The world rectangle the camera sees, with a margin. */
+const viewRect = (frame: TFrame, margin: number) => {
+  const halfW = frame.width / 2 / frame.camera.zoom + margin;
+  const halfH = frame.height / 2 / frame.camera.zoom + margin;
+
+  return { minX: frame.camera.x - halfW, maxX: frame.camera.x + halfW, minY: frame.camera.y - halfH, maxY: frame.camera.y + halfH };
+};
+
+const drawWisps = (
+  context: CanvasRenderingContext2D,
+  sim: TCleanupSim,
+  scene: TScene,
+  frame: TFrame,
+  front: boolean,
+) => {
+  const wisps = scene.wisps ?? layoutWisps(sim);
+  scene.wisps = wisps;
+  const art = scene.wispArt ?? [
+    makeWispArt("rgba(176, 222, 92, 0.62)", "rgba(116, 160, 58, 0.32)"),
+    makeWispArt("rgba(92, 118, 52, 0.7)", "rgba(58, 76, 34, 0.36)"),
+  ];
+  scene.wispArt = art;
+  const view = viewRect(frame, 200);
+  const time = frame.motion ? frame.clock : 0;
+
+  for (const wisp of wisps) {
+    if (front && !wisp.front) {
+      continue;
+    }
+
+    if (wisp.x < view.minX || wisp.x > view.maxX || wisp.y < view.minY || wisp.y > view.maxY) {
+      continue;
+    }
+
+    const clear = clearAt(sim, wisp.side, wisp.along);
+    if (clear >= 1) {
+      continue;
+    }
+
+    const drift = time * 0.35 + wisp.phase;
+    const radius = wisp.radius * (1 + Math.sin(time * 0.6 + wisp.phase) * 0.1);
+    const x = wisp.x + Math.sin(drift) * 22;
+    const y = wisp.y + Math.cos(drift * 0.8) * 14 - (front ? 10 : 0);
+    context.globalAlpha = (1 - clear) * (front ? 0.55 : 0.9);
+    context.drawImage(art[wisp.dark ? 1 : 0] as HTMLCanvasElement, x - radius, y - radius, radius * 2, radius * 2);
+  }
+
+  context.globalAlpha = 1;
+};
+
+/** A jagged rock rising from the clouds: a grey-brown crag with an ink rim and a lit face. */
+const drawRock = (context: CanvasRenderingContext2D, rock: TBorderRock) => {
+  const points: { x: number; y: number }[] = [];
+  const count = 9;
+
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index / count) * Math.PI * 2 + hash01(rock.seed * 50 + index) * 0.4;
+    // The top of the crag reaches higher than its foot spreads.
+    const stretch = Math.sin(angle) < 0 ? 1.18 : 0.86;
+    const radius = rock.radius * (0.72 + hash01(rock.seed * 90 + index) * 0.32) * stretch;
+    points.push({ x: rock.x + Math.cos(angle) * radius, y: rock.y + Math.sin(angle) * radius });
+  }
+
+  context.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  });
+  context.closePath();
+  const shade = context.createLinearGradient(rock.x - rock.radius, rock.y - rock.radius, rock.x + rock.radius, rock.y + rock.radius);
+  shade.addColorStop(0, "#9a8b74");
+  shade.addColorStop(0.5, "#6e604f");
+  shade.addColorStop(1, "#3e342a");
+  context.fillStyle = shade;
+  context.fill();
+  context.lineJoin = "round";
+  context.strokeStyle = INK;
+  context.lineWidth = 4;
+  context.stroke();
+
+  // Cracks and the lit ridge, in ink and in cream.
+  const top = points.reduce((best, point) => (point.y < best.y ? point : best), points[0] as { x: number; y: number });
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(top.x, top.y);
+  context.lineTo(rock.x + rock.radius * 0.08, rock.y + rock.radius * 0.1);
+  context.lineTo(rock.x - rock.radius * 0.25, rock.y + rock.radius * 0.55);
+  context.moveTo(rock.x + rock.radius * 0.08, rock.y + rock.radius * 0.1);
+  context.lineTo(rock.x + rock.radius * 0.45, rock.y + rock.radius * 0.3);
+  context.stroke();
+  context.strokeStyle = "rgba(241, 228, 196, 0.55)";
+  context.lineWidth = 2.5;
+  context.beginPath();
+  context.moveTo(top.x - 4, top.y + 6);
+  context.lineTo(rock.x - rock.radius * 0.4, rock.y - rock.radius * 0.1);
+  context.stroke();
+};
+
+/** The world rectangle of a window's band. */
+const windowRect = (sim: TCleanupSim, window: TBorderWindow) => {
+  const depth = sim.border.depth;
+  const { halfWidth, halfHeight } = sim.bounds;
+  if (window.side === 0) {
+    return { x: window.at - window.half, y: -halfHeight, w: window.half * 2, h: depth };
+  }
+
+  if (window.side === 2) {
+    return { x: window.at - window.half, y: halfHeight - depth, w: window.half * 2, h: depth };
+  }
+
+  if (window.side === 1) {
+    return { x: halfWidth - depth, y: window.at - window.half, w: depth, h: window.half * 2 };
+  }
+
+  return { x: -halfWidth, y: window.at - window.half, w: depth, h: window.half * 2 };
+};
+
+/** An open window: light through the gap, gold edges, chevrons pointing out, and its timer. */
+const drawWindow = (context: CanvasRenderingContext2D, sim: TCleanupSim, window: TBorderWindow, frame: TFrame) => {
+  const openness = windowOpenness(window, sim.tick);
+  if (openness <= 0) {
+    return;
+  }
+
+  const closing = isWindowClosing(window, sim.tick, TICK_HZ);
+  const blink = closing ? 0.55 + 0.45 * Math.sin(frame.clock * 10) : 1;
+  const color = closing ? WARN : GOLD;
+  const rect = windowRect(sim, window);
+  const outer = sidePoint(sim.bounds, window.side, window.at, 0);
+  const inner = sidePoint(sim.bounds, window.side, window.at, sim.border.depth);
+  const light = context.createLinearGradient(inner.x, inner.y, outer.x, outer.y);
+  light.addColorStop(0, "rgba(216, 180, 92, 0)");
+  light.addColorStop(1, closing ? "rgba(224, 100, 74, 0.35)" : "rgba(241, 228, 196, 0.38)");
+
+  context.globalAlpha = openness;
+  context.fillStyle = light;
+  context.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+  // The two edges of the gap, across the band.
+  context.globalAlpha = openness * blink;
+  context.strokeStyle = color;
+  context.lineWidth = 5;
+  context.setLineDash([18, 12]);
+  context.beginPath();
+  for (const edge of [-1, 1]) {
+    const from = sidePoint(sim.bounds, window.side, window.at + edge * window.half, 0);
+    const to = sidePoint(sim.bounds, window.side, window.at + edge * window.half, sim.border.depth);
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+  }
+  context.stroke();
+  context.setLineDash([]);
+
+  // Chevrons slide out through the gap.
+  const dx = outer.x - inner.x;
+  const dy = outer.y - inner.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = dx / length;
+  const uy = dy / length;
+  const flow = frame.motion ? (frame.clock * 0.6) % 1 : 0.5;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  for (let index = 0; index < 3; index += 1) {
+    const t = (index / 3 + flow) % 1;
+    const cx = inner.x + dx * t;
+    const cy = inner.y + dy * t;
+    context.globalAlpha = openness * blink * Math.sin(t * Math.PI);
+    context.beginPath();
+    context.moveTo(cx - ux * 18 - uy * 34, cy - uy * 18 + ux * 34);
+    context.lineTo(cx + ux * 18, cy + uy * 18);
+    context.lineTo(cx - ux * 18 + uy * 34, cy - uy * 18 - ux * 34);
+    context.strokeStyle = INK;
+    context.lineWidth = 11;
+    context.stroke();
+    context.strokeStyle = color;
+    context.lineWidth = 6;
+    context.stroke();
+  }
+
+  const seconds = Math.ceil(windowSecondsLeft(window, sim.tick, TICK_HZ));
+  const label = closing ? `Закрывается · ${seconds} с` : `Окно · ${seconds} с`;
+  // The timer stands just past the border line, on the open sky, where no island covers it.
+  const at = sidePoint(sim.bounds, window.side, window.at, -46);
+  context.globalAlpha = openness * (closing ? blink : 1);
+  context.font = `italic 700 30px ${SERIF}`;
+  context.textAlign = window.side === 1 ? "left" : window.side === 3 ? "right" : "center";
+  context.textBaseline = "middle";
+  inkText(context, label, at.x, at.y, closing ? WARN : CREAM, 6);
+  context.globalAlpha = 1;
+};
+
+/** A wash of poison along the band, broken where a window is open. */
+const drawBandWash = (context: CanvasRenderingContext2D, sim: TCleanupSim) => {
+  const depth = sim.border.depth;
+
+  for (const side of [0, 1, 2, 3] as const) {
+    const half = side % 2 === 0 ? sim.bounds.halfWidth : sim.bounds.halfHeight - depth;
+    const outer = sidePoint(sim.bounds, side, 0, 0);
+    const inner = sidePoint(sim.bounds, side, 0, depth);
+    const wash = context.createLinearGradient(outer.x, outer.y, inner.x, inner.y);
+    wash.addColorStop(0, "rgba(58, 84, 30, 0.75)");
+    wash.addColorStop(1, "rgba(58, 84, 30, 0)");
+    context.fillStyle = wash;
+
+    // Steps along the side, so the wash thins out over an open window.
+    const step = 40;
+    for (let along = -half; along < half; along += step) {
+      const clear = clearAt(sim, side, along + step / 2);
+      if (clear >= 1) {
+        continue;
+      }
+
+      context.globalAlpha = 1 - clear;
+      const a = sidePoint(sim.bounds, side, along, 0);
+      const b = sidePoint(sim.bounds, side, along + step, depth);
+      context.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    }
+  }
+
+  context.globalAlpha = 1;
+};
+
+/**
+ * The map border: open sky beyond it, a band of toxic plumes with rocks
+ * rising from under them, and the windows through which the island can leave.
+ */
 const drawBorder = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene: TScene, frame: TFrame) => {
   const { halfWidth, halfHeight } = sim.bounds;
-  const inner = RETREAT_BAND;
+  const depth = sim.border.depth;
   const far = 20000;
 
   // Beyond the border the map is not drawn: a dark wash.
@@ -323,50 +685,72 @@ const drawBorder = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene: 
   context.fillStyle = "rgba(6, 7, 8, 0.5)";
   context.fill("evenodd");
 
-  // The retreat band, hatched like the unexplored mist of the globe.
-  const pulse = sim.inRetreatBand ? 0.5 + 0.5 * Math.sin(frame.clock * 4) : 0;
-  context.beginPath();
-  context.rect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2);
-  context.rect(-halfWidth + inner, -halfHeight + inner, (halfWidth - inner) * 2, (halfHeight - inner) * 2);
-  context.fillStyle = `rgba(201, 180, 138, ${0.05 + pulse * 0.06})`;
-  context.fill("evenodd");
-  const hatch = ensureHatch(context, scene);
-  if (hatch) {
-    context.fillStyle = hatch;
-    context.fill("evenodd");
+  drawBandWash(context, sim);
+  drawWisps(context, sim, scene, frame, false);
+
+  const view = viewRect(frame, 200);
+  for (const rock of sim.border.rocks) {
+    if (rock.x > view.minX && rock.x < view.maxX && rock.y > view.minY && rock.y < view.maxY) {
+      drawRock(context, rock);
+    }
   }
 
-  context.strokeStyle = SEPIA;
-  context.lineWidth = 4;
-  context.setLineDash([26, 14]);
-  context.strokeRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2);
-  context.lineWidth = 1.5;
-  context.setLineDash([8, 10]);
-  context.globalAlpha = 0.6;
-  context.strokeRect(-halfWidth + inner, -halfHeight + inner, (halfWidth - inner) * 2, (halfHeight - inner) * 2);
-  context.globalAlpha = 1;
+  drawWisps(context, sim, scene, frame, true);
+
+  // The inner edge of the band: a dashed toxic line.
+  context.strokeStyle = "rgba(155, 255, 79, 0.35)";
+  context.lineWidth = 2;
+  context.setLineDash([10, 12]);
+  context.strokeRect(-halfWidth + depth, -halfHeight + depth, (halfWidth - depth) * 2, (halfHeight - depth) * 2);
   context.setLineDash([]);
 
-  // "Отступление" written along the band, as a map labels its margins.
-  context.font = `italic 600 30px ${SERIF}`;
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillStyle = "rgba(232, 220, 192, 0.55)";
-  const mid = inner / 2;
+  for (const window of sim.border.windows) {
+    drawWindow(context, sim, window, frame);
+  }
+};
 
-  for (let x = -halfWidth + LABEL_SPACING / 2; x < halfWidth; x += LABEL_SPACING) {
-    context.fillText("Отступление", x, -halfHeight + mid);
-    context.fillText("Отступление", x, halfHeight - mid);
+/** The outline of one pointy-top hex. */
+const hexOutline = (context: CanvasRenderingContext2D, x: number, y: number, size: number) => {
+  for (let corner = 0; corner < 6; corner += 1) {
+    const angle = ((60 * corner - 30) * Math.PI) / 180;
+    const px = x + size * Math.cos(angle);
+    const py = y + size * Math.sin(angle);
+    if (corner === 0) {
+      context.moveTo(px, py);
+    } else {
+      context.lineTo(px, py);
+    }
   }
 
-  for (let y = -halfHeight + LABEL_SPACING / 2; y < halfHeight; y += LABEL_SPACING) {
-    for (const side of [-1, 1]) {
-      context.save();
-      context.translate(side * (halfWidth - mid), y);
-      context.rotate((side * Math.PI) / 2);
-      context.fillText("Отступление", 0, 0);
-      context.restore();
+  context.closePath();
+};
+
+/**
+ * A destroyed hex leaves the island at once, but the new sprite takes a
+ * moment to bake. Until it is ready, the old sprite gets a hole there.
+ */
+const cutCrumbledHexes = (context: CanvasRenderingContext2D, scene: TScene, island: TSimIsland, at: { x: number; y: number }) => {
+  const baked = scene.bakedShape[island.index] ?? -1;
+  let cut = false;
+
+  for (const effect of scene.effects) {
+    if (effect.kind !== "crumble" || effect.island !== island.index || baked >= effect.shape) {
+      continue;
     }
+
+    if (!cut) {
+      context.save();
+      context.globalCompositeOperation = "destination-out";
+      context.beginPath();
+      cut = true;
+    }
+
+    hexOutline(context, at.x + effect.lx, at.y + effect.ly, HEX_SIZE + 2);
+  }
+
+  if (cut) {
+    context.fill();
+    context.restore();
   }
 };
 
@@ -398,6 +782,7 @@ const drawIslands = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene:
     }
 
     context.restore();
+    cutCrumbledHexes(context, scene, island, at);
 
     if (island.state === "cleared") {
       // A husk waiting to be docked: a dashed sepia ring calls for the player.
@@ -838,6 +1223,47 @@ const drawEffects = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene:
 
       context.font = `italic 700 18px ${SERIF}`;
       inkText(context, "Разрушено", effect.x, effect.y - 70 - t * 20, "#e0644a", 4);
+    } else if (effect.kind === "poison" && age < POISON_SECONDS) {
+      // Green fumes rise from a hex choking in the plumes.
+      const t = age / POISON_SECONDS;
+      context.globalAlpha = (1 - t) * 0.8;
+      for (let puff = 0; puff < 3; puff += 1) {
+        const px = effect.x + (puff - 1) * 16 + Math.sin(t * 6 + puff) * 6;
+        const py = effect.y - 10 - t * 60 - puff * 8;
+        context.fillStyle = "rgba(155, 255, 79, 0.45)";
+        context.strokeStyle = "rgba(42, 60, 20, 0.8)";
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.arc(px, py, 8 + t * 14, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+      }
+    } else if (effect.kind === "crumble" && age < CRUMBLE_SECONDS) {
+      // The hex breaks off and falls into the haze, shedding rubble.
+      const t = age / CRUMBLE_SECONDS;
+      const drop = t * t * 180;
+      context.globalAlpha = 1 - t;
+      context.fillStyle = effect.target ? "#5a4632" : "#6b5a44";
+      context.strokeStyle = INK;
+      context.lineWidth = 3;
+      context.beginPath();
+      hexOutline(context, effect.x, effect.y + drop, HEX_SIZE * (1 - t * 0.35));
+      context.fill();
+      context.stroke();
+      context.fillStyle = INK;
+      for (let stone = 0; stone < 6; stone += 1) {
+        const angle = stone * 1.05 + effect.lx * 0.01;
+        const spread = HEX_SIZE * (0.6 + t * 0.9);
+        context.beginPath();
+        context.arc(effect.x + Math.cos(angle) * spread, effect.y + Math.sin(angle) * spread * 0.6 + drop * 1.3, 4 + (stone % 3), 0, Math.PI * 2);
+        context.fill();
+      }
+
+      if (effect.target && age < 0.9) {
+        context.globalAlpha = 1 - age / 0.9;
+        context.font = `italic 700 22px ${SERIF}`;
+        inkText(context, "Земля разрушена", effect.x, effect.y - 60 - t * 30, WARN, 5);
+      }
     } else if (effect.kind === "banner" && age < BANNER_SECONDS) {
       const island = sim.islands[effect.island];
       if (!island) {
@@ -855,10 +1281,10 @@ const drawEffects = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene:
   context.globalAlpha = 1;
 };
 
-/** The retreat ring around the player's island while it sits in the band. */
-const drawRetreat = (context: CanvasRenderingContext2D, sim: TCleanupSim, frame: TFrame) => {
+/** The exit ring around the player's island while it sails through an open window. */
+const drawExit = (context: CanvasRenderingContext2D, sim: TCleanupSim, frame: TFrame) => {
   const player = sim.islands[0];
-  if (!player || sim.retreatProgress <= 0) {
+  if (!player || !sim.inWindow || sim.exitProgress <= 0) {
     return;
   }
 
@@ -873,16 +1299,106 @@ const drawRetreat = (context: CanvasRenderingContext2D, sim: TCleanupSim, frame:
   context.beginPath();
   context.arc(cx, cy, radius, 0, Math.PI * 2);
   context.stroke();
-  context.strokeStyle = SEPIA;
+  context.strokeStyle = GOLD;
   context.lineWidth = 6;
   context.beginPath();
-  context.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * sim.retreatProgress);
+  context.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * sim.exitProgress);
   context.stroke();
 
   context.font = `italic 700 26px ${SERIF}`;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  inkText(context, sim.inRetreatBand ? "Отступление…" : "Отступление прервано", cx, cy - radius - 24, CREAM, 5);
+  inkText(context, "Уходим через окно…", cx, cy - radius - 24, CREAM, 5);
+};
+
+/**
+ * The targeting cursor of a skill: the reach around the player's island, the
+ * target hex in red and, in a lighter red, the pieces that would break off.
+ */
+const drawTargeting = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene: TScene, frame: TFrame) => {
+  const targeting = scene.targeting;
+  const player = sim.islands[0];
+  if (!targeting || !player) {
+    return;
+  }
+
+  const home = islandPosition(player, frame);
+  context.strokeStyle = "rgba(224, 100, 74, 0.55)";
+  context.lineWidth = 3;
+  context.setLineDash([16, 12]);
+  context.beginPath();
+  context.arc(home.x + player.body.centerX, home.y + player.body.centerY, player.body.radius + targeting.reach, 0, Math.PI * 2);
+  context.stroke();
+  context.setLineDash([]);
+
+  const hover = targeting.hover;
+  const island = hover ? sim.islands[hover.island] : null;
+  if (!hover || !island) {
+    return;
+  }
+
+  const at = islandPosition(island, frame);
+  const pulse = 0.75 + Math.sin(frame.clock * 8) * 0.25;
+  const refused = hover.refusal !== null;
+
+  hover.removed.forEach((index, order) => {
+    const hex = island.hexes[index];
+    if (!hex) {
+      return;
+    }
+
+    const center = hexToPixel(hex.q, hex.r, HEX_SIZE);
+    const target = order === 0;
+    context.beginPath();
+    hexOutline(context, at.x + center.x, at.y + center.y, HEX_SIZE - 3);
+    if (refused) {
+      context.fillStyle = "rgba(60, 60, 60, 0.35)";
+    } else {
+      context.fillStyle = target ? `rgba(200, 40, 24, ${0.5 * pulse})` : "rgba(224, 100, 74, 0.3)";
+    }
+    context.fill();
+    context.strokeStyle = refused ? SEPIA : target ? "#ff3b22" : WARN;
+    context.lineWidth = target ? 5 : 2.5;
+    context.stroke();
+  });
+
+  const first = island.hexes[hover.removed[0] ?? -1];
+  if (!first) {
+    return;
+  }
+
+  const center = hexToPixel(first.q, first.r, HEX_SIZE);
+  let label = hover.refusal ?? (island.index === 0 ? "Разрушить свой гекс" : "Разрушить");
+  if (!refused && hover.removed.length > 1) {
+    label += ` · отколется ${hover.removed.length - 1} гекс.`;
+  }
+
+  context.font = `italic 700 22px ${SERIF}`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  inkText(context, label, at.x + center.x, at.y + center.y - HEX_SIZE - 16, refused ? CREAM : WARN, 5);
+};
+
+/**
+ * The island and hex under a world point, as drawn this frame. Islands that
+ * have joined or drifted off are skipped.
+ */
+const pickHex = (sim: TCleanupSim, frame: TFrame, x: number, y: number) => {
+  for (const island of sim.islands) {
+    if (island.state === "attached" || island.state === "lost" || island.hexes.length === 0) {
+      continue;
+    }
+
+    const at = islandPosition(island, frame);
+    const fraction = pixelToAxial(x - at.x, y - at.y);
+    const cell = roundAxial(fraction.q, fraction.r);
+    const index = island.hexes.findIndex((hex) => hex.q === cell.q && hex.r === cell.r);
+    if (index >= 0) {
+      return { island: island.index, hex: index };
+    }
+  }
+
+  return null;
 };
 
 /** An ink arrow on the screen edge with an icon beside it. */
@@ -929,7 +1445,7 @@ const drawEdgeArrow = (
   }
 };
 
-/** Arrows toward enemy islands out of sight, and toward the nearest map border. */
+/** Arrows toward enemy islands out of sight, and toward the nearest open window in the plumes. */
 const drawPointers = (context: CanvasRenderingContext2D, sim: TCleanupSim, frame: TFrame) => {
   const { width, height, camera } = frame;
   const marker = iconImage(ICONS.army);
@@ -952,25 +1468,41 @@ const drawPointers = (context: CanvasRenderingContext2D, sim: TCleanupSim, frame
     drawEdgeArrow(context, Math.atan2(at.y - height / 2, at.x - width / 2), width, height, RUST, marker, null);
   }
 
-  // The nearest border, while it is out of sight.
-  const { halfWidth, halfHeight } = sim.bounds;
-  const sides = [
-    { gap: camera.x + halfWidth, x: -halfWidth, y: camera.y },
-    { gap: halfWidth - camera.x, x: halfWidth, y: camera.y },
-    { gap: camera.y + halfHeight, x: camera.x, y: -halfHeight },
-    { gap: halfHeight - camera.y, x: camera.x, y: halfHeight },
-  ].sort((a, b) => a.gap - b.gap);
-  const nearest = sides[0];
+  // The nearest open window, while it is out of sight.
+  const player = sim.islands[0];
+  if (!player) {
+    return;
+  }
+
+  const from = { x: player.body.x + player.body.centerX, y: player.body.y + player.body.centerY };
+  let nearest: TBorderWindow | null = null;
+  let nearestDistance = Infinity;
+  for (const window of sim.border.windows) {
+    if (!isWindowOpen(window, sim.tick)) {
+      continue;
+    }
+
+    const center = windowCenter(sim.bounds, window, sim.border.depth / 2);
+    const distance = Math.hypot(center.x - from.x, center.y - from.y);
+    if (distance < nearestDistance) {
+      nearest = window;
+      nearestDistance = distance;
+    }
+  }
+
   if (!nearest) {
     return;
   }
 
-  const edge = toScreen(nearest.x, nearest.y);
+  const center = windowCenter(sim.bounds, nearest, sim.border.depth / 2);
+  const edge = toScreen(center.x, center.y);
   if (edge.x >= 0 && edge.x <= width && edge.y >= 0 && edge.y <= height) {
     return;
   }
 
-  drawEdgeArrow(context, Math.atan2(edge.y - height / 2, edge.x - width / 2), width, height, SEPIA, null, "Отступление");
+  const closing = isWindowClosing(nearest, sim.tick, TICK_HZ);
+  const seconds = Math.ceil(windowSecondsLeft(nearest, sim.tick, TICK_HZ));
+  drawEdgeArrow(context, Math.atan2(edge.y - height / 2, edge.x - width / 2), width, height, closing ? WARN : GOLD, null, `Окно · ${seconds} с`);
 };
 
 const drawScene = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene: TScene, frame: TFrame) => {
@@ -1010,7 +1542,8 @@ const drawScene = (context: CanvasRenderingContext2D, sim: TCleanupSim, scene: T
   }
 
   drawEffects(context, sim, scene, frame, time);
-  drawRetreat(context, sim, frame);
+  drawExit(context, sim, frame);
+  drawTargeting(context, sim, scene, frame);
 
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   drawPointers(context, sim, frame);
@@ -1021,5 +1554,5 @@ const pruneEffects = (scene: TScene, time: number) => {
   scene.effects = scene.effects.filter((effect) => time - effect.born < DEATH_SECONDS && time - effect.born > -1);
 };
 
-export type { TCamera, TEffect, TFrame, TScene };
-export { absorbEvents, drawScene, iconImage, pruneEffects };
+export type { TCamera, TEffect, TFrame, TScene, TTargetHover, TTargeting };
+export { absorbEvents, drawScene, iconImage, pickHex, pruneEffects };

@@ -1,4 +1,7 @@
 import type { TCleanupSpeed } from "../store/battle-state";
+import type { TSkillTarget } from "../core/cleanup-sim";
+import type { TSkillId } from "../core/skills";
+import type { TFactionId } from "../core/factions";
 import type { TTechId } from "../core/techs";
 import type { TBuildingId } from "../core/types";
 import type { TCamera, THudAnchorId, TPointerAnchor } from "../store/ui-state";
@@ -48,7 +51,19 @@ type TSetCleanupInputAction = (x: number, y: number) => void;
 type TStepCleanupAction = (ticks: number) => void;
 type TSetCleanupSpeedAction = (speed: TCleanupSpeed) => void;
 type TToggleCleanupPauseAction = () => void;
+type TArmSkillAction = (skillId: TSkillId) => void;
+type TCancelSkillAction = () => void;
+type TCastSkillAction = (target: TSkillTarget) => void;
 type TCloseTechModalAction = () => void;
+
+type TOpenFactionsModalAction = (factionId?: TFactionId | null) => void;
+type TSelectFactionAction = (factionId: TFactionId) => void;
+type TCloseFactionsModalAction = () => void;
+
+type TReachGuideStepAction = () => void;
+type TNextGuideStepAction = () => void;
+type TPrevGuideStepAction = () => void;
+type TSkipGuideAction = () => void;
 
 type TAppRegistry = {
   placeStrongholdAction: TPlaceStrongholdAction;
@@ -88,6 +103,16 @@ type TAppRegistry = {
   stepCleanupAction: TStepCleanupAction;
   setCleanupSpeedAction: TSetCleanupSpeedAction;
   toggleCleanupPauseAction: TToggleCleanupPauseAction;
+  armSkillAction: TArmSkillAction;
+  cancelSkillAction: TCancelSkillAction;
+  castSkillAction: TCastSkillAction;
+  reachGuideStepAction: TReachGuideStepAction;
+  nextGuideStepAction: TNextGuideStepAction;
+  prevGuideStepAction: TPrevGuideStepAction;
+  skipGuideAction: TSkipGuideAction;
+  openFactionsModalAction: TOpenFactionsModalAction;
+  selectFactionAction: TSelectFactionAction;
+  closeFactionsModalAction: TCloseFactionsModalAction;
 };
 
 export type {
@@ -101,10 +126,14 @@ export type {
   TSetCleanupSpeedAction,
   TStepCleanupAction,
   TToggleCleanupPauseAction,
+  TArmSkillAction,
+  TCancelSkillAction,
+  TCastSkillAction,
   TArmBuildingAction,
   TBuildOnHexAction,
   TCancelDemolishAction,
   TCancelSoilCleanseAction,
+  TCloseFactionsModalAction,
   TCloseHexModalAction,
   TCloseSlotModalAction,
   TCloseTaxPickAction,
@@ -116,15 +145,21 @@ export type {
   TNavigateToIslandAction,
   TNavigateToWorldAction,
   TNewGameAction,
+  TNextGuideStepAction,
+  TOpenFactionsModalAction,
   TOpenTaxPickAction,
   TOpenTechModalAction,
   TPickSoilHexAction,
   TPickTaxFaceAction,
   TPlaceStrongholdAction,
+  TPrevGuideStepAction,
+  TReachGuideStepAction,
   TRequestDemolishAction,
   TSelectHexAction,
   TSetCameraAction,
   TSetHudAnchorsAction,
+  TSelectFactionAction,
+  TSkipGuideAction,
   TSkipTaxAnimationAction,
   TStartGameAction,
   TToggleDemolishModeAction,

@@ -11,6 +11,7 @@ import coinIcon from "../assets/icons/coin.png";
 import crowIcon from "../assets/icons/crow.png";
 import deadIcon from "../assets/icons/dead.png";
 import demolishIcon from "../assets/icons/demolish.png";
+import factionsIcon from "../assets/factions/factions_button.png";
 import farmIcon from "../assets/icons/farm.png";
 import foodIcon from "../assets/icons/food.png";
 import greatEagleIcon from "../assets/icons/great-eagle.png";
@@ -71,6 +72,7 @@ const ICONS = {
   crow: crowIcon,
   dead: deadIcon,
   demolish: demolishIcon,
+  factions: factionsIcon,
   farm: farmIcon,
   food: foodIcon,
   greatEagle: greatEagleIcon,

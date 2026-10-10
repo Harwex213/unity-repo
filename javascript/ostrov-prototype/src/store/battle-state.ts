@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals-react";
 import type { TCleanupHud, TCleanupResult, TCleanupSim } from "../core/cleanup-sim";
+import type { TSkillId } from "../core/skills";
 import type { TUnitId } from "../core/units";
 
 type TCleanupSpeed = 1 | 2;
@@ -21,6 +22,8 @@ const createBattleState = () => ({
   paused: signal<boolean>(false),
   /** Set once the result has been handed back to the island. */
   resolved: signal<boolean>(false),
+  /** The skill waiting for a target hex, or `null`. A click on a hex casts it. */
+  targeting: signal<TSkillId | null>(null),
 });
 
 type TBattleState = ReturnType<typeof createBattleState>;

@@ -173,4 +173,4 @@ const isConnected = (hexes: readonly TAxial[]) => {
 };
 
 export type { TAttachPlan, TSeamEdge };
-export { isConnected, planAttachment, roundAxial, seamEdges };
+export { isConnected, pixelToAxial, planAttachment, roundAxial, seamEdges };

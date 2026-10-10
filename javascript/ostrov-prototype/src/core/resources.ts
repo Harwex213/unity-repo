@@ -70,6 +70,8 @@ const STARTING_POOL: TResourcePool = {
   scouting: 2,
   // Enough for one face change in the first tax phase, or two cheap ones.
   power: 2,
+  // Enough for two casts of «Разрушить землю» in the first battles.
+  mana: 4,
 };
 
 const addResources = (pool: TResourcePool, delta: Partial<Record<TResourceId, number>>): TResourcePool => {

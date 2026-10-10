@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals-react";
+import type { TFactionId } from "../core/factions";
 import type { TBuildingId, TResourceId } from "../core/types";
 
 /**
@@ -85,6 +86,8 @@ const createUiState = () => ({
   /** The hex whose biome modal is open on the right. */
   selectedHexId: signal<string | null>(null),
   techModalOpen: signal<boolean>(false),
+  /** The faction shown in the open factions modal. `null` while the modal is closed. */
+  factionsModalFactionId: signal<TFactionId | null>(null),
   /** The building whose face popup is open in the tax phase. */
   taxPickHexId: signal<string | null>(null),
   /** The hex waiting for a "вы уверены?" answer. */

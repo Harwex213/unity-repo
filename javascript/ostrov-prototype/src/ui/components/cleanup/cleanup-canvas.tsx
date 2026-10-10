@@ -1,19 +1,23 @@
 import { useSignals } from "@preact/signals-react/runtime";
 import { useEffect, useRef } from "react";
-import { ATTACH_PULL_SECONDS, drainEvents, summarizeCleanup, TICK_SECONDS } from "../../../core/cleanup-sim";
+import { ATTACH_PULL_SECONDS, drainEvents, shatterPlan, summarizeCleanup, TICK_SECONDS } from "../../../core/cleanup-sim";
+import { getSkill, SKILLS } from "../../../core/skills";
 import { useStore } from "../../../store/store";
-import { absorbEvents, drawScene, pruneEffects } from "./cleanup-render";
+import { absorbEvents, drawScene, pickHex, pruneEffects } from "./cleanup-render";
 import { bakeIsland, releaseSprite } from "./island-sprites";
 import { createSkyRenderer } from "./sky-gl";
 import type { FC } from "react";
-import type { TCleanupSim } from "../../../core/cleanup-sim";
+import type { TCleanupSim, TSimIsland } from "../../../core/cleanup-sim";
 import type {
+  TArmSkillAction,
+  TCancelSkillAction,
+  TCastSkillAction,
   TSetCleanupInputAction,
   TSetCleanupSpeedAction,
   TStepCleanupAction,
   TToggleCleanupPauseAction,
 } from "../../../domain/registry";
-import type { TCamera, TScene } from "./cleanup-render";
+import type { TCamera, TFrame, TScene, TTargetHover } from "./cleanup-render";
 
 /** WASD and the arrows both steer the island. */
 const KEY_DIRECTIONS: Readonly<Record<string, readonly [number, number]>> = {
@@ -41,12 +45,19 @@ const MAX_FRAME_SECONDS = 0.25;
 const MAX_TICKS_PER_FRAME = 8;
 /** The scene draws at most 1.5 device pixels per CSS pixel: the paper look hides the rest. */
 const MAX_PIXEL_RATIO = 1.5;
+/** A press that moves farther than this, in CSS pixels, is a drag, not a click. */
+const DRAG_THRESHOLD = 5;
+/** A panned camera may look this far past the map border. */
+const PAN_MARGIN = 500;
 
 type TCleanupCanvasRegistrySlice = {
   setCleanupInputAction: TSetCleanupInputAction;
   stepCleanupAction: TStepCleanupAction;
   setCleanupSpeedAction: TSetCleanupSpeedAction;
   toggleCleanupPauseAction: TToggleCleanupPauseAction;
+  armSkillAction: TArmSkillAction;
+  cancelSkillAction: TCancelSkillAction;
+  castSkillAction: TCastSkillAction;
 };
 
 type TCleanupCanvasProps = {
@@ -124,21 +135,25 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
     const scene: TScene = {
       sprites: sim.islands.map(() => null),
       effects: [],
-      hatch: null,
-      playerBakedHexes: 0,
+      bakedShape: sim.islands.map(() => -1),
       playerAt: null,
+      wisps: null,
+      wispArt: null,
+      targeting: null,
     };
-    let rebaking = false;
     // Without WebGL2 the sky is the plain slate of the stage's CSS background.
     const sky = createSky(skyRef.current, "under", sim.seed);
     const veil = createSky(veilRef.current, "over", sim.seed + 1);
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const clockStart = performance.now();
     const playerId = store.derived.humanPlayer.peek()?.id ?? "human";
+    const baking = new Set<number>();
 
-    sim.islands.forEach((island) => {
+    /** Bakes an island with its current hexes. A destroyed hex or a joined island changes its shape. */
+    const bake = (island: TSimIsland) => {
+      const shape = island.shape;
       const seedKey = island.side === "player" ? playerId : `${sim.seed}:${island.id}`;
-      const hexCount = island.hexes.length;
+      baking.add(island.index);
       bakeIsland([...island.hexes], island.side, seedKey)
         .then((sprite) => {
           if (cancelled) {
@@ -147,20 +162,55 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
             return;
           }
 
+          const old = scene.sprites[island.index];
           scene.sprites[island.index] = sprite;
-          if (island.index === 0) {
-            scene.playerBakedHexes = hexCount;
+          scene.bakedShape[island.index] = shape;
+          if (old) {
+            releaseSprite(old);
           }
         })
         .catch((error: unknown) => {
           console.error(error);
+        })
+        .finally(() => {
+          baking.delete(island.index);
         });
-    });
+    };
+
+    sim.islands.forEach(bake);
 
     const start = playerCenter(sim);
     const baseZoom = () => clamp(Math.min(canvas.clientWidth, canvas.clientHeight) / DEFAULT_VIEW_SPAN, MIN_ZOOM, MAX_ZOOM);
     const camera: TCamera = { x: start.x, y: start.y, zoom: baseZoom() };
     let zoomTarget = camera.zoom;
+    /**
+     * A panned camera stays where the player left it. It glides back to the
+     * island when the player steers, presses C or double-clicks.
+     */
+    let free = false;
+    /** The world point under the cursor at the last wheel step, held there while a free camera zooms. */
+    let zoomAnchor: { sx: number; sy: number; wx: number; wy: number } | null = null;
+    let drag: { id: number; button: number; x: number; y: number; startX: number; startY: number; moved: boolean } | null = null;
+    /** The cursor in CSS pixels of the stage, or `null` while it is outside. */
+    let mouse: { x: number; y: number } | null = null;
+    let lastFrame: TFrame | null = null;
+
+    /** CSS pixels of the stage to world units. The canvas backing store's device pixel ratio does not enter here. */
+    const toWorld = (sx: number, sy: number) => ({
+      x: camera.x + (sx - canvas.clientWidth / 2) / camera.zoom,
+      y: camera.y + (sy - canvas.clientHeight / 2) / camera.zoom,
+    });
+
+    const stagePoint = (event: MouseEvent) => {
+      const rect = stage.getBoundingClientRect();
+
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+
+    const recenter = () => {
+      free = false;
+      zoomAnchor = null;
+    };
 
     const pressed = new Set<string>();
     const pushInput = () => {
@@ -172,6 +222,10 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
           x += direction[0];
           y += direction[1];
         }
+      }
+
+      if (x !== 0 || y !== 0) {
+        recenter();
       }
 
       registry.setCleanupInputAction(clamp(x, -1, 1), clamp(y, -1, 1));
@@ -188,6 +242,13 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
         return;
       }
 
+      const skill = SKILLS.find((candidate) => candidate.hotkey === event.code);
+      if (skill && !event.repeat) {
+        registry.armSkillAction(skill.id);
+
+        return;
+      }
+
       if (event.code === "Space" && !event.repeat) {
         event.preventDefault();
         registry.toggleCleanupPauseAction();
@@ -195,6 +256,10 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
         registry.setCleanupSpeedAction(1);
       } else if (event.code === "Digit2") {
         registry.setCleanupSpeedAction(2);
+      } else if (event.code === "KeyC") {
+        recenter();
+      } else if (event.code === "Escape" && store.battle.targeting.peek()) {
+        registry.cancelSkillAction();
       }
     };
 
@@ -207,11 +272,120 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
     const onBlur = () => {
       pressed.clear();
       pushInput();
+      drag = null;
     };
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       zoomTarget = clamp(zoomTarget * Math.pow(ZOOM_STEP, -event.deltaY / 100), MIN_ZOOM, MAX_ZOOM);
+      if (free) {
+        const point = stagePoint(event);
+        const world = toWorld(point.x, point.y);
+        zoomAnchor = { sx: point.x, sy: point.y, wx: world.x, wy: world.y };
+      }
+    };
+
+    /** Any mouse button drags the camera. A left click without a drag casts the picked skill; a right click drops it. */
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button > 2) {
+        return;
+      }
+
+      if (event.button === 1) {
+        // No autoscroll: the middle button pans like the others.
+        event.preventDefault();
+      }
+
+      const point = stagePoint(event);
+      drag = { id: event.pointerId, button: event.button, x: point.x, y: point.y, startX: point.x, startY: point.y, moved: false };
+      stage.setPointerCapture(event.pointerId);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      const point = stagePoint(event);
+      mouse = point;
+      if (!drag || drag.id !== event.pointerId) {
+        return;
+      }
+
+      if (!drag.moved && Math.hypot(point.x - drag.startX, point.y - drag.startY) > DRAG_THRESHOLD) {
+        drag.moved = true;
+      }
+
+      if (drag.moved) {
+        camera.x -= (point.x - drag.x) / camera.zoom;
+        camera.y -= (point.y - drag.y) / camera.zoom;
+        free = true;
+        zoomAnchor = null;
+      }
+
+      drag.x = point.x;
+      drag.y = point.y;
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (!drag || drag.id !== event.pointerId) {
+        return;
+      }
+
+      const click = !drag.moved;
+      const button = drag.button;
+      drag = null;
+      if (stage.hasPointerCapture(event.pointerId)) {
+        stage.releasePointerCapture(event.pointerId);
+      }
+
+      if (!click || !store.battle.targeting.peek()) {
+        return;
+      }
+
+      if (button === 2) {
+        registry.cancelSkillAction();
+
+        return;
+      }
+
+      if (button === 0 && lastFrame) {
+        const point = stagePoint(event);
+        const world = toWorld(point.x, point.y);
+        const target = pickHex(sim, lastFrame, world.x, world.y);
+        if (target) {
+          registry.castSkillAction(target);
+        }
+      }
+    };
+
+    const onPointerLeave = () => {
+      mouse = null;
+    };
+
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+
+    const onDoubleClick = () => {
+      if (!store.battle.targeting.peek()) {
+        recenter();
+      }
+    };
+
+    /** What the targeting cursor points at, and what a cast there would destroy. */
+    const hoverOf = (frame: TFrame): TTargetHover | null => {
+      if (!mouse) {
+        return null;
+      }
+
+      const world = toWorld(mouse.x, mouse.y);
+      const target = pickHex(sim, frame, world.x, world.y);
+      if (!target) {
+        return null;
+      }
+
+      const plan = shatterPlan(sim, target);
+
+      return "refusal" in plan
+        ? { island: target.island, hex: target.hex, removed: [target.hex], refusal: plan.refusal }
+        : { island: target.island, hex: target.hex, removed: plan.removed, refusal: null };
     };
 
     let last = performance.now();
@@ -246,46 +420,39 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
 
       const alpha = sim.status === "running" ? clamp(accumulator / TICK_SECONDS, 0, 1) : 1;
 
-      // An island joined: once its pull-in has played, the player's island is
-      // baked again with the new hex set, so the seam blends like any other.
-      const home = sim.islands[0];
+      // An island changed its hexes: it is baked again. A joining island
+      // first plays its pull-in, so the seam blends like any other.
       const pulling = sim.islands.some((island) => {
         return island.attach !== null && (sim.tick - island.attach.tick) * TICK_SECONDS < ATTACH_PULL_SECONDS;
       });
-      if (home && !rebaking && !pulling && scene.playerBakedHexes > 0 && home.hexes.length > scene.playerBakedHexes) {
-        rebaking = true;
-        const hexCount = home.hexes.length;
-        bakeIsland([...home.hexes], "player", playerId)
-          .then((sprite) => {
-            if (cancelled) {
-              releaseSprite(sprite);
-
-              return;
-            }
-
-            const old = scene.sprites[0];
-            scene.sprites[0] = sprite;
-            scene.playerBakedHexes = hexCount;
-            if (old) {
-              releaseSprite(old);
-            }
-          })
-          .catch((error: unknown) => {
-            console.error(error);
-          })
-          .finally(() => {
-            rebaking = false;
-          });
+      for (const island of sim.islands) {
+        const stale = (scene.bakedShape[island.index] ?? -1) !== island.shape;
+        const drawn = island.state !== "attached" && island.state !== "lost" && island.hexes.length > 0;
+        if (stale && drawn && !baking.has(island.index) && !(island.index === 0 && pulling)) {
+          bake(island);
+        }
       }
+
       const simTime = sim.tick * TICK_SECONDS;
       absorbEvents(scene, sim, drainEvents(sim), simTime);
       pruneEffects(scene, simTime);
 
-      const target = playerCenter(sim);
-      const follow = 1 - Math.exp(-CAMERA_FOLLOW * seconds);
-      camera.x += (target.x + target.vx * LOOK_AHEAD - camera.x) * follow;
-      camera.y += (target.y + target.vy * LOOK_AHEAD - camera.y) * follow;
-      camera.zoom += (zoomTarget - camera.zoom) * (1 - Math.exp(-ZOOM_FOLLOW * seconds));
+      if (free) {
+        camera.zoom += (zoomTarget - camera.zoom) * (1 - Math.exp(-ZOOM_FOLLOW * seconds));
+        if (zoomAnchor) {
+          camera.x = zoomAnchor.wx - (zoomAnchor.sx - canvas.clientWidth / 2) / camera.zoom;
+          camera.y = zoomAnchor.wy - (zoomAnchor.sy - canvas.clientHeight / 2) / camera.zoom;
+        }
+
+        camera.x = clamp(camera.x, -sim.bounds.halfWidth - PAN_MARGIN, sim.bounds.halfWidth + PAN_MARGIN);
+        camera.y = clamp(camera.y, -sim.bounds.halfHeight - PAN_MARGIN, sim.bounds.halfHeight + PAN_MARGIN);
+      } else {
+        const target = playerCenter(sim);
+        const follow = 1 - Math.exp(-CAMERA_FOLLOW * seconds);
+        camera.x += (target.x + target.vx * LOOK_AHEAD - camera.x) * follow;
+        camera.y += (target.y + target.vy * LOOK_AHEAD - camera.y) * follow;
+        camera.zoom += (zoomTarget - camera.zoom) * (1 - Math.exp(-ZOOM_FOLLOW * seconds));
+      }
 
       const ratio = Math.min(MAX_PIXEL_RATIO, window.devicePixelRatio || 1);
       const width = canvas.clientWidth;
@@ -311,8 +478,15 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
         focusRadius: ((player?.body.radius ?? 300) + 80) * camera.zoom,
       };
 
+      const sceneFrame: TFrame = { width, height, ratio, alpha, camera, clock, motion };
+      lastFrame = sceneFrame;
+      const skillId = store.battle.targeting.peek();
+      scene.targeting = skillId ? { reach: getSkill(skillId).reach, hover: hoverOf(sceneFrame) } : null;
+      stage.classList.toggle("cleanup-stage--targeting", skillId !== null);
+      stage.classList.toggle("cleanup-stage--panning", drag !== null && drag.moved);
+
       sky?.render(skyFrame);
-      drawScene(context, sim, scene, { width, height, ratio, alpha, camera, clock, motion });
+      drawScene(context, sim, scene, sceneFrame);
       veil?.render(skyFrame);
     };
 
@@ -342,6 +516,13 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
     window.addEventListener("blur", onBlur);
     document.addEventListener("visibilitychange", onVisibility);
     stage.addEventListener("wheel", onWheel, { passive: false });
+    stage.addEventListener("pointerdown", onPointerDown);
+    stage.addEventListener("pointermove", onPointerMove);
+    stage.addEventListener("pointerup", onPointerUp);
+    stage.addEventListener("pointercancel", onPointerUp);
+    stage.addEventListener("pointerleave", onPointerLeave);
+    stage.addEventListener("contextmenu", onContextMenu);
+    stage.addEventListener("dblclick", onDoubleClick);
 
     return () => {
       cancelled = true;
@@ -351,6 +532,14 @@ const CleanupCanvas: FC<TCleanupCanvasProps> = ({ registry }) => {
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVisibility);
       stage.removeEventListener("wheel", onWheel);
+      stage.removeEventListener("pointerdown", onPointerDown);
+      stage.removeEventListener("pointermove", onPointerMove);
+      stage.removeEventListener("pointerup", onPointerUp);
+      stage.removeEventListener("pointercancel", onPointerUp);
+      stage.removeEventListener("pointerleave", onPointerLeave);
+      stage.removeEventListener("contextmenu", onContextMenu);
+      stage.removeEventListener("dblclick", onDoubleClick);
+      stage.classList.remove("cleanup-stage--targeting", "cleanup-stage--panning");
       sky?.dispose();
       veil?.dispose();
       registry.setCleanupInputAction(0, 0);

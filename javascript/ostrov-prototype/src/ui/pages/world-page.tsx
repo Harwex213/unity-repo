@@ -1,6 +1,7 @@
 import { useSignals } from "@preact/signals-react/runtime";
 import { useStore } from "../../store/store";
 import { EndTurnPanel } from "../components/end-turn-panel";
+import { FactionsModal } from "../components/factions-modal";
 import { Globe } from "../components/globe";
 import { IslandMinimap } from "../components/island-minimap";
 import { NoticeToast } from "../components/notice-toast";
@@ -11,6 +12,7 @@ import { TrailEventModal } from "../components/trail-event-modal";
 import { TurnPanel } from "../components/turn-panel";
 import { WaitingOverlay } from "../components/waiting-overlay";
 import { WorldCellPanel } from "../components/world-cell-panel";
+import { WorldToolsPanel } from "../components/world-tools-panel";
 import type { FC } from "react";
 import type { TAppRegistry } from "../../domain/registry";
 
@@ -44,11 +46,15 @@ const WorldPage: FC<TWorldPageProps> = ({ registry }) => {
         <ToxicPanel registry={registry} />
       </div>
 
+      {/* The same bar as on the island page. The factions button and the cell
+          panel take the places of the tools and the buildings panel. */}
       <div className="island-page__bottom">
-        <div className="world-page__bottom-left">
-          <WorldCellPanel registry={registry} />
+        <ResourcesPanel registry={registry} />
 
-          <ResourcesPanel registry={registry} />
+        <div className="island-page__actions world-page__actions">
+          <WorldToolsPanel registry={registry} />
+
+          <WorldCellPanel registry={registry} />
         </div>
 
         <div className="island-page__end">
@@ -63,6 +69,8 @@ const WorldPage: FC<TWorldPageProps> = ({ registry }) => {
       <NoticeToast />
 
       <TrailEventModal registry={registry} />
+
+      <FactionsModal registry={registry} />
     </div>
   );
 };

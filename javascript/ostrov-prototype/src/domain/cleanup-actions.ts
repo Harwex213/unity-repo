@@ -1,9 +1,11 @@
 import { createLevel, joinAnnexed } from "../core/cleanup-level";
 import {
+  castSkill,
   cleanupResult,
   createCleanup,
   retreatCleanup,
   setCleanupInput,
+  skillRefusal,
   stepCleanup,
   summarizeCleanup,
 } from "../core/cleanup-sim";
@@ -15,7 +17,8 @@ import { BOSS_TECH_ID } from "../core/techs";
 import { getCell } from "../core/world-gen";
 import { replacePlayer, withIslandHexes } from "./player-updates";
 import { showNotice } from "./ui-actions";
-import type { TCleanupResult } from "../core/cleanup-sim";
+import type { TCleanupResult, TSkillTarget } from "../core/cleanup-sim";
+import type { TSkillId } from "../core/skills";
 import type { TPlayer } from "../core/types";
 import type { TStore } from "../store/store";
 import type { TCleanupSpeed } from "../store/battle-state";
@@ -81,6 +84,7 @@ const enterClearingAction = (store: TStore) => {
   store.battle.resolved.value = false;
   store.battle.paused.value = false;
   store.battle.speed.value = 1;
+  store.battle.targeting.value = null;
   store.battle.sim.value = createCleanup(level, hashSeed(`${nickname}:cleanup-sim:${turn}`));
   publishHud(store);
 };
@@ -106,6 +110,59 @@ const stepCleanupAction = (store: TStore, ticks: number) => {
     stepCleanup(sim);
   }
 
+  if (sim.status !== "running") {
+    store.battle.targeting.value = null;
+  }
+
+  publishHud(store);
+};
+
+/**
+ * Picks a skill for targeting, or drops it when it is picked already. A skill
+ * that cannot be cast now says why and is not picked.
+ */
+const armSkillAction = (store: TStore, skillId: TSkillId) => {
+  const sim = store.battle.sim.peek();
+  if (!sim || store.derived.isHumanReady.peek()) {
+    return;
+  }
+
+  if (store.battle.targeting.peek() === skillId) {
+    store.battle.targeting.value = null;
+
+    return;
+  }
+
+  const refusal = skillRefusal(sim, skillId);
+  if (refusal) {
+    showNotice(store, refusal);
+
+    return;
+  }
+
+  store.battle.targeting.value = skillId;
+};
+
+const cancelSkillAction = (store: TStore) => {
+  store.battle.targeting.value = null;
+};
+
+/** Casts the picked skill at a hex. A refused cast keeps the skill picked and says why. */
+const castSkillAction = (store: TStore, target: TSkillTarget) => {
+  const sim = store.battle.sim.peek();
+  const skillId = store.battle.targeting.peek();
+  if (!sim || !skillId || store.derived.isHumanReady.peek()) {
+    return;
+  }
+
+  const refusal = castSkill(sim, skillId, target);
+  if (refusal) {
+    showNotice(store, refusal);
+
+    return;
+  }
+
+  store.battle.targeting.value = null;
   publishHud(store);
 };
 
@@ -197,7 +254,15 @@ const finishClearingAction = (store: TStore) => {
     const peopleLost = result.lost.reduce((sum, unitId) => sum + getUnit(unitId).upkeep, 0);
     const damage = applyStructureDamage(player, result);
     ruinedNow = damage.ruinedNow;
-    const damaged = withIslandHexes(player, damage.hexes);
+    // Hexes destroyed in battle leave the island; the plumes' poison stays on the rest.
+    const destroyed = new Set(result.destroyedHexIds);
+    const poison = new Map(result.poisoned.map((entry) => [entry.hexId, entry.toxicity]));
+    const damaged = withIslandHexes(
+      player,
+      damage.hexes
+        .filter((hex) => !destroyed.has(hex.id))
+        .map((hex) => (poison.has(hex.id) ? { ...hex, toxicity: Math.max(hex.toxicity, poison.get(hex.id) as number) } : hex)),
+    );
     // The islands that joined in battle keep their exact battle coordinates.
     const grown = joinAnnexed(damaged.island, result.annexed);
 
@@ -207,6 +272,7 @@ const finishClearingAction = (store: TStore) => {
       resources: {
         ...player.resources,
         population: Math.max(0, player.resources.population - peopleLost),
+        mana: Math.max(0, player.resources.mana - result.manaSpent),
       },
     };
 
@@ -243,9 +309,13 @@ const finishClearingAction = (store: TStore) => {
   store.battle.sim.value = null;
   store.battle.hud.value = null;
   store.battle.result.value = null;
+  store.battle.targeting.value = null;
 };
 
 export {
+  armSkillAction,
+  cancelSkillAction,
+  castSkillAction,
   enterClearingAction,
   finishClearingAction,
   setCleanupInputAction,

@@ -72,7 +72,7 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
   }
 
   return (
-    <div className="resources-panels">
+    <div className="resources-panels" data-tutorial="tax">
       {PANEL_LAYOUT.map((rows, panelIndex) => (
         <div key={panelIndex} className="panel resources-panel">
           {rows.flatMap((ids, rowIndex) => ids.map((id, columnIndex) => {

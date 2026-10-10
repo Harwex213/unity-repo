@@ -1,0 +1,50 @@
+{
+  "$schema": "../../schemas/game-config/1.0.0.json",
+  "schemaVersion": "1.0.0",
+  "configVersion": 1,
+  "meta": {
+    "author": "web-editor",
+    "createdAt": "2026-10-10T12:00:00Z",
+    "comment": "Values copied from javascript/ostrov-prototype"
+  },
+  "resources": [
+    { "id": "food", "label": "Еда", "startAmount": 5 },
+    { "id": "stone", "label": "Камень", "startAmount": 5 },
+    { "id": "wood", "label": "Дерево", "startAmount": 5 },
+    { "id": "hammers", "label": "Молоты", "startAmount": 2 },
+    { "id": "mad", "label": "Безумие", "negative": true }
+  ],
+  "biomes": [
+    { "id": "grassland", "label": "Луга" },
+    { "id": "plains", "label": "Равнины" },
+    { "id": "tundra", "label": "Тундра" },
+    { "id": "swamp", "label": "Болото" },
+    { "id": "hills", "label": "Холмы" }
+  ],
+  "buildings": [
+    {
+      "id": "farm",
+      "label": "Ферма",
+      "yields": "food",
+      "cost": { "stone": 1, "wood": 3, "hammers": 1 },
+      "baseFaces": [
+        { "resource": "food", "amount": 1, "toxicity": 0 },
+        { "resource": "food", "amount": 5, "toxicity": 0 },
+        { "resource": "food", "amount": 3, "toxicity": 0 },
+        { "resource": "food", "amount": 3, "toxicity": 0 }
+      ],
+      "biomeFaces": {
+        "grassland": { "resource": "food", "amount": 4, "toxicity": 1 },
+        "plains": { "resource": "food", "amount": 2, "toxicity": 0 },
+        "tundra": { "resource": "food", "amount": 2, "toxicity": 0 },
+        "swamp": { "resource": "food", "amount": 5, "toxicity": 3 },
+        "hills": { "resource": "food", "amount": 3, "toxicity": 1 }
+      }
+    }
+  ],
+  "units": [
+    { "id": "militia", "label": "Ополченец", "unitClass": "melee", "hp": 30, "damage": 6, "cooldown": 1, "range": 1, "speed": 1.1, "flying": false, "projectile": null, "upkeep": 1 },
+    { "id": "archer", "label": "Лучник", "unitClass": "ranged", "hp": 28, "damage": 7, "cooldown": 1.2, "range": 3, "speed": 1, "flying": false, "projectile": "arrow", "upkeep": 1 },
+    { "id": "griffin", "label": "Грифон", "unitClass": "air", "hp": 96, "damage": 20, "cooldown": 1, "range": 1, "speed": 2.5, "flying": true, "projectile": null, "upkeep": 4 }
+  ]
+}

@@ -38,6 +38,8 @@ type TGlobeMarker = {
   readonly ring: string;
   /** Size relative to a normal marker. */
   readonly size: number;
+  /** The icon is a round emblem: it fills the whole disc inside the ring. */
+  readonly fill?: boolean;
 };
 
 type TGlobeView = {
@@ -108,8 +110,12 @@ const createStars = (seed: string) => {
   return new THREE.Points(geometry, material);
 };
 
+/** Icon inset from the badge edge: a small picture on parchment, or a round emblem that fills the disc. */
+const ICON_INSET = 26;
+const EMBLEM_INSET = 12;
+
 /** Draws a map badge: a parchment disc, an ink ring in the owner colour, the icon. */
-const drawBadge = (canvas: HTMLCanvasElement, ring: string, image: HTMLImageElement | null) => {
+const drawBadge = (canvas: HTMLCanvasElement, ring: string, fill: boolean, image: HTMLImageElement | null) => {
   const context = canvas.getContext("2d");
   if (!context) {
     return;
@@ -138,7 +144,7 @@ const drawBadge = (canvas: HTMLCanvasElement, ring: string, image: HTMLImageElem
   context.stroke();
 
   if (image && image.complete && image.naturalWidth > 0) {
-    const inset = 26;
+    const inset = fill ? EMBLEM_INSET : ICON_INSET;
     context.drawImage(image, inset, inset, BADGE_SIZE - inset * 2, BADGE_SIZE - inset * 2);
   }
 };
@@ -235,8 +241,8 @@ const createGlobeScene = (container: HTMLElement, world: TWorld, options: TGlobe
   const badges = new Map<string, { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture }>();
   const redrawOnLoad = new Map<string, Set<string>>();
 
-  const badgeTexture = (icon: string, ring: string) => {
-    const key = `${icon}|${ring}`;
+  const badgeTexture = (icon: string, ring: string, fill: boolean) => {
+    const key = `${icon}|${ring}|${fill ? 1 : 0}`;
     const known = badges.get(key);
     if (known) {
       return known.texture;
@@ -252,8 +258,8 @@ const createGlobeScene = (container: HTMLElement, world: TWorld, options: TGlobe
         for (const badgeKey of redrawOnLoad.get(icon) ?? []) {
           const badge = badges.get(badgeKey);
           if (badge) {
-            const [, badgeRing] = badgeKey.split("|");
-            drawBadge(badge.canvas, badgeRing ?? "#ffffff", loaded);
+            const [, badgeRing, badgeFill] = badgeKey.split("|");
+            drawBadge(badge.canvas, badgeRing ?? "#ffffff", badgeFill === "1", loaded);
             badge.texture.needsUpdate = true;
           }
         }
@@ -263,7 +269,7 @@ const createGlobeScene = (container: HTMLElement, world: TWorld, options: TGlobe
     const canvas = document.createElement("canvas");
     canvas.width = BADGE_SIZE;
     canvas.height = BADGE_SIZE;
-    drawBadge(canvas, ring, image);
+    drawBadge(canvas, ring, fill, image);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     badges.set(key, { canvas, texture });
@@ -299,7 +305,7 @@ const createGlobeScene = (container: HTMLElement, world: TWorld, options: TGlobe
     clearSprites();
     for (const marker of view.markers) {
       const material = new THREE.SpriteMaterial({
-        map: badgeTexture(marker.icon, marker.ring),
+        map: badgeTexture(marker.icon, marker.ring, marker.fill ?? false),
         transparent: true,
         depthTest: false,
         depthWrite: false,

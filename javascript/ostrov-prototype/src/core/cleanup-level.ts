@@ -87,6 +87,8 @@ type TLevelSpec = {
   readonly growth: number;
   readonly islands: readonly TIslandSpec[];
   readonly roster: readonly TUnitId[];
+  /** The player's mana when the battle begins. The skills spend it. */
+  readonly mana: number;
 };
 
 type TLevelSetup = {
@@ -313,7 +315,7 @@ const createLevel = (setup: TLevelSetup, rng: TRng): TLevelSpec => {
   }
 
   // The border leaves the same open margin beyond the outermost island on
-  // every side, so no island starts inside the retreat band.
+  // every side, so no island starts inside the plume band.
   const reachX = placedRings.reduce((max, ring) => Math.max(max, Math.abs(ring.x) + ring.radius), 0);
   const reachY = placedRings.reduce((max, ring) => Math.max(max, Math.abs(ring.y) + ring.radius), 0);
   const bounds = {
@@ -321,7 +323,7 @@ const createLevel = (setup: TLevelSetup, rng: TRng): TLevelSpec => {
     halfHeight: Math.max(MIN_HALF_HEIGHT, reachY + BOUNDS_MARGIN),
   };
 
-  return { tier, growth, bounds, islands, roster: setup.roster };
+  return { tier, growth, bounds, islands, roster: setup.roster, mana: setup.player.resources.mana };
 };
 
 /**

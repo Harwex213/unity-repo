@@ -34,7 +34,7 @@ const BuildingsPanel: FC<TBuildingsPanelProps> = ({ registry }) => {
   }
 
   return (
-    <div className={`panel buildings-panel ${locked ? "panel--locked" : ""}`}>
+    <div className={`panel buildings-panel ${locked ? "panel--locked" : ""}`} data-tutorial="build">
       {BUILDINGS.map((building) => {
         const affordable = canAfford(pool, building, discount);
         const cost = effectiveCost(building, discount);

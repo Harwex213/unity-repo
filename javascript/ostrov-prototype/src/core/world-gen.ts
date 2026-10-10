@@ -1,5 +1,7 @@
+import { pickFaction } from "./factions";
 import { createPerlin, fbm } from "./noise";
 import { createRng, hashSeed, pick } from "./rng";
+import type { TFactionId } from "./factions";
 import type { TRng } from "./rng";
 import type { TBiomeId } from "./types";
 
@@ -66,6 +68,13 @@ type TWorldCell = {
    * boss on their own, until they have defeated it (`TPlayer.bossSlain`).
    */
   readonly boss: boolean;
+  /**
+   * The faction whose mobs hold the wild islands here. Every cell that starts
+   * with wild islands has one, and the boss's lair belongs to Helios. It
+   * stays after the cell is cleared. `null` for clouds, settlements and the
+   * players' home cells.
+   */
+  readonly faction: TFactionId | null;
 };
 
 type TWorld = {
@@ -267,6 +276,7 @@ const buildCells = (rng: TRng): TWorldCell[] => {
       toxicTrail: 0,
       cleared: false,
       boss: false,
+      faction: null,
     };
   });
 };
@@ -375,6 +385,8 @@ const createWorld = (seed: string, playerIds: readonly string[]) => {
   const humanCell = cells.find((cell) => cell.id === humanCellId);
   const homeRing = new Set([humanCellId, ...(humanCell?.neighbors ?? [])]);
   const bossCellId = pickBossCell(cells, [...placement.values()])?.id ?? null;
+  // Factions roll from their own stream, so adding them left the planet itself unchanged.
+  const factionRng = createRng(hashSeed(`${seed}:factions`));
 
   const world: TWorld = {
     seed,
@@ -390,12 +402,18 @@ const createWorld = (seed: string, playerIds: readonly string[]) => {
         return { ...cell, kind: "island" as const, ownerId, revealed, islandCount: 0, activated: true, cleared: true };
       }
 
-      // The lair holds one island: the boss's own.
+      // The lair holds one island: the boss's own. It is Nexus Arcology, the
+      // one city of Helios.
       if (cell.id === bossCellId) {
-        return { ...cell, ownerId, revealed, boss: true, islandCount: 1, biome: "volcano" as const };
+        return { ...cell, ownerId, revealed, boss: true, islandCount: 1, biome: "volcano" as const, faction: "helios" as const };
       }
 
-      return { ...cell, ownerId, revealed };
+      // Every cell is rolled, held or not, so one cell's kind does not shift
+      // the rolls of the cells after it.
+      const roll = factionRng();
+      const faction = cell.kind === "island" && cell.islandCount > 0 ? pickFaction(cell.biome, cell.islandCount, roll) : null;
+
+      return { ...cell, ownerId, revealed, faction };
     }),
   };
 

@@ -20,7 +20,7 @@ const TITLES: Readonly<Record<TCleanupOutcome, string>> = {
 const TEXTS: Readonly<Record<TCleanupOutcome, string>> = {
   won: "Все вражеские острова зачищены. Пристыкованные острова стали частью вашего острова — ровно так, как вы их пристыковали.",
   lost: "Разрушена последняя постройка. Твердыня лежит в руинах и не приносит дохода, пока её не отстроят. Острова, пристыкованные в этом бою, откалываются и уходят, острова врага остаются в клетке.",
-  retreated: "Остров ушёл за край карты. Пристыкованные острова остаются вашими, остальные ждут следующего хода. Кто стоял на чужих островах, остался там.",
+  retreated: "Остров ушёл через окно в ядовитых облаках. Пристыкованные острова остаются вашими, остальные ждут следующего хода. Кто стоял на чужих островах, остался там.",
   calm: "В этой клетке нет вражеских островов.",
 };
 
@@ -93,6 +93,33 @@ const CleanupSummary: FC<TCleanupSummaryProps> = ({ registry }) => {
             <p className="cleanup-summary__note">
               {"Разрушенные постройки исчезают с гексов. Повреждённые чинятся сами: +25% прочности в конце каждого хода."}
             </p>
+          </div>
+        ) : null}
+
+        {result.destroyedHexIds.length > 0 || result.poisoned.length > 0 || result.manaSpent > 0 ? (
+          <div className="cleanup-summary__section">
+            <div className="cleanup-summary__label">
+              {"Земля и мана"}
+            </div>
+            <div className="cleanup-summary__chips">
+              {result.destroyedHexIds.length > 0 ? (
+                <span className="cleanup-summary__chip cleanup-summary__chip--lost">
+                  {`Своих гексов разрушено: ${result.destroyedHexIds.length}`}
+                </span>
+              ) : null}
+              {result.poisoned.length > 0 ? (
+                <span className="cleanup-summary__chip cleanup-summary__chip--lost">
+                  <Icon src={ICONS.toxicity} />
+                  {`Отравлено облаками: ${result.poisoned.length} гекс.`}
+                </span>
+              ) : null}
+              {result.manaSpent > 0 ? (
+                <span className="cleanup-summary__chip">
+                  <Icon src={ICONS.mana} />
+                  {`Потрачено маны: ${result.manaSpent}`}
+                </span>
+              ) : null}
+            </div>
           </div>
         ) : null}
 

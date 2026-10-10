@@ -8,10 +8,14 @@ import {
   toggleDemolishModeAction,
 } from "./build-actions";
 import { endPhaseAction, newGameAction, startGameAction } from "./game-actions";
+import { nextGuideStepAction, prevGuideStepAction, reachGuideStepAction, skipGuideAction } from "./guide-actions";
 import { navigateToIslandAction, navigateToWorldAction } from "./route-actions";
 import { placeStrongholdAction } from "./setup-actions";
 import { closeSlotModalAction } from "./slot-actions";
 import {
+  armSkillAction,
+  cancelSkillAction,
+  castSkillAction,
   setCleanupInputAction,
   setCleanupSpeedAction,
   stepCleanupAction,
@@ -29,10 +33,13 @@ import {
 } from "./tax-actions";
 import { closeTrailEventAction, moveIslandAction, scoutAction, selectWorldCellAction } from "./world-actions";
 import {
+  closeFactionsModalAction,
   closeHexModalAction,
   closeTechModalAction,
   hoverHexAction,
+  openFactionsModalAction,
   openTechModalAction,
+  selectFactionAction,
   selectHexAction,
 } from "./ui-actions";
 import type { TStore } from "../store/store";
@@ -81,6 +88,16 @@ const createRegistry = (store: TStore) => {
     stepCleanupAction,
     setCleanupSpeedAction,
     toggleCleanupPauseAction,
+    armSkillAction,
+    cancelSkillAction,
+    castSkillAction,
+    reachGuideStepAction,
+    nextGuideStepAction,
+    prevGuideStepAction,
+    skipGuideAction,
+    openFactionsModalAction,
+    selectFactionAction,
+    closeFactionsModalAction,
   };
 
   // The actions differ in arity, so the store is bound through one shared shape.

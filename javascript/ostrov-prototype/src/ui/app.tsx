@@ -3,6 +3,7 @@ import { BattlePage } from "./pages/battle-page";
 import { IslandPage } from "./pages/island-page";
 import { WorldPage } from "./pages/world-page";
 import { EndGameModal } from "./components/end-game-modal";
+import { LearnGuide } from "./components/learn-guide";
 import { SlotModal } from "./components/slot-modal";
 import { useStore } from "../store/store";
 import type { FC } from "react";
@@ -30,6 +31,9 @@ const App: FC<TAppProps> = ({ registry }) => {
       {pageView}
 
       <SlotModal registry={registry} />
+
+      {/* The learn guide, on only with the `?guide` flag. */}
+      <LearnGuide registry={registry} />
 
       <EndGameModal registry={registry} />
     </>

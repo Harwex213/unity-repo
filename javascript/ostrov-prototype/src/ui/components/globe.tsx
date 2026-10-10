@@ -1,5 +1,6 @@
 import { useSignals } from "@preact/signals-react/runtime";
 import { useEffect, useRef } from "react";
+import { getFaction } from "../../core/factions";
 import { ICONS } from "../../core/icons";
 import { getCell } from "../../core/world-gen";
 import { cellVisibility, reachableCellIds } from "../../core/world-rules";
@@ -30,8 +31,6 @@ const BRASS = "#8a6a32";
 const MONSTER_RING = "#7a5a3a";
 /** An activated island: its fight is on. */
 const ACTIVE_RING = "#a3261d";
-/** Wild islands in a cell, drawn as a beast that grows with their number. */
-const MONSTER_ICONS = [ICONS.wolf, ICONS.skeleton, ICONS.ogre];
 
 type TGlobeRegistrySlice = {
   selectWorldCellAction: TSelectWorldCellAction;
@@ -41,7 +40,10 @@ type TGlobeProps = {
   registry: TGlobeRegistrySlice;
 };
 
-/** The one badge a scouted cell shows: its owner, or its wild islands. */
+/**
+ * The one badge a scouted cell shows: its owner, or the faction that holds its
+ * wild islands. The badge grows with the number of wild islands.
+ */
 const markerFor = (cell: TWorldCell, players: readonly TPlayer[]): TGlobeMarker | null => {
   if (!cell.revealed) {
     return null;
@@ -62,22 +64,33 @@ const markerFor = (cell: TWorldCell, players: readonly TPlayer[]): TGlobeMarker 
     return null;
   }
 
+  // The lair is Nexus Arcology, so it shows the Helios emblem in the boss ring.
   if (cell.boss) {
-    return { key: `${cell.id}:boss`, cellIndex: cell.index, icon: ICONS.boss, ring: BOSS_RING, size: 1.15 };
+    const faction = cell.faction ? getFaction(cell.faction) : undefined;
+
+    return {
+      key: `${cell.id}:boss`,
+      cellIndex: cell.index,
+      icon: faction ? faction.iconLarge : ICONS.boss,
+      ring: BOSS_RING,
+      size: 1.4,
+      fill: faction !== undefined,
+    };
   }
 
   if (cell.cleared || cell.islandCount === 0) {
-    return { key: `${cell.id}:cleared`, cellIndex: cell.index, icon: ICONS.check, ring: BRASS, size: 0.6 };
+    return { key: `${cell.id}:cleared`, cellIndex: cell.index, icon: ICONS.check, ring: BRASS, size: 0.8 };
   }
 
-  const icon = MONSTER_ICONS[Math.min(MONSTER_ICONS.length, cell.islandCount) - 1] ?? ICONS.wolf;
+  const faction = cell.faction ? getFaction(cell.faction) : undefined;
 
   return {
     key: `${cell.id}:islands`,
     cellIndex: cell.index,
-    icon,
+    icon: faction ? faction.iconLarge : ICONS.skeleton,
     ring: cell.activated ? ACTIVE_RING : MONSTER_RING,
-    size: 0.42 + cell.islandCount * 0.05,
+    size: 0.9 + cell.islandCount * 0.1,
+    fill: faction !== undefined,
   };
 };
 

@@ -1,6 +1,7 @@
 import { useSignals } from "@preact/signals-react/runtime";
 import { CleanupCanvas } from "../components/cleanup/cleanup-canvas";
 import { CleanupArmyPanel, CleanupControlsPanel, CleanupIslandsPanel } from "../components/cleanup/cleanup-hud";
+import { CleanupSkillsBar } from "../components/cleanup/cleanup-skills";
 import { CleanupSummary } from "../components/cleanup/cleanup-summary";
 import { EndTurnPanel } from "../components/end-turn-panel";
 import { NoticeToast } from "../components/notice-toast";
@@ -17,7 +18,8 @@ type TBattlePageProps = {
 
 /**
  * The cleanup phase. The player steers their island with WASD into the enemy
- * hex islands of the level; the units fight on their own. "Готов" ends the
+ * hex islands of the level; the units fight on their own. The mouse moves the
+ * camera, and the skills bar casts skills on hexes. "Готов" ends the
  * level early; the results modal then hands the turn on.
  */
 const BattlePage: FC<TBattlePageProps> = ({ registry }) => {
@@ -31,7 +33,7 @@ const BattlePage: FC<TBattlePageProps> = ({ registry }) => {
   const showPlayers = store.game.ready.value.length > 0;
 
   // "Готов" opens only once the battle has ended: by victory, by defeat or by
-  // a retreat through the map border. Until then the wheel is locked.
+  // a retreat through a window in the border plumes. Until then the wheel is locked.
   const isBattleOver = result !== null;
   const endTurnSlice = {
     endPhaseAction: isBattleOver ? registry.endPhaseAction : () => undefined,
@@ -57,9 +59,11 @@ const BattlePage: FC<TBattlePageProps> = ({ registry }) => {
       <div className="island-page__bottom">
         <CleanupControlsPanel registry={registry} />
 
+        <CleanupSkillsBar registry={registry} />
+
         <div
           className={`cleanup-end ${isBattleOver ? "" : "cleanup-end--locked"}`}
-          title={isBattleOver ? undefined : "Бой идёт. Уйти можно только за край карты."}
+          title={isBattleOver ? undefined : "Бой идёт. Найдите окно в облаках, чтобы отступить."}
           aria-disabled={!isBattleOver}
           inert={!isBattleOver}
         >

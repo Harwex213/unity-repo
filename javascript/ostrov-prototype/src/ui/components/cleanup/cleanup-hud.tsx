@@ -213,14 +213,20 @@ const CleanupControlsPanel: FC<TCleanupControlsProps> = ({ registry }) => {
         </button>
       </div>
 
-      <div className="cleanup-controls__hints">
+      <div className="cleanup-controls__hints" data-tutorial="battle">
         <span>
           <kbd>{"WASD"}</kbd>
           {" / стрелки — вести остров"}
         </span>
         <span>
+          <kbd>{"Мышь"}</kbd>
+          {" — тянуть карту, "}
           <kbd>{"Колесо"}</kbd>
           {" — масштаб"}
+        </span>
+        <span>
+          <kbd>{"C"}</kbd>
+          {" / двойной клик — к острову"}
         </span>
         <span>
           <kbd>{"Пробел"}</kbd>
@@ -234,17 +240,23 @@ const CleanupControlsPanel: FC<TCleanupControlsProps> = ({ registry }) => {
           {"Подведите остров вплотную: войска сражаются сами."}
         </span>
         <span className="cleanup-controls__hint-dim">
-          {"Уйти из боя можно только за край карты: держите остров в полосе «Отступление». Кто стоит на чужих островах, останется там."}
+          {"Край карты закрыт ядовитыми облаками и скалами. Найдите окно в облаках, чтобы отступить. Кто стоит на чужих островах, останется там."}
         </span>
       </div>
 
-      {hud && hud.retreatProgress > 0 ? (
-        <div className="cleanup-retreat">
-          {hud.inRetreatBand ? "Отступление" : "Отступление прервано"}
-          <div className="cleanup-retreat__bar">
-            <div className="cleanup-retreat__fill" style={{ width: `${Math.round(hud.retreatProgress * 100)}%` }} />
+      {hud && hud.status === "running" ? (
+        hud.inWindow && hud.exitProgress > 0 ? (
+          <div className="cleanup-retreat">
+            {"Уходим через окно"}
+            <div className="cleanup-retreat__bar">
+              <div className="cleanup-retreat__fill" style={{ width: `${Math.round(hud.exitProgress * 100)}%` }} />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="cleanup-retreat cleanup-retreat--idle">
+            {hud.windowsOpen > 0 ? `Окон в облаках: ${hud.windowsOpen}. Стрелка у края экрана ведёт к ближайшему.` : "Окна в облаках закрыты. Скоро откроются новые."}
+          </div>
+        )
       ) : null}
     </div>
   );

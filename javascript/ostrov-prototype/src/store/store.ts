@@ -2,15 +2,18 @@ import { computed } from "@preact/signals-react";
 import { createContext, useContext } from "react";
 import { createBattleState } from "./battle-state";
 import { createGameState } from "./game-state";
+import { createGuideState } from "./guide-state";
 import { createRouteState } from "./route-state";
 import { createUiState } from "./ui-state";
 import { createWorldState } from "./world-state";
 import { findRoll, powerLeft, planPowerSpent } from "../core/tax-plan";
 import { techEffects } from "../core/techs";
 import { getCell } from "../core/world-gen";
+import type { TGuideStepId } from "../core/guide";
 import type { THex, TPlayer } from "../core/types";
 import type { TBattleState } from "./battle-state";
 import type { TGameState } from "./game-state";
+import type { TGuideState } from "./guide-state";
 import type { TRouteState } from "./route-state";
 import type { TUiState } from "./ui-state";
 import type { TWorldState } from "./world-state";
@@ -33,6 +36,7 @@ const createDerived = (
   ui: TUiState,
   world: TWorldState,
   battle: TBattleState,
+  guide: TGuideState,
 ) => {
   const humanPlayer = computed(() => {
     return game.players.value.find((player) => player.id === game.humanPlayerId.value) ?? null;
@@ -101,9 +105,48 @@ const createDerived = (
     return game.phase.value === "tax" || isCleanupSkipped.value;
   });
 
+  /**
+   * The guide card that belongs to what is on screen now, or `null`. Each
+   * phase has its own page, so the card waits for its page and its phase.
+   */
+  const guideContextStep = computed((): TGuideStepId | null => {
+    if (!guide.enabled.value || game.outcome.value) {
+      return null;
+    }
+
+    const page = route.page.value;
+    const stage = game.stage.value;
+    const phase = game.phase.value;
+
+    if (page === "island" && !isReadonly.value) {
+      if (stage === "setup") {
+        return "intro";
+      }
+
+      if (stage === "play" && phase === "build") {
+        return "build";
+      }
+
+      if (stage === "play" && phase === "tax") {
+        return "tax";
+      }
+    }
+
+    if (page === "world" && phase === "scout") {
+      return "scout";
+    }
+
+    if (page === "battle" && phase === "clear") {
+      return "battle";
+    }
+
+    return null;
+  });
+
   return {
     humanPlayer,
     isHumanReady,
+    guideContextStep,
     isCleanupSkipped,
     isReadyLocked,
     viewedPlayer,
@@ -150,6 +193,7 @@ const createStore = () => {
   const ui = createUiState();
   const world = createWorldState();
   const battle = createBattleState();
+  const guide = createGuideState();
 
   return {
     route,
@@ -157,7 +201,8 @@ const createStore = () => {
     ui,
     world,
     battle,
-    derived: createDerived(route, game, ui, world, battle),
+    guide,
+    derived: createDerived(route, game, ui, world, battle, guide),
   };
 };
 

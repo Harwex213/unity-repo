@@ -1,3 +1,5 @@
+import { FACTIONS } from "../core/factions";
+import type { TFactionId } from "../core/factions";
 import type { TStore } from "../store/store";
 import type { TPointerAnchor } from "../store/ui-state";
 
@@ -47,11 +49,30 @@ const closeTechModalAction = (store: TStore) => {
   store.ui.techModalOpen.value = false;
 };
 
+/** Opens the factions modal on the given faction, or on the first one. */
+const openFactionsModalAction = (store: TStore, factionId: TFactionId | null = null) => {
+  store.ui.factionsModalFactionId.value = factionId ?? FACTIONS[0]?.id ?? null;
+};
+
+/** Shows another faction in the open modal. */
+const selectFactionAction = (store: TStore, factionId: TFactionId) => {
+  if (store.ui.factionsModalFactionId.value !== null) {
+    store.ui.factionsModalFactionId.value = factionId;
+  }
+};
+
+const closeFactionsModalAction = (store: TStore) => {
+  store.ui.factionsModalFactionId.value = null;
+};
+
 export {
+  closeFactionsModalAction,
   closeHexModalAction,
   closeTechModalAction,
   hoverHexAction,
+  openFactionsModalAction,
   openTechModalAction,
+  selectFactionAction,
   selectHexAction,
   showNotice,
 };
