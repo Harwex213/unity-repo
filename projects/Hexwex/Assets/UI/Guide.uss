@@ -1,0 +1,110 @@
+/* The learn guide. Built by Hexwex.View.LearnGuide, over the HUD and under the main menu. */
+
+.learn-guide {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    color: rgb(236, 232, 220);
+}
+
+/* The shades darken the screen and take the clicks meant for the game. */
+.learn-guide__dim {
+    position: absolute;
+    background-color: rgba(4, 7, 11, 0.55);
+}
+
+.learn-guide__ring {
+    position: absolute;
+    border-width: 3px;
+    border-color: rgb(226, 190, 104);
+    border-radius: 12px;
+}
+
+.learn-guide__card {
+    position: absolute;
+    padding: 20px 24px;
+    background-color: rgb(24, 28, 36);
+    border-width: 2px;
+    border-color: rgba(226, 190, 104, 0.6);
+    border-radius: 14px;
+}
+
+.learn-guide__head {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: 14px;
+}
+
+.learn-guide__progress {
+    flex-grow: 1;
+    flex-direction: row;
+}
+
+.learn-guide__segment {
+    flex-grow: 1;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 4px;
+    background-color: rgba(232, 241, 242, 0.14);
+}
+
+.learn-guide__segment--done {
+    background-color: rgb(216, 180, 92);
+}
+
+.learn-guide__segment--current {
+    background-color: rgb(243, 220, 154);
+}
+
+.learn-guide__counter {
+    margin-left: 8px;
+    font-size: 18px;
+    color: rgb(170, 172, 168);
+}
+
+.learn-guide__art {
+    flex-shrink: 0;
+    height: 240px;
+    border-width: 1px;
+    border-color: rgba(226, 190, 104, 0.35);
+    border-radius: 10px;
+    overflow: hidden;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.learn-guide__title {
+    flex-shrink: 0;
+    margin: 14px 0 8px 0;
+    font-size: 27px;
+    -unity-font-style: bold;
+    color: rgb(226, 190, 104);
+    white-space: normal;
+}
+
+.learn-guide__body {
+    flex-shrink: 1;
+    min-height: 70px;
+}
+
+.learn-guide__text {
+    font-size: 20px;
+    white-space: normal;
+}
+
+.learn-guide__buttons {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 16px;
+}
+
+.learn-guide__skip {
+    margin-right: auto;
+}
+
+.learn-guide__buttons .end-button {
+    padding: 10px 24px;
+}

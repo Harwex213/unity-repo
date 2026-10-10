@@ -1,0 +1,232 @@
+/* The main menu. Built by Hexwex.View.MainMenu, over the HUD. */
+
+.main-menu {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    color: rgb(236, 232, 220);
+    opacity: 1;
+    transition-property: opacity;
+    transition-duration: 0.7s;
+    transition-timing-function: ease-in;
+}
+
+/* A start fades the menu out over the freshly created game. */
+.main-menu.leaving {
+    opacity: 0;
+}
+
+/* The island turns behind the menu, under a dark shade. */
+.main-menu__shade {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(8, 10, 16, 0.62);
+}
+
+.main-menu__layout {
+    flex-grow: 1;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 60px 110px;
+}
+
+.main-menu__layout:disabled {
+    opacity: 0.35;
+}
+
+/* The title block, on the left */
+
+.main-menu__title-block {
+    width: 620px;
+    align-items: flex-start;
+}
+
+.main-menu__emblem {
+    width: 150px;
+    height: 150px;
+    margin-bottom: 14px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.main-menu__heading {
+    font-size: 26px;
+    letter-spacing: 4px;
+    color: rgb(226, 190, 104);
+}
+
+.main-menu__title {
+    margin: 2px 0;
+    font-size: 132px;
+    -unity-font-style: bold;
+    color: rgb(250, 246, 234);
+    text-shadow: 0 6px 14px rgba(0, 0, 0, 0.75);
+}
+
+.main-menu__subtitle {
+    font-size: 34px;
+    -unity-font-style: italic;
+    color: rgb(200, 198, 188);
+}
+
+.main-menu-bar {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 44px;
+    padding: 10px 14px;
+    background-color: rgba(16, 18, 26, 0.82);
+    border-width: 2px;
+    border-color: rgba(226, 190, 104, 0.45);
+    border-radius: 8px;
+}
+
+.main-menu-bar__label {
+    margin-right: 10px;
+    font-size: 20px;
+    color: rgb(226, 190, 104);
+}
+
+.main-menu-bar__select {
+    width: 190px;
+    font-size: 20px;
+}
+
+.main-menu-bar__button {
+    width: 52px;
+    height: 52px;
+    margin: 0 0 0 14px;
+    padding: 4px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-width: 2px;
+    border-color: rgba(226, 190, 104, 0.45);
+    border-radius: 8px;
+}
+
+.main-menu-bar__button:hover {
+    background-color: rgba(226, 190, 104, 0.25);
+}
+
+.main-menu-bar__icon {
+    flex-grow: 1;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* The entries, on the right */
+
+.main-menu__nav {
+    width: 560px;
+}
+
+.main-menu-entry {
+    flex-direction: row;
+    align-items: center;
+    margin: 8px 0;
+    padding: 12px 18px;
+    background-color: rgba(16, 18, 26, 0.72);
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: rgb(236, 232, 220);
+    transition-property: background-color, border-color, translate;
+    transition-duration: 0.12s;
+}
+
+.main-menu-entry--active {
+    background-color: rgba(52, 44, 22, 0.9);
+    border-color: rgb(226, 190, 104);
+    translate: -14px 0;
+}
+
+.main-menu-entry__frame {
+    width: 76px;
+    height: 76px;
+    margin-right: 18px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.45);
+    border-width: 2px;
+    border-color: rgba(226, 190, 104, 0.6);
+    border-radius: 8px;
+}
+
+.main-menu-entry__icon {
+    flex-grow: 1;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.main-menu-entry__label {
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: rgb(226, 190, 104);
+}
+
+.main-menu-entry__title {
+    font-size: 38px;
+    -unity-font-style: bold;
+    color: rgb(250, 246, 234);
+}
+
+/* The exit, in the lower left corner */
+
+.main-menu__footer {
+    position: absolute;
+    left: 110px;
+    bottom: 56px;
+}
+
+.main-menu-button {
+    margin: 0;
+    padding: 12px 34px;
+    font-size: 24px;
+    color: rgb(236, 232, 220);
+    background-color: rgba(16, 18, 26, 0.85);
+    border-width: 2px;
+    border-color: rgba(226, 190, 104, 0.6);
+    border-radius: 8px;
+}
+
+.main-menu-button:hover {
+    background-color: rgba(226, 190, 104, 0.3);
+}
+
+/* The credits */
+
+.main-menu-credits {
+    width: 560px;
+}
+
+.main-menu-credits__row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-self: stretch;
+    margin: 6px 0;
+}
+
+.main-menu-credits__role {
+    font-size: 20px;
+    color: rgb(170, 172, 168);
+}
+
+.main-menu-credits__name {
+    font-size: 20px;
+    -unity-font-style: bold;
+}
+
+.main-menu-credits .main-menu-button {
+    margin-top: 20px;
+}
+
+.main-menu-bar__select .unity-base-popup-field__input {
+    color: rgb(24, 24, 24);
+    background-color: rgb(236, 232, 220);
+}
+
+/* A button centres its text; the two lines of an entry start at the left. */
+.main-menu-entry__label,
+.main-menu-entry__title {
+    -unity-text-align: middle-left;
+}

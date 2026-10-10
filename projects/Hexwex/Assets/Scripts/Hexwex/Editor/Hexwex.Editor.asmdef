@@ -1,0 +1,19 @@
+{
+    "name": "Hexwex.Editor",
+    "rootNamespace": "Hexwex.EditorTools",
+    "references": [
+        "Hexwex.Core",
+        "Hexwex.View"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
