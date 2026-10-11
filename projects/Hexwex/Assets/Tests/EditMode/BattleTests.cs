@@ -78,10 +78,11 @@ namespace Hexwex.Core.Tests
         }
 
         [Test]
-        public void TheLevelStandsItsIslandsApartInsideTheBorder()
+        public void TheLevelStandsItsIslandsApartInTheClearing()
         {
             Player player = Defender(out _);
             LevelSpec level = Level(player, 3, Knights(2));
+            CleanupFog fog = CleanupSim.Create(level, 1).Fog;
 
             Assert.AreEqual(4, level.Islands.Count);
             Assert.AreEqual(CleanupSide.Player, level.Islands[0].Side);
@@ -94,8 +95,8 @@ namespace Hexwex.Core.Tests
                 double ax = level.Islands[a].X + first.Cx;
                 double ay = level.Islands[a].Y + first.Cy;
 
-                Assert.Less(System.Math.Abs(ax) + first.Radius, level.Bounds.HalfWidth - CleanupBorder.BorderDepth);
-                Assert.Less(System.Math.Abs(ay) + first.Radius, level.Bounds.HalfHeight - CleanupBorder.BorderDepth);
+                // Every island starts with open sky between it and the fog.
+                Assert.LessOrEqual(fog.DepthAt(ax, ay) + first.Radius, -CleanupFog.Margin + 1);
 
                 for (int b = a + 1; b < level.Islands.Count; b += 1)
                 {
@@ -265,6 +266,122 @@ namespace Hexwex.Core.Tests
             Assert.IsFalse(wild.Cleared);
             Assert.AreEqual(hexes, human.Hexes.Count);
             Assert.AreEqual(session.LastBattleResult.Survivors.Count, human.Army);
+        }
+        /// <summary>Sails the player's island straight out of the clearing, away from its middle.</summary>
+        private static void SailOut(CleanupSim sim)
+        {
+            SimIsland player = sim.PlayerIsland;
+            double x = player.CenterX - sim.Fog.CenterX;
+            double y = player.CenterY - sim.Fog.CenterY;
+            if (CleanupMath.Hypot(x, y) < 1)
+            {
+                x = 1;
+                y = 0;
+            }
+
+            sim.SetInput(x, y);
+        }
+
+        [Test]
+        public void NobodySeesFarIntoTheFog()
+        {
+            double far = CleanupFog.Sight + 1;
+
+            // In the clearing everyone sees everyone, at any distance.
+            Assert.IsTrue(CleanupFog.Sees(false, 0, 0, false, 5000, 0));
+            // The fog hides whoever is in it, and blinds whoever looks out of it.
+            Assert.IsFalse(CleanupFog.Sees(false, 0, 0, true, far, 0));
+            Assert.IsFalse(CleanupFog.Sees(true, 0, 0, false, far, 0));
+            Assert.IsFalse(CleanupFog.Sees(true, 0, 0, true, 0, far));
+            // Close by, the fog hides nothing.
+            Assert.IsTrue(CleanupFog.Sees(false, 0, 0, true, CleanupFog.Sight, 0));
+            Assert.IsTrue(CleanupFog.Sees(true, 0, 0, true, 0, CleanupFog.Sight));
+        }
+
+        [Test]
+        public void TheFogHidesTheIslandAndIsTheWayOut()
+        {
+            CleanupSim sim = CleanupSim.Create(Level(Defender(out _), 1, Knights(4)), 9);
+            Assert.IsFalse(sim.Hidden);
+            Assert.AreEqual(0, sim.ExitProgress);
+
+            List<SimEventType> seen = new List<SimEventType>();
+            for (int tick = 0; tick < 3000 && !sim.Hidden; tick += 1)
+            {
+                SailOut(sim);
+                sim.Step();
+                seen.AddRange(sim.DrainEvents().Select(simEvent => simEvent.Type));
+            }
+
+            // In the fog the island is hidden, and the battle goes on.
+            Assert.IsTrue(sim.Hidden);
+            Assert.AreEqual(SimStatus.Running, sim.Status);
+            Assert.Contains(SimEventType.Hid, seen);
+            Assert.IsTrue(sim.Fog.Covers(sim.PlayerIsland.CenterX, sim.PlayerIsland.CenterY));
+
+            // It may turn back: out of the fog it is in sight again.
+            for (int tick = 0; tick < 3000 && sim.Hidden; tick += 1)
+            {
+                sim.SetInput(sim.Fog.CenterX - sim.PlayerIsland.CenterX, sim.Fog.CenterY - sim.PlayerIsland.CenterY);
+                sim.Step();
+                seen.AddRange(sim.DrainEvents().Select(simEvent => simEvent.Type));
+            }
+
+            Assert.IsFalse(sim.Hidden);
+            Assert.AreEqual(SimStatus.Running, sim.Status);
+            Assert.Contains(SimEventType.Showed, seen);
+
+            // Sailing on through the whole depth of the fog leaves the battle.
+            double progress = 0;
+            for (int tick = 0; tick < 6000 && sim.Status == SimStatus.Running; tick += 1)
+            {
+                SailOut(sim);
+                sim.Step();
+                Assert.GreaterOrEqual(sim.ExitProgress, progress - 0.05);
+                progress = sim.ExitProgress;
+            }
+
+            Assert.AreEqual(SimStatus.Retreated, sim.Status);
+            Assert.AreEqual(CleanupOutcome.Retreated, sim.Result().Outcome);
+        }
+
+        [Test]
+        public void EnemyIslandsDoNotFollowIntoTheFog()
+        {
+            CleanupSim sim = CleanupSim.Create(Level(Defender(out _), 3, Knights(4)), 21);
+
+            // The island sails in a third of the way and waits there.
+            for (int tick = 0; tick < 3000 && sim.ExitProgress < 0.33; tick += 1)
+            {
+                SailOut(sim);
+                sim.Step();
+            }
+
+            Assert.IsTrue(sim.Hidden);
+            sim.SetInput(0, 0);
+
+            for (int tick = 0; tick < 900 && sim.Status == SimStatus.Running; tick += 1)
+            {
+                // Held against the drift it still has, so that it stays where it hid.
+                if (sim.ExitProgress > 0.5)
+                {
+                    sim.SetInput(sim.Fog.CenterX - sim.PlayerIsland.CenterX, sim.Fog.CenterY - sim.PlayerIsland.CenterY);
+                }
+                else
+                {
+                    sim.SetInput(0, 0);
+                }
+
+                sim.Step();
+
+                foreach (SimIsland island in sim.Islands.Where(island => island.Side == CleanupSide.Enemy && !island.IsGone))
+                {
+                    Assert.LessOrEqual(sim.Fog.DepthAt(island.CenterX, island.CenterY) + island.Body.Radius, 1e-6, island.Label + " is in the fog at tick " + sim.Tick);
+                }
+            }
+
+            Assert.AreEqual(SimStatus.Running, sim.Status);
+            Assert.IsTrue(sim.Hidden);
         }
     }
 }

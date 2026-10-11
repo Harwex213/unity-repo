@@ -37,10 +37,6 @@ namespace Hexwex.View
         private static readonly Color RootColor = new Color(0.27f, 0.23f, 0.21f);
         private static readonly Color ToxicColor = new Color(0.52f, 0.2f, 0.62f);
         private static readonly Color HuskColor = new Color(0.55f, 0.55f, 0.52f);
-        private static readonly Color PlumeColor = new Color(0.4f, 0.16f, 0.5f);
-        private static readonly Color WindowColor = new Color(0.45f, 0.9f, 0.6f);
-        private static readonly Color WindowClosingColor = new Color(0.98f, 0.75f, 0.25f);
-        private static readonly Color RockColor = new Color(0.36f, 0.34f, 0.38f);
         private static readonly Color EnemyColor = new Color(0.72f, 0.2f, 0.18f);
         /// <summary>The player's army wears one strong colour, so it reads against any biome.</summary>
         private static readonly Color ArmyColor = new Color(0.2f, 0.4f, 0.95f);
@@ -51,7 +47,6 @@ namespace Hexwex.View
         private readonly List<IslandVisual> _islands = new List<IslandVisual>();
         private readonly Dictionary<int, UnitVisual> _units = new Dictionary<int, UnitVisual>();
         private readonly List<Transform> _shots = new List<Transform>();
-        private readonly Dictionary<int, Transform> _windows = new Dictionary<int, Transform>();
         private readonly HashSet<int> _seen = new HashSet<int>();
         private readonly List<int> _gone = new List<int>();
         private readonly List<Effect> _effects = new List<Effect>();
@@ -70,7 +65,6 @@ namespace Hexwex.View
         private static readonly Dictionary<string, GameObject> UnitPrefabs = new Dictionary<string, GameObject>();
 
         private CleanupSim _sim;
-        private Transform _border;
         private Color _playerColor = Color.white;
         private int _lastRepaintTick;
         private int _targetIsland = -1;
@@ -147,7 +141,7 @@ namespace Hexwex.View
                 _islands.Add(new IslandVisual { Root = root.transform });
             }
 
-            BuildBorder();
+            BuildFog();
         }
 
         public void Clear()
@@ -162,8 +156,6 @@ namespace Hexwex.View
             _shots.Clear();
             _effects.Clear();
             _fallen.Clear();
-            _windows.Clear();
-            _border = null;
             _sim = null;
             _targetIsland = -1;
             _targetHex = -1;
@@ -244,7 +236,6 @@ namespace Hexwex.View
             DrawShots(alpha);
             DrawEffects();
             DrawFallen();
-            DrawWindows();
         }
 
         /* ---------- islands ---------- */
@@ -605,8 +596,8 @@ namespace Hexwex.View
 
         /// <summary>
         /// Shows what the sim says has just happened: a puff where a unit fell or was
-        /// carried off, a burst where a building was razed, a purple puff over a
-        /// poisoned hex, and a hex that crumbles and falls.
+        /// carried off, a burst where a building was razed, and a hex that crumbles
+        /// and falls.
         /// </summary>
         public void PlayEffect(SimEvent simEvent)
         {
@@ -622,9 +613,6 @@ namespace Hexwex.View
                     break;
                 case SimEventType.Razed:
                     AddPuff(simEvent, new Color(0.95f, 0.55f, 0.2f), 1.3f, 0.55f);
-                    break;
-                case SimEventType.Poison:
-                    AddPuff(simEvent, PlumeColor, 0.5f, 0.45f);
                     break;
                 case SimEventType.Ferry:
                     AddPuff(simEvent, new Color(0.9f, 0.9f, 1f), 0.4f, 0.3f);
@@ -707,77 +695,145 @@ namespace Hexwex.View
             }
         }
 
-        /* ---------- the border ---------- */
+        /* ---------- the fog ---------- */
 
-        /// <summary>The band of plumes along the map border, and the rocks standing in it.</summary>
-        private void BuildBorder()
+        /// <summary>
+        /// One sheet of the fog: a flat ring round the clearing at its own height.
+        /// It thickens from <see cref="From"/> to <see cref="To"/>, measured in the
+        /// sim's units from the edge of the clearing outward, up to <see cref="Thickness"/>.
+        /// </summary>
+        private readonly struct FogSheet
         {
-            GameObject root = new GameObject("Border");
-            root.transform.SetParent(transform, false);
-            _border = root.transform;
+            public readonly float Height;
+            public readonly float From;
+            public readonly float To;
+            public readonly float Thickness;
 
-            float halfWidth = (float)_sim.Bounds.HalfWidth * Scale;
-            float halfHeight = (float)_sim.Bounds.HalfHeight * Scale;
-            float depth = (float)_sim.Border.Depth * Scale;
-            float thickness = 0.5f;
-            Vector3 low = Vector3.down * 0.15f;
-
-            // Top and bottom run the whole width; left and right fill what is between them.
-            Props.Part(_border, Props.Cube, surfaceMaterial, low + new Vector3(0f, 0f, halfHeight - depth * 0.5f), new Vector3(halfWidth * 2f, thickness, depth), PlumeColor);
-            Props.Part(_border, Props.Cube, surfaceMaterial, low + new Vector3(0f, 0f, -halfHeight + depth * 0.5f), new Vector3(halfWidth * 2f, thickness, depth), PlumeColor);
-            Props.Part(_border, Props.Cube, surfaceMaterial, low + new Vector3(halfWidth - depth * 0.5f, 0f, 0f), new Vector3(depth, thickness, (halfHeight - depth) * 2f), PlumeColor * 0.92f);
-            Props.Part(_border, Props.Cube, surfaceMaterial, low + new Vector3(-halfWidth + depth * 0.5f, 0f, 0f), new Vector3(depth, thickness, (halfHeight - depth) * 2f), PlumeColor * 0.92f);
-
-            foreach (BorderRock rock in _sim.Border.Rocks)
+            public FogSheet(float height, float from, float to, float thickness)
             {
-                float radius = (float)rock.Radius * Scale;
-                Transform cone = Props.Part(_border, HexMeshes.Cone, surfaceMaterial, ToWorld(rock.X, rock.Y, -0.3f), new Vector3(radius, radius * (1.3f + (float)rock.Seed), radius), RockColor * (0.85f + (float)rock.Seed * 0.3f));
-                cone.localRotation = Quaternion.Euler(0f, (float)rock.Seed * 360f, 0f);
+                Height = height;
+                From = from;
+                To = to;
+                Thickness = thickness;
             }
         }
 
-        /// <summary>An open window is a clear strip across the plumes. It turns amber before it closes.</summary>
-        private void DrawWindows()
+        /// <summary>
+        /// The sheets lie one over another, so an island sinks into the fog by
+        /// degrees. The lowest runs under the hex tops and creeps into the clearing
+        /// as a mist; the highest lies over the roofs and starts a little way in.
+        /// </summary>
+        private static readonly FogSheet[] FogSheets =
         {
-            _seen.Clear();
-            float depth = (float)_sim.Border.Depth;
+            new FogSheet(0.08f, -340f, 380f, 0.92f),
+            new FogSheet(1.0f, -90f, 620f, 0.55f),
+            new FogSheet(2.2f, 70f, (float)CleanupFog.Depth, 0.72f),
+        };
 
-            foreach (BorderWindow window in _sim.Border.Windows)
+        /// <summary>Where the rings of a sheet lie, from the edge of the clearing outward.</summary>
+        private static readonly float[] FogRings = { -340f, -210f, -90f, 70f, 220f, 380f, 620f, (float)CleanupFog.Depth, (float)CleanupFog.Depth + 420f, 16000f };
+        private const int FogSegments = 144;
+
+        private static Material _fogMaterial;
+
+        private static Material FogMaterial
+        {
+            get
             {
-                if (!window.IsOpen(_sim.Tick))
+                if (_fogMaterial == null)
                 {
-                    continue;
+                    Shader shader = Resources.Load<Shader>("Shaders/HexwexFog");
+                    _fogMaterial = shader != null ? new Material(shader) { name = "M_Fog" } : null;
                 }
 
-                _seen.Add(window.Id);
-                if (!_windows.TryGetValue(window.Id, out Transform visual))
-                {
-                    CleanupBorder.SidePoint(_sim.Bounds, window.Side, window.At, depth * 0.5, out double x, out double y);
-                    bool isHorizontal = window.Side % 2 == 0;
-                    float along = (float)window.Half * 2f * Scale;
-                    float across = depth * Scale * 1.02f;
-                    visual = Props.Part(_border, Props.Cube, surfaceMaterial, ToWorld(x, y, -0.1f), new Vector3(isHorizontal ? along : across, 0.56f, isHorizontal ? across : along), WindowColor);
-                    visual.name = "Window " + window.Id;
-                    _windows[window.Id] = visual;
-                }
-
-                Props.Paint(visual.GetComponent<MeshRenderer>(), window.IsClosing(_sim.Tick, CleanupSim.TickHz) ? WindowClosingColor : WindowColor);
+                return _fogMaterial;
             }
+        }
 
-            _gone.Clear();
-            foreach (int id in _windows.Keys)
+        /// <summary>
+        /// The fog round the clearing. It follows the edge the sim keeps, so what
+        /// looks like fog is fog: whoever is under it is hidden. Past the depth at
+        /// which an island leaves the battle every sheet is solid.
+        /// </summary>
+        private void BuildFog()
+        {
+            if (FogMaterial == null)
             {
-                if (!_seen.Contains(id))
+                Debug.LogWarning("Hexwex: the fog shader is missing from Resources/Shaders; the fog is not drawn.");
+
+                return;
+            }
+
+            GameObject root = new GameObject("Fog");
+            root.transform.SetParent(transform, false);
+
+            for (int index = 0; index < FogSheets.Length; index += 1)
+            {
+                GameObject sheet = new GameObject("Sheet " + index);
+                sheet.transform.SetParent(root.transform, false);
+                sheet.AddComponent<MeshFilter>().sharedMesh = FogMesh(FogSheets[index], index);
+                MeshRenderer sheetRenderer = sheet.AddComponent<MeshRenderer>();
+                sheetRenderer.sharedMaterial = FogMaterial;
+                sheetRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                sheetRenderer.receiveShadows = false;
+                // The higher sheet is drawn over the lower one.
+                sheetRenderer.sortingOrder = index;
+            }
+        }
+
+        private Mesh FogMesh(FogSheet sheet, int index)
+        {
+            CleanupFog fog = _sim.Fog;
+            int across = FogRings.Length;
+            Vector3[] vertices = new Vector3[(FogSegments + 1) * across];
+            Color[] colors = new Color[vertices.Length];
+            Vector2[] sheets = new Vector2[vertices.Length];
+            int[] triangles = new int[FogSegments * (across - 1) * 6];
+
+            for (int segment = 0; segment <= FogSegments; segment += 1)
+            {
+                double angle = segment % FogSegments * System.Math.PI * 2 / FogSegments;
+                double edge = fog.EdgeAt(angle);
+
+                for (int ring = 0; ring < across; ring += 1)
                 {
-                    _gone.Add(id);
+                    float depth = FogRings[ring];
+                    double reach = edge + depth;
+                    int vertex = segment * across + ring;
+                    vertices[vertex] = ToWorld(fog.CenterX + System.Math.Cos(angle) * reach, fog.CenterY + System.Math.Sin(angle) * reach, sheet.Height);
+
+                    float thick = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(sheet.From, sheet.To, depth)) * sheet.Thickness;
+                    // Beyond the way out nothing shows through.
+                    float solid = Mathf.InverseLerp((float)CleanupFog.Depth, (float)CleanupFog.Depth + 420f, depth);
+                    colors[vertex] = new Color(1f, 1f, 1f, Mathf.Lerp(thick, 1f, solid));
+                    sheets[vertex] = new Vector2(index, 0f);
                 }
             }
 
-            foreach (int id in _gone)
+            int next = 0;
+            for (int segment = 0; segment < FogSegments; segment += 1)
             {
-                Destroy(_windows[id].gameObject);
-                _windows.Remove(id);
+                for (int ring = 0; ring < across - 1; ring += 1)
+                {
+                    int a = segment * across + ring;
+                    int b = a + across;
+                    triangles[next++] = a;
+                    triangles[next++] = a + 1;
+                    triangles[next++] = b;
+                    triangles[next++] = b;
+                    triangles[next++] = a + 1;
+                    triangles[next++] = b + 1;
+                }
             }
+
+            Mesh mesh = new Mesh { name = "Fog sheet " + index };
+            mesh.vertices = vertices;
+            mesh.colors = colors;
+            mesh.uv = sheets;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+
+            return mesh;
         }
     }
 }

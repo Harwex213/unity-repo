@@ -167,6 +167,7 @@ namespace Hexwex.View
         private float _revealStart;
         private bool _collected;
         private Quaternion _islandSunRotation;
+        private Color _islandSky;
 
         private void Start()
         {
@@ -759,9 +760,14 @@ namespace Hexwex.View
                         // Red over the player's own, pale over the enemy's.
                         hud.SpawnFloater(battleView.EffectPoint(simEvent.X, simEvent.Y, 0.9f), "−" + simEvent.Amount, simEvent.Side == CleanupSide.Player);
                         break;
+                    case SimEventType.Hid:
+                        hud.ShowNotice("Остров скрылся в тумане: враг его не видит");
+                        break;
+                    case SimEventType.Showed:
+                        hud.ShowNotice("Остров вышел из тумана");
+                        break;
                     case SimEventType.Death:
                     case SimEventType.Razed:
-                    case SimEventType.Poison:
                     case SimEventType.Crumble:
                     case SimEventType.Ferry:
                         battleView.PlayEffect(simEvent);
@@ -807,6 +813,9 @@ namespace Hexwex.View
                 {
                     _islandOrbit = cameraRig.Current;
                     _islandSunRotation = sun.transform.rotation;
+                    // The globe hangs in the night, as in the prototype.
+                    _islandSky = worldCamera.backgroundColor;
+                    worldCamera.backgroundColor = GlobeView.Sky;
                     WorldCell home = Session.World.Get(Session.Human.CellId);
                     Vector3 direction = home != null ? globeView.DirectionOf(home) : Vector3.back;
                     // Seen a little from the side, so what stands on the cells reads as standing.
@@ -822,6 +831,7 @@ namespace Hexwex.View
                 {
                     _globeOrbit = cameraRig.Current;
                     sun.transform.rotation = _islandSunRotation;
+                    worldCamera.backgroundColor = _islandSky;
                     if (_islandOrbit.HasValue)
                     {
                         cameraRig.Current = _islandOrbit.Value;

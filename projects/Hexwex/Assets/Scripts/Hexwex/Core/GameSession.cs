@@ -370,10 +370,10 @@ namespace Hexwex.Core
             }
             else if (Phase == Phase.Clear)
             {
-                // The level has to end before the turn can: the way out is a window in the plumes.
+                // The level has to end before the turn can: the way out is through the fog.
                 if (Battle != null && Battle.Status == SimStatus.Running)
                 {
-                    Refuse("Бой ещё идёт: зачистите острова или уведите остров через окно в облаках");
+                    Refuse("Бой ещё идёт: зачистите острова или уведите остров в туман");
 
                     return;
                 }
@@ -490,15 +490,8 @@ namespace Hexwex.Core
                 StructureHp.Set(hex, kind, entry.Hp);
             }
 
-            // Hexes destroyed in battle leave the island; the plumes' poison stays on the rest.
+            // Hexes destroyed in battle leave the island.
             player.Hexes.RemoveAll(hex => result.DestroyedHexIds.Contains(hex.Id));
-            foreach (HexTile hex in player.Hexes)
-            {
-                if (result.Poisoned.TryGetValue(hex.Id, out int toxicity))
-                {
-                    hex.Toxicity = Math.Max(hex.Toxicity, toxicity);
-                }
-            }
 
             // The islands that joined in battle keep their exact battle coordinates.
             CleanupLevel.JoinAnnexed(player, result.Annexed);

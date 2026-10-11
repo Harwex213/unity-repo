@@ -18,7 +18,9 @@ namespace Hexwex.View
     /// prototype's <c>globe.tsx</c> and <c>globe-scene.ts</c> stood: it only reads
     /// the world and never changes it. The prototype paints an antique map onto a
     /// smooth sphere with a shader; here every cell is its own slab, land stands
-    /// above the sea, and what is on a scouted cell is modelled on top of it.
+    /// above the sea, and what is on a scouted cell is modelled on top of it. The
+    /// slabs are drawn with the same antique map, by <c>Hexwex/Globe</c>, a port
+    /// of the prototype's shader, and the same muted stars stand behind.
     ///
     /// One cell is about one world unit across, the size of an island hex.
     /// </summary>
@@ -35,17 +37,39 @@ namespace Hexwex.View
         /// <summary>A trail this big paints the cell fully toxic.</summary>
         private const float ToxicFull = 400f;
 
-        private static readonly Color CoreColor = new Color(0.07f, 0.09f, 0.12f);
-        private static readonly Color FogSea = new Color(0.22f, 0.31f, 0.42f);
-        private static readonly Color FogLand = new Color(0.46f, 0.44f, 0.38f);
-        private static readonly Color FrontierSea = new Color(0.33f, 0.46f, 0.6f);
-        private static readonly Color FrontierLand = new Color(0.66f, 0.62f, 0.5f);
-        private static readonly Color CloudSea = new Color(0.72f, 0.84f, 0.95f);
+        /// <summary>The night behind the globe, as in the prototype.</summary>
+        public static readonly Color Sky = new Color(0.027f, 0.031f, 0.04f);
+
+        private static readonly Color CoreColor = new Color(0.05f, 0.045f, 0.04f);
+        private static readonly Color FogSea = new Color(0.13f, 0.14f, 0.15f);
+        private static readonly Color FogLand = new Color(0.23f, 0.22f, 0.2f);
+        private static readonly Color FrontierSea = new Color(0.36f, 0.37f, 0.36f);
+        private static readonly Color FrontierLand = new Color(0.52f, 0.5f, 0.43f);
+        private static readonly Color Sea = new Color(0.17f, 0.23f, 0.27f);
         private static readonly Color SettlementColor = new Color(0.8f, 0.71f, 0.5f);
         private static readonly Color LairColor = new Color(0.42f, 0.12f, 0.1f);
         private static readonly Color BossRing = new Color(0.75f, 0.16f, 0.12f);
         private static readonly Color ActiveRing = new Color(0.64f, 0.15f, 0.11f);
-        private static readonly Color ToxicColor = new Color(0.52f, 0.2f, 0.62f);
+
+        private const int StarCount = 2600;
+        private static readonly Color[] StarTints =
+        {
+            new Color(0.75f, 0.82f, 1f),
+            new Color(1f, 0.95f, 0.85f),
+            new Color(1f, 0.82f, 0.62f),
+            new Color(0.9f, 0.9f, 0.95f),
+        };
+
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int CellId = Shader.PropertyToID("_Cell");
+        private static readonly int OwnerId = Shader.PropertyToID("_Owner");
+        private static readonly int MarkId = Shader.PropertyToID("_Mark");
+        private static readonly int CenterId = Shader.PropertyToID("_Center");
+        private static readonly int PaperId = Shader.PropertyToID("_Paper");
+        private static MaterialPropertyBlock _block;
+
+        private Material _mapMaterial;
+        private Material _starMaterial;
 
         [SerializeField] private Material surfaceMaterial;
 
@@ -96,12 +120,36 @@ namespace Hexwex.View
                 Build(world);
             }
 
+            if (_mapMaterial != null)
+            {
+                _mapMaterial.SetVector(CenterId, transform.position);
+            }
+
             foreach (WorldCell cell in world.Cells)
             {
                 CellVisual visual = _visuals[cell.Index];
                 UpdateContent(cell, visual, players);
-                PaintCell(world, cell, visual, markOf != null ? markOf(cell) : CellMark.None);
+                PaintCell(world, cell, visual, markOf != null ? markOf(cell) : CellMark.None, OwnerOf(cell, players));
             }
+        }
+
+        /// <summary>The player whose island flies over a scouted cell, or <c>null</c>.</summary>
+        private static Player OwnerOf(WorldCell cell, IReadOnlyList<Player> players)
+        {
+            if (!cell.Revealed || cell.OwnerId == null)
+            {
+                return null;
+            }
+
+            foreach (Player player in players)
+            {
+                if (player.Id == cell.OwnerId)
+                {
+                    return player;
+                }
+            }
+
+            return null;
         }
 
         public void Clear()
@@ -168,7 +216,18 @@ namespace Hexwex.View
             _visuals = new CellVisual[world.Cells.Length];
             _directions = new Vector3[world.Cells.Length];
 
-            // The dark body of the planet shows in the gaps between the cells.
+            // The map is drawn by the port of the prototype's shader, over its own paper.
+            Shader mapShader = Resources.Load<Shader>("Shaders/HexwexGlobe");
+            if (_mapMaterial == null && mapShader != null)
+            {
+                _mapMaterial = new Material(mapShader) { name = "M_Globe" };
+                _mapMaterial.SetTexture(PaperId, Resources.Load<Texture2D>("Globe/paper"));
+            }
+
+            Material cellMaterial = _mapMaterial != null ? _mapMaterial : surfaceMaterial;
+            BuildStars(world);
+
+            // The dark body of the planet shows in the gaps between the cells, as the ink of the grid.
             Transform core = Props.Part(transform, Props.Sphere, surfaceMaterial, Vector3.zero, Vector3.one * (Radius - SkirtDepth * 0.5f) * 2f, CoreColor);
             core.name = "Core";
 
@@ -182,7 +241,7 @@ namespace Hexwex.View
                 slab.transform.SetParent(transform, false);
                 slab.AddComponent<MeshFilter>().sharedMesh = BuildSlab(cell, direction, height);
                 MeshRenderer renderer = slab.AddComponent<MeshRenderer>();
-                renderer.sharedMaterials = new[] { surfaceMaterial, surfaceMaterial };
+                renderer.sharedMaterials = new[] { cellMaterial, cellMaterial };
 
                 GameObject anchor = new GameObject("Anchor");
                 anchor.transform.SetParent(slab.transform, false);
@@ -195,9 +254,94 @@ namespace Hexwex.View
         }
 
         /// <summary>
+        /// The starfield of the prototype: the same count, the same four tints, the
+        /// same spread of sizes, far behind the globe. A star is a small square that
+        /// faces the globe.
+        /// </summary>
+        private void BuildStars(World world)
+        {
+            Shader shader = Resources.Load<Shader>("Shaders/HexwexStars");
+            if (shader == null)
+            {
+                return;
+            }
+
+            if (_starMaterial == null)
+            {
+                _starMaterial = new Material(shader) { name = "M_Stars" };
+            }
+
+            Rng rng = Rng.FromText(world.Seed + ":stars");
+            Vector3[] vertices = new Vector3[StarCount * 4];
+            Color[] colors = new Color[StarCount * 4];
+            Vector2[] corners = new Vector2[StarCount * 4];
+            Vector2[] phases = new Vector2[StarCount * 4];
+            int[] triangles = new int[StarCount * 6];
+
+            for (int index = 0; index < StarCount; index += 1)
+            {
+                float z = (float)rng.Next() * 2f - 1f;
+                float angle = (float)rng.Next() * Mathf.PI * 2f;
+                float ring = Mathf.Sqrt(1f - z * z);
+                // The prototype's planet has radius 1 and its stars stand 60 to 90 away.
+                float distance = (16f + (float)rng.Next() * 8f) * Radius;
+                Vector3 direction = new Vector3(Mathf.Cos(angle) * ring, z, Mathf.Sin(angle) * ring);
+
+                float brightness = (Mathf.Pow((float)rng.Next(), 3f) * 0.9f + 0.1f) * 0.95f;
+                Color tint = StarTints[Mathf.Min(StarTints.Length - 1, (int)(rng.Next() * StarTints.Length))] * brightness;
+                float size = (1.5f + Mathf.Pow((float)rng.Next(), 6f) * 4f) * distance * 0.0014f;
+                float phase = (float)rng.Next();
+
+                Vector3 right = Vector3.Cross(direction, Mathf.Abs(direction.y) > 0.9f ? Vector3.right : Vector3.up).normalized * size;
+                Vector3 up = Vector3.Cross(right, direction).normalized * size;
+                Vector3 at = direction * distance;
+                int first = index * 4;
+                vertices[first] = at - right - up;
+                vertices[first + 1] = at + right - up;
+                vertices[first + 2] = at + right + up;
+                vertices[first + 3] = at - right + up;
+                corners[first] = new Vector2(0f, 0f);
+                corners[first + 1] = new Vector2(1f, 0f);
+                corners[first + 2] = new Vector2(1f, 1f);
+                corners[first + 3] = new Vector2(0f, 1f);
+                for (int corner = 0; corner < 4; corner += 1)
+                {
+                    colors[first + corner] = tint;
+                    phases[first + corner] = new Vector2(phase, 0f);
+                }
+
+                int triangle = index * 6;
+                triangles[triangle] = first;
+                triangles[triangle + 1] = first + 1;
+                triangles[triangle + 2] = first + 2;
+                triangles[triangle + 3] = first;
+                triangles[triangle + 4] = first + 2;
+                triangles[triangle + 5] = first + 3;
+            }
+
+            Mesh mesh = new Mesh { name = "Stars" };
+            mesh.vertices = vertices;
+            mesh.colors = colors;
+            mesh.uv = corners;
+            mesh.uv2 = phases;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+
+            GameObject stars = new GameObject("Stars");
+            stars.transform.SetParent(transform, false);
+            stars.AddComponent<MeshFilter>().sharedMesh = mesh;
+            MeshRenderer starRenderer = stars.AddComponent<MeshRenderer>();
+            starRenderer.sharedMaterial = _starMaterial;
+            starRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            starRenderer.receiveShadows = false;
+        }
+
+        /// <summary>
         /// One cell as a slab: its outline pulled in a little, lifted to the cell's
         /// height, with walls down into the core. Submesh 0 is the top, submesh 1
-        /// the walls, so the two take different colours.
+        /// the walls. For the map shader a vertex also carries its place in the
+        /// cell's own plane, how near the border it is (0 in the middle, 1 on the
+        /// outline), and whether it is on a wall.
         /// </summary>
         private static Mesh BuildSlab(WorldCell cell, Vector3 direction, float height)
         {
@@ -213,16 +357,37 @@ namespace Hexwex.View
 
             List<Vector3> vertices = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
+            List<Vector2> locals = new List<Vector2>();
+            List<Vector2> edges = new List<Vector2>();
             List<int> cap = new List<int>();
             List<int> walls = new List<int>();
 
+            // The cell's own plane: east and north on the sphere, one unit to the farthest corner.
+            Vector3 middle = direction * (Radius + height);
+            Vector3 east = Vector3.Cross(Mathf.Abs(direction.y) > 0.98f ? Vector3.forward : Vector3.up, direction).normalized;
+            Vector3 north = Vector3.Cross(direction, east);
+            float reach = 0.001f;
+            for (int index = 0; index < corners; index += 1)
+            {
+                reach = Mathf.Max(reach, (top[index] - middle).magnitude);
+            }
+
+            Vector2 Local(Vector3 point)
+            {
+                return new Vector2(Vector3.Dot(point - middle, east), Vector3.Dot(point - middle, north)) / reach;
+            }
+
             int center = vertices.Count;
-            vertices.Add(direction * (Radius + height));
+            vertices.Add(middle);
             normals.Add(direction);
+            locals.Add(Vector2.zero);
+            edges.Add(Vector2.zero);
             for (int index = 0; index < corners; index += 1)
             {
                 vertices.Add(top[index]);
                 normals.Add(direction);
+                locals.Add(Local(top[index]));
+                edges.Add(new Vector2(1f, 0f));
             }
 
             for (int index = 0; index < corners; index += 1)
@@ -240,9 +405,14 @@ namespace Hexwex.View
                 vertices.Add(top[next]);
                 vertices.Add(bottom[next]);
                 vertices.Add(bottom[index]);
+                locals.Add(Local(top[index]));
+                locals.Add(Local(top[next]));
+                locals.Add(Local(top[next]));
+                locals.Add(Local(top[index]));
                 for (int corner = 0; corner < 4; corner += 1)
                 {
                     normals.Add(outward);
+                    edges.Add(new Vector2(1f, 1f));
                 }
 
                 AddTriangle(walls, vertices, first, first + 1, first + 2, outward);
@@ -252,6 +422,8 @@ namespace Hexwex.View
             Mesh mesh = new Mesh { name = "Cell " + cell.Id };
             mesh.SetVertices(vertices);
             mesh.SetNormals(normals);
+            mesh.SetUVs(0, locals);
+            mesh.SetUVs(1, edges);
             mesh.subMeshCount = 2;
             mesh.SetTriangles(cap, 0);
             mesh.SetTriangles(walls, 1);
@@ -481,46 +653,44 @@ namespace Hexwex.View
             Props.Part(parent, Props.Sphere, surfaceMaterial, hover + Vector3.up * 0.9f, Vector3.one * (owner.IsHuman ? 0.3f : 0.24f), banner);
         }
 
-        private static void PaintCell(World world, WorldCell cell, CellVisual visual, CellMark mark)
+        private static void PaintCell(World world, WorldCell cell, CellVisual visual, CellMark mark, Player owner)
         {
             bool isLand = cell.Kind != CellKind.Void;
-            Color top;
+            Color ground;
+            float visibility;
 
             switch (WorldRules.Visibility(world, cell))
             {
                 case CellVisibility.Fogged:
-                    top = isLand ? FogLand : FogSea;
+                    ground = isLand ? FogLand : FogSea;
+                    visibility = 0f;
                     break;
                 case CellVisibility.Frontier:
-                    top = isLand ? FrontierLand : FrontierSea;
+                    ground = isLand ? FrontierLand : FrontierSea;
+                    visibility = 0.5f;
                     break;
                 default:
-                    top = cell.Boss ? LairColor
+                    ground = cell.Boss ? LairColor
                         : cell.Kind == CellKind.Island ? Props.Hex(Biomes.Get(cell.Biome).Color)
                         : cell.Kind == CellKind.Settlement ? SettlementColor
-                        : CloudSea;
-                    // The trail a player left here never fades.
-                    top = Color.Lerp(top, ToxicColor, Mathf.Clamp01(cell.ToxicTrail / ToxicFull) * 0.75f);
+                        : Sea;
+                    visibility = 1f;
                     break;
             }
 
-            Color side = top * 0.6f;
+            // The trail a player left here never fades: the shader soaks the cell in it.
+            float toxic = visibility > 0.75f ? Mathf.Clamp01(cell.ToxicTrail / ToxicFull) : 0f;
+            float kind = cell.Boss ? 2f : isLand ? 1f : 0f;
+            Color ownerColor = owner != null ? Props.Hex(owner.Color) : Color.white;
+            ownerColor.a = owner == null ? 0f : owner.IsHuman ? 1f : 0.5f;
 
-            switch (mark)
-            {
-                case CellMark.Hovered:
-                    top = Color.Lerp(top, Color.white, 0.3f);
-                    break;
-                case CellMark.Selected:
-                    top = Color.Lerp(top, new Color(1f, 0.92f, 0.45f), 0.6f);
-                    break;
-                case CellMark.Reachable:
-                    top = Color.Lerp(top, new Color(0.55f, 1f, 0.55f), 0.45f);
-                    break;
-            }
-
-            Props.Paint(visual.Renderer, top, 0);
-            Props.Paint(visual.Renderer, side, 1);
+            _block ??= new MaterialPropertyBlock();
+            _block.Clear();
+            _block.SetColor(BaseColorId, ground);
+            _block.SetVector(CellId, new Vector4(visibility, toxic, cell.Index, kind));
+            _block.SetColor(OwnerId, ownerColor);
+            _block.SetVector(MarkId, new Vector4(mark == CellMark.Hovered ? 1f : 0f, mark == CellMark.Selected ? 1f : 0f, mark == CellMark.Reachable ? 1f : 0f, 0f));
+            visual.Renderer.SetPropertyBlock(_block);
         }
     }
 }

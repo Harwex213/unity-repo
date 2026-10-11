@@ -115,6 +115,8 @@ namespace Hexwex.Core
         public double IdleWait;
         /// <summary>Flyers: the node under them, or -1 over water.</summary>
         public int HoverNode = -1;
+        /// <summary>The unit stands in the fog: it is seen, and it sees, only from close by.</summary>
+        public bool InFog;
 
         public bool IsStructure
         {
@@ -150,8 +152,10 @@ namespace Hexwex.Core
         Cleared,
         Attached,
         Lost,
-        /// <summary>A hex of the player's island choked in the border plumes.</summary>
-        Poison,
+        /// <summary>The player's island sailed into the fog and is out of sight.</summary>
+        Hid,
+        /// <summary>The player's island came back out of the fog.</summary>
+        Showed,
         /// <summary>A hex was destroyed.</summary>
         Crumble,
     }
@@ -202,8 +206,6 @@ namespace Hexwex.Core
         public int Razed;
         /// <summary>Hexes of the player's island destroyed in battle, by id. They leave the island.</summary>
         public List<string> DestroyedHexIds;
-        /// <summary>Hexes of the player's island that the border plumes poisoned, with their new toxicity.</summary>
-        public Dictionary<string, int> Poisoned;
         public int ManaSpent;
     }
 
@@ -233,17 +235,8 @@ namespace Hexwex.Core
         private const double ApproachRadius = 1100;
         /// <summary>Islands answer a change of desired velocity at this rate per second.</summary>
         private const double EnemyResponse = 0.8;
-        /// <summary>The plumes push an island back inward this hard, per second squared. Stronger than the player's own push.</summary>
-        private const double PlumePush = 560;
-        /// <summary>The share of an island's outward speed that the plumes eat per second.</summary>
-        private const double PlumeDamp = 6;
-        /// <summary>The plumes poison the player's island in pulses this many seconds apart.</summary>
-        private const double PlumePulseSeconds = 0.5;
-        /// <summary>Toxicity, in percent, that one pulse adds to a hex in the plumes.</summary>
-        private const int PlumeToxicity = 2;
-        /// <summary>Share of max hp that one pulse takes from a unit or a building on such a hex.</summary>
-        private const double PlumeUnitDamage = 0.04;
-        private const double PlumeStructureDamage = 0.02;
+        /// <summary>Enemy islands and husks keep this far from the fog: they never sail into it.</summary>
+        private const double FogShy = 40;
 
         /// <summary>Melee reach against a flyer, and a flyer's own reach.</summary>
         private const double FlyerReach = 70;
@@ -290,13 +283,12 @@ namespace Hexwex.Core
         /// <summary>Everything the player fielded, dead or alive.</summary>
         public List<Unit> Roster;
         public readonly List<Unit> Lost = new List<Unit>();
-        public LevelBounds Bounds;
-        /// <summary>The plumes, the rocks and the windows along the map border.</summary>
-        public CleanupBorder Border;
-        /// <summary>0..1: how far the player's island has sailed through an open window. 1 is out.</summary>
+        /// <summary>The fog round the clearing the level is fought in.</summary>
+        public CleanupFog Fog;
+        /// <summary>0..1: how far the player's island has sailed through the fog. 1 is out of the battle.</summary>
         public double ExitProgress;
-        /// <summary>True while the player's island sits in the band of an open window.</summary>
-        public bool InWindow;
+        /// <summary>True while the player's island is in the fog, out of the enemy's sight.</summary>
+        public bool Hidden;
         /// <summary>The player's mana: the pool at the start minus what the skill spent.</summary>
         public int Mana;
         public int ManaSpent;
@@ -311,7 +303,6 @@ namespace Hexwex.Core
         private readonly List<Body> _bodies = new List<Body>();
         private readonly List<AnnexedHex> _annexed = new List<AnnexedHex>();
         private readonly List<string> _destroyedHexIds = new List<string>();
-        private readonly Dictionary<string, int> _startToxicity = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _startHp = new Dictionary<string, int>();
         private readonly List<Bridge> _bridges = new List<Bridge>();
         private readonly List<PairDistance> _distances = new List<PairDistance>();
@@ -358,7 +349,7 @@ namespace Hexwex.Core
 
         public static CleanupSim Create(LevelSpec level, uint seed)
         {
-            CleanupSim sim = new CleanupSim(seed) { Tier = level.Tier, Roster = level.Roster, Bounds = level.Bounds, Mana = level.Mana };
+            CleanupSim sim = new CleanupSim(seed) { Tier = level.Tier, Roster = level.Roster, Mana = level.Mana };
             int nodeCount = 0;
 
             for (int index = 0; index < level.Islands.Count; index += 1)
@@ -417,14 +408,13 @@ namespace Hexwex.Core
             }
 
             SimIsland player = sim.PlayerIsland;
-            sim.Border = new CleanupBorder(level.Bounds, seed, player != null ? player.Body.Radius : 300);
+            sim.Fog = new CleanupFog(sim.Islands.Select(island => new[] { island.CenterX, island.CenterY, island.Body.Radius }).ToList(), seed);
             sim.StructureHpByHex = new double[player != null ? player.Hexes.Count : 0];
 
             if (player != null)
             {
                 for (int index = 0; index < player.Hexes.Count; index += 1)
                 {
-                    sim._startToxicity[player.Hexes[index].Id] = player.Hexes[index].Toxicity;
                     sim._startHp[player.Hexes[index].Id] = player.Hexes[index].Hp;
                     sim.StructureHpByHex[index] = -1;
                     sim.AddStructure(player.Hexes[index], index);
@@ -454,7 +444,6 @@ namespace Hexwex.Core
             }
 
             sim.RefreshWorld();
-            sim.Border.Step(0, TickHz, player != null ? player.Body.Radius : 300);
 
             return sim;
         }
@@ -523,11 +512,6 @@ namespace Hexwex.Core
             get { return Units.Count(unit => unit.Alive && unit.IsStructure); }
         }
 
-        public int WindowsOpen
-        {
-            get { return Border.Windows.Count(window => window.IsOpen(Tick)); }
-        }
-
         /// <summary>Seconds until the skill is ready. 0 is ready.</summary>
         public double SkillCooldown
         {
@@ -559,7 +543,6 @@ namespace Hexwex.Core
             Dictionary<string, CleanupHex> hexById = hexes.ToDictionary(hex => hex.Id, hex => hex);
 
             List<StructureResult> structures = new List<StructureResult>();
-            Dictionary<string, int> poisoned = new Dictionary<string, int>();
             for (int index = 0; index < hexes.Count; index += 1)
             {
                 CleanupHex hex = hexes[index];
@@ -572,11 +555,6 @@ namespace Hexwex.Core
                         StartHp = _startHp.TryGetValue(hex.Id, out int startHp) ? startHp : hex.Hp,
                         MaxHp = hex.MaxHp,
                     });
-                }
-
-                if (_startToxicity.TryGetValue(hex.Id, out int before) && hex.Toxicity > before)
-                {
-                    poisoned[hex.Id] = hex.Toxicity;
                 }
             }
 
@@ -610,14 +588,13 @@ namespace Hexwex.Core
                 Structures = structures,
                 Razed = Razed,
                 DestroyedHexIds = new List<string>(_destroyedHexIds),
-                Poisoned = poisoned,
                 ManaSpent = ManaSpent,
             };
         }
 
         /// <summary>
         /// Ends a level that is still running as a retreat, at the same cost as
-        /// sailing out through the border. Only the turn flow calls it, as a safety
+        /// sailing out through the fog. Only the turn flow calls it, as a safety
         /// net when the phase moves on without the level having ended.
         /// </summary>
         public void Retreat()
@@ -647,6 +624,7 @@ namespace Hexwex.Core
                 unit.Px = unit.X;
                 unit.Py = unit.Y;
                 unit.Cooldown -= dt;
+                unit.InFog = Fog.Covers(unit.X, unit.Y);
                 if (unit.Node < 0)
                 {
                     unit.HoverNode = HoverNodeAt(unit.X, unit.Y);
@@ -703,8 +681,6 @@ namespace Hexwex.Core
             Units.RemoveAll(unit => !unit.Alive);
             StepIslandStates();
             StepStatus();
-            Border.Step(Tick, TickHz, PlayerIsland != null ? PlayerIsland.Body.Radius : 300);
-            StepPlumePoison();
             StepExit();
         }
 
@@ -1086,7 +1062,8 @@ namespace Hexwex.Core
         private int LeadApproacher()
         {
             SimIsland player = PlayerIsland;
-            if (player == null)
+            // An island in the fog is out of sight: nobody sails after it.
+            if (player == null || Hidden)
             {
                 return -1;
             }
@@ -1113,199 +1090,44 @@ namespace Hexwex.Core
         }
 
         /// <summary>
-        /// The span of the player's island along a side fits inside an open window
-        /// there: the island may sail past the border on that side.
+        /// Keeps enemy islands and husks in the clearing. One that drifts or is
+        /// pushed to the fog stops at its edge. The player's island goes where it
+        /// is steered: the fog is its way out.
         /// </summary>
-        private bool FitsWindow(SimIsland island, int side)
-        {
-            Body body = island.Body;
-            double low = side % 2 == 0 ? body.X + island.MinX : body.Y + island.MinY;
-            double high = side % 2 == 0 ? body.X + island.MaxX : body.Y + island.MaxY;
-            BorderWindow window = Border.WindowAt(side, (low + high) / 2, Tick);
-
-            return window != null && low >= window.At - window.Half && high <= window.At + window.Half;
-        }
-
-        /// <summary>
-        /// Keeps every island inside the map. An island that hits the edge stops
-        /// there. Enemy islands and husks keep out of the plume band altogether, so
-        /// they never stick in it. The player's island stops at the border line,
-        /// except where it fits through an open window.
-        /// </summary>
-        private void ClampToBounds()
+        private void KeepOutOfFog()
         {
             foreach (SimIsland island in Islands)
             {
-                if (island.IsGone || island.Hexes.Count == 0)
-                {
-                    continue;
-                }
-
-                bool isPlayer = island.Side == CleanupSide.Player;
-                double inset = isPlayer ? 0 : Border.Depth;
-                double halfWidth = Bounds.HalfWidth - inset;
-                double halfHeight = Bounds.HalfHeight - inset;
-                Body body = island.Body;
-                double left = body.X + island.MinX;
-                double right = body.X + island.MaxX;
-                double top = body.Y + island.MinY;
-                double bottom = body.Y + island.MaxY;
-
-                if (left < -halfWidth && !(isPlayer && FitsWindow(island, 3)))
-                {
-                    body.X += -halfWidth - left;
-                    body.Vx = Math.Max(0, body.Vx);
-                }
-                else if (right > halfWidth && !(isPlayer && FitsWindow(island, 1)))
-                {
-                    body.X -= right - halfWidth;
-                    body.Vx = Math.Min(0, body.Vx);
-                }
-
-                if (top < -halfHeight && !(isPlayer && FitsWindow(island, 0)))
-                {
-                    body.Y += -halfHeight - top;
-                    body.Vy = Math.Max(0, body.Vy);
-                }
-                else if (bottom > halfHeight && !(isPlayer && FitsWindow(island, 2)))
-                {
-                    body.Y -= bottom - halfHeight;
-                    body.Vy = Math.Min(0, body.Vy);
-                }
-            }
-        }
-
-        /// <summary>The rocks of the border are solid: an island that runs into one is pushed back out.</summary>
-        private void SolveRocks()
-        {
-            foreach (SimIsland island in Islands)
-            {
-                if (island.IsGone || !island.Body.Solid || island.Hexes.Count == 0)
+                if (island.IsGone || island.Hexes.Count == 0 || island.Side == CleanupSide.Player)
                 {
                     continue;
                 }
 
                 Body body = island.Body;
-
-                foreach (BorderRock rock in Border.Rocks)
-                {
-                    if (CleanupMath.Hypot(rock.X - (body.X + body.CenterX), rock.Y - (body.Y + body.CenterY)) > body.Radius + rock.Radius)
-                    {
-                        continue;
-                    }
-
-                    double depth = 0;
-                    double normalX = 0;
-                    double normalY = 0;
-
-                    for (int index = 0; index < body.LocalX.Length; index += 1)
-                    {
-                        double dx = body.X + body.LocalX[index] - rock.X;
-                        double dy = body.Y + body.LocalY[index] - rock.Y;
-                        double distance = CleanupMath.Hypot(dx, dy);
-                        if (distance == 0)
-                        {
-                            distance = 1;
-                        }
-
-                        double overlap = rock.Radius + HexMath.HexSize * 0.85 - distance;
-                        if (overlap > depth)
-                        {
-                            depth = overlap;
-                            normalX = dx / distance;
-                            normalY = dy / distance;
-                        }
-                    }
-
-                    if (depth <= 0)
-                    {
-                        continue;
-                    }
-
-                    body.X += normalX * depth;
-                    body.Y += normalY * depth;
-                    double closing = body.Vx * normalX + body.Vy * normalY;
-                    if (closing < 0)
-                    {
-                        body.Vx -= closing * normalX;
-                        body.Vy -= closing * normalY;
-                    }
-                }
-            }
-        }
-
-        /// <summary>The hexes of an island that sit in the plumes, with the side whose plumes cover each.</summary>
-        private List<KeyValuePair<int, int>> HexesInPlumes(SimIsland island)
-        {
-            List<KeyValuePair<int, int>> found = new List<KeyValuePair<int, int>>();
-            Body body = island.Body;
-            double depth = Border.Depth + HexMath.HexSize;
-
-            // Most of the time the island is far from every edge.
-            if (body.X + island.MinX > -Bounds.HalfWidth + depth
-                && body.X + island.MaxX < Bounds.HalfWidth - depth
-                && body.Y + island.MinY > -Bounds.HalfHeight + depth
-                && body.Y + island.MaxY < Bounds.HalfHeight - depth)
-            {
-                return found;
-            }
-
-            for (int index = 0; index < body.LocalX.Length; index += 1)
-            {
-                int side = Border.PlumeSideAt(body.X + body.LocalX[index], body.Y + body.LocalY[index], Tick, HexMath.HexSize * 0.8);
-                if (side >= 0)
-                {
-                    found.Add(new KeyValuePair<int, int>(index, side));
-                }
-            }
-
-            return found;
-        }
-
-        /// <summary>The plumes push an island back inward and eat its outward speed.</summary>
-        private void PushOutOfPlumes(double dt)
-        {
-            foreach (SimIsland island in Islands)
-            {
-                if (island.IsGone || island.Hexes.Count == 0)
+                double over = Fog.DepthAt(island.CenterX, island.CenterY) + body.Radius + FogShy;
+                if (over <= 0)
                 {
                     continue;
                 }
 
-                List<KeyValuePair<int, int>> inside = HexesInPlumes(island);
-                if (inside.Count == 0)
-                {
-                    continue;
-                }
-
-                double pushX = 0;
-                double pushY = 0;
-                foreach (KeyValuePair<int, int> entry in inside)
-                {
-                    CleanupBorder.InwardNormal(entry.Value, out double normalX, out double normalY);
-                    pushX += normalX;
-                    pushY += normalY;
-                }
-
-                double length = CleanupMath.Hypot(pushX, pushY);
+                double outX = island.CenterX - Fog.CenterX;
+                double outY = island.CenterY - Fog.CenterY;
+                double length = CleanupMath.Hypot(outX, outY);
                 if (length == 0)
                 {
-                    length = 1;
+                    continue;
                 }
 
-                double nx = pushX / length;
-                double ny = pushY / length;
-                Body body = island.Body;
-                double along = body.Vx * nx + body.Vy * ny;
-                if (along < 0)
+                outX /= length;
+                outY /= length;
+                body.X -= outX * over;
+                body.Y -= outY * over;
+                double outward = body.Vx * outX + body.Vy * outY;
+                if (outward > 0)
                 {
-                    double damp = Math.Min(1, PlumeDamp * dt);
-                    body.Vx -= along * nx * damp;
-                    body.Vy -= along * ny * damp;
+                    body.Vx -= outward * outX;
+                    body.Vy -= outward * outY;
                 }
-
-                body.Vx += nx * PlumePush * dt;
-                body.Vy += ny * PlumePush * dt;
             }
         }
 
@@ -1405,12 +1227,10 @@ namespace Hexwex.Core
                 body.Y += body.Vy * dt;
             }
 
-            PushOutOfPlumes(dt);
-            ClampToBounds();
+            KeepOutOfFog();
             CleanupCollision.Solve(_bodies);
-            SolveRocks();
-            // The solver may push an island back out; the border wins.
-            ClampToBounds();
+            // The solver may push an island into the fog; the fog wins.
+            KeepOutOfFog();
         }
 
         /// <summary>Node positions, bridges and island gaps.</summary>
@@ -1610,7 +1430,7 @@ namespace Hexwex.Core
             }
         }
 
-        /// <summary>The nearest living foe that <paramref name="accept"/> allows, by straight distance.</summary>
+        /// <summary>The nearest living foe in sight that <paramref name="accept"/> allows, by straight distance. The fog hides a foe that is not close by.</summary>
         private SimUnit NearestFoe(SimUnit unit, double maxDistance, Func<SimUnit, bool> accept)
         {
             SimUnit best = null;
@@ -1618,7 +1438,7 @@ namespace Hexwex.Core
 
             foreach (SimUnit other in Units)
             {
-                if (!other.Alive || other.Side == unit.Side)
+                if (!other.Alive || other.Side == unit.Side || !CleanupFog.Sees(unit.InFog, unit.X, unit.Y, other.InFog, other.X, other.Y))
                 {
                     continue;
                 }
@@ -2357,9 +2177,11 @@ namespace Hexwex.Core
         }
 
         /// <summary>
-        /// The way out. The player's island leaves once its centre has sailed past
-        /// the border line, which only an open window lets it do.
-        /// <see cref="ExitProgress"/> shows how far through the window band it has come.
+        /// The way out, and the place to hide. The player's island is hidden while
+        /// its centre is in the fog, and it leaves the battle once it has sailed
+        /// through the whole depth of it. <see cref="ExitProgress"/> shows how far it
+        /// has come. Coming back out takes a little more than going in, so an island
+        /// on the very edge does not flicker in and out of sight.
         /// </summary>
         private void StepExit()
         {
@@ -2369,77 +2191,19 @@ namespace Hexwex.Core
                 return;
             }
 
-            double cx = player.CenterX;
-            double cy = player.CenterY;
-            double progress = 0;
-            bool inWindow = false;
-            bool isOut = false;
-
-            for (int side = 0; side < 4; side += 1)
+            double depth = Fog.DepthAt(player.CenterX, player.CenterY);
+            bool hidden = Hidden ? depth > -FogShy : depth > 0;
+            if (hidden != Hidden)
             {
-                double depth = CleanupBorder.DepthFrom(Bounds, side, cx, cy);
-                if (depth < 0)
-                {
-                    isOut = true;
-                }
-
-                if (depth >= Border.Depth || Border.WindowAt(side, CleanupBorder.AlongOf(side, cx, cy), Tick) == null)
-                {
-                    continue;
-                }
-
-                inWindow = true;
-                progress = Math.Max(progress, 1 - Math.Max(0, depth) / Border.Depth);
+                Hidden = hidden;
+                PushEvent(new SimEvent { Type = hidden ? SimEventType.Hid : SimEventType.Showed, X = player.CenterX, Y = player.CenterY, Side = CleanupSide.Player });
             }
 
-            InWindow = inWindow;
-            ExitProgress = isOut ? 1 : progress;
+            ExitProgress = Math.Max(0, Math.Min(1, depth / CleanupFog.Depth));
 
-            if (isOut && Status == SimStatus.Running)
+            if (depth >= CleanupFog.Depth && Status == SimStatus.Running)
             {
                 LeaveBattle();
-            }
-        }
-
-        /// <summary>
-        /// The plumes poison the player's island in pulses: each hex in them gains
-        /// toxicity, and units and buildings on it lose a share of their hp. The
-        /// island is pushed back out long before this kills anyone.
-        /// </summary>
-        private void StepPlumePoison()
-        {
-            int pulse = JsMath.Round(PlumePulseSeconds * TickHz);
-            SimIsland player = PlayerIsland;
-            if (player == null || Tick % pulse != 0)
-            {
-                return;
-            }
-
-            List<KeyValuePair<int, int>> inside = HexesInPlumes(player);
-            if (inside.Count == 0)
-            {
-                return;
-            }
-
-            HashSet<int> poisoned = new HashSet<int>();
-            foreach (KeyValuePair<int, int> entry in inside)
-            {
-                CleanupHex hex = player.Hexes[entry.Key];
-                hex.Toxicity = Math.Min(100, hex.Toxicity + PlumeToxicity);
-                hex.Dead = hex.Dead || hex.Toxicity >= 100;
-                int node = player.Nodes[entry.Key];
-                poisoned.Add(node);
-                PushEvent(new SimEvent { Type = SimEventType.Poison, X = _nodeX[node], Y = _nodeY[node] });
-            }
-
-            foreach (SimUnit unit in Units)
-            {
-                if (!unit.Alive || unit.Side != CleanupSide.Player || !poisoned.Contains(unit.Node))
-                {
-                    continue;
-                }
-
-                Hurt(unit, unit.MaxHp * (unit.IsStructure ? PlumeStructureDamage : PlumeUnitDamage));
             }
         }
 

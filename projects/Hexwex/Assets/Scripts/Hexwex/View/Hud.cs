@@ -814,13 +814,11 @@ namespace Hexwex.View
                 Text(island.Label + " · " + state, classes, row);
             }
 
-            string exit = "Окон в облаках открыто: " + sim.WindowsOpen;
-            if (sim.InWindow)
-            {
-                exit += " · выход: " + JsMath.Round(sim.ExitProgress * 100) + "%";
-            }
-
-            Text(exit, sim.InWindow ? "panel-text toxic" : "panel-text", _hexPanel);
+            // The fog is both the hiding place and the way out.
+            string fog = sim.Hidden
+                ? "Остров в тумане: враг его не видит. До ухода из боя: " + JsMath.Round((1 - sim.ExitProgress) * 100) + "%"
+                : "Вокруг туман: в нём можно укрыться, а пройдя его насквозь — уйти из боя";
+            Text(fog, sim.Hidden ? "panel-text good" : "panel-text", _hexPanel);
         }
 
         /// <summary>The battle's bar: the skill, the clock, and how to sail.</summary>
@@ -848,7 +846,7 @@ namespace Hexwex.View
             Text(
                 _game.SkillArmed
                     ? "Кликните по гексу, который нужно разрушить. Esc — отмена."
-                    : "WASD — вести остров. Сойдитесь с островом врага бортом: войска перейдут сами. Уйти из боя можно через светлое окно в облаках.",
+                    : "WASD — вести остров. Сойдитесь с островом врага бортом: войска перейдут сами. Туман вокруг скроет остров от врага, а пройдя его насквозь, вы уйдёте из боя.",
                 "hint",
                 _bottom);
 
@@ -873,7 +871,7 @@ namespace Hexwex.View
                     break;
                 case CleanupOutcome.Retreated:
                     title = "Отступление";
-                    text = "Остров ушёл через окно в ядовитых облаках. Пристыкованные острова остаются вашими, остальные ждут следующего хода. Кто стоял на чужих островах, остался там.";
+                    text = "Остров ушёл в туман. Пристыкованные острова остаются вашими, остальные ждут следующего хода. Кто стоял на чужих островах, остался там.";
                     break;
                 default:
                     title = "Море спокойно";
@@ -899,11 +897,6 @@ namespace Hexwex.View
             if (result.DestroyedHexIds.Count > 0)
             {
                 land.Add("своих гексов разрушено: " + result.DestroyedHexIds.Count);
-            }
-
-            if (result.Poisoned.Count > 0)
-            {
-                land.Add("отравлено облаками: " + result.Poisoned.Count + " гекс.");
             }
 
             if (result.ManaSpent > 0)

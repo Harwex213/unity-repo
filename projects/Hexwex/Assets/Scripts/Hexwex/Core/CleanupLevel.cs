@@ -53,23 +53,9 @@ namespace Hexwex.Core
         public List<Enemy> Garrison = new List<Enemy>();
     }
 
-    /// <summary>The map border: a rectangle centred on the world origin.</summary>
-    public readonly struct LevelBounds
-    {
-        public readonly double HalfWidth;
-        public readonly double HalfHeight;
-
-        public LevelBounds(double halfWidth, double halfHeight)
-        {
-            HalfWidth = halfWidth;
-            HalfHeight = halfHeight;
-        }
-    }
-
     public sealed class LevelSpec
     {
         public int Tier;
-        public LevelBounds Bounds;
         /// <summary>Multiplier on monster hp and damage.</summary>
         public double Growth;
         public List<IslandSpec> Islands;
@@ -150,10 +136,6 @@ namespace Hexwex.Core
         private const double SpawnGapSpread = 260;
         private const double SpawnGapBetween = 160;
         private const double ApproachChancePerTier = 0.2;
-        /// <summary>Open sky between the outermost island and the map border.</summary>
-        private const double BoundsMargin = 760;
-        private const double MinHalfWidth = 1900;
-        private const double MinHalfHeight = 1400;
         private const double MaxApproachChance = 0.8;
         private const int BossGarrison = 8;
         /// <summary>
@@ -278,16 +260,10 @@ namespace Hexwex.Core
                 });
             }
 
-            // The border leaves the same open margin beyond the outermost island on
-            // every side, so no island starts inside the plume band.
-            double reachX = rings.Max(ring => Math.Abs(ring[0]) + ring[2]);
-            double reachY = rings.Max(ring => Math.Abs(ring[1]) + ring[2]);
-
             return new LevelSpec
             {
                 Tier = tier,
                 Growth = growth,
-                Bounds = new LevelBounds(Math.Max(MinHalfWidth, reachX + BoundsMargin), Math.Max(MinHalfHeight, reachY + BoundsMargin)),
                 Islands = islands,
                 Roster = setup.Roster,
                 Mana = setup.Player.Resources[ResourceId.Mana],
