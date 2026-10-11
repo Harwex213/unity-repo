@@ -5,6 +5,7 @@ small palette, one material per colour. Every model stands on z = 0 with its
 middle on the origin and its front facing -Y. One hex is 2 units corner to corner.
 """
 
+import json
 import math
 import os
 import random
@@ -35,7 +36,7 @@ PALETTE = {
     "M_Iron": ((0.090, 0.095, 0.120), 0.45, 0.0),
     "M_Glass": ((0.250, 0.480, 0.760), 0.20, 0.0),
     # The clean light of the converter.
-    "M_Glow": ((0.250, 0.950, 0.700), 0.30, 2.5),
+    "M_Glow": ((0.150, 0.900, 0.650), 0.30, 1.1),
     # Scenery: leaves of each kind of forest, and the ground things of each biome.
     "M_Leaf_Pine": ((0.045, 0.200, 0.110), 0.90, 0.0),
     "M_Leaf": ((0.090, 0.330, 0.085), 0.90, 0.0),
@@ -56,6 +57,8 @@ PALETTE = {
     "M_Sand": ((0.780, 0.640, 0.330), 0.95, 0.0),
     "M_Lava": ((1.000, 0.220, 0.030), 0.40, 1.2),
     "M_Flower": ((0.900, 0.750, 0.150), 0.80, 0.0),
+    # Lit windows and lanterns.
+    "M_Lamp": ((1.000, 0.620, 0.180), 0.40, 1.6),
     # Units: the player's colour, flesh and gear, and what the monsters are made of.
     "M_Team": ((0.040, 0.150, 0.800), 0.70, 0.0),
     "M_Skin": ((0.780, 0.520, 0.380), 0.80, 0.0),
@@ -73,7 +76,7 @@ PALETTE = {
     "M_Feather": ((0.330, 0.190, 0.080), 0.90, 0.0),
     "M_Eye": ((1.000, 0.150, 0.050), 0.40, 2.0),
     # The poison the boss and the witch carry.
-    "M_Toxic": ((0.550, 0.950, 0.150), 0.30, 2.5),
+    "M_Toxic": ((0.450, 0.900, 0.100), 0.30, 1.3),
 }
 
 
@@ -175,15 +178,46 @@ class Model:
             made = self.bm.faces.new([verts[i] for i in face])
             made.material_index = index
 
-    def take(self, source, matrix=None):
-        """Adds a copy of another object's mesh, with its materials."""
+    def take(self, source, matrix=None, keep=None):
+        """
+        Adds a copy of another object's mesh, with its materials. `keep` picks
+        among its loose pieces: it is given the material names of one piece, most
+        used first, and says whether the piece comes along. A piece is taken
+        whole, so what comes along stays a closed shell.
+        """
         before_verts = set(self.bm.verts)
         before_faces = set(self.bm.faces)
         self.bm.from_mesh(source.data)
-        remap = [self.slot(mat.name) for mat in source.data.materials]
-        for face in self.bm.faces:
-            if face not in before_faces:
-                face.material_index = remap[face.material_index]
+        names = [mat.name for mat in source.data.materials]
+        fresh = [face for face in self.bm.faces if face not in before_faces]
+
+        if keep is not None:
+            unseen = set(fresh)
+            dropped = []
+            while unseen:
+                piece = [unseen.pop()]
+                for face in piece:
+                    for edge in face.edges:
+                        for other in edge.link_faces:
+                            if other in unseen:
+                                unseen.discard(other)
+                                piece.append(other)
+
+                counts = {}
+                for face in piece:
+                    counts[names[face.material_index]] = counts.get(names[face.material_index], 0) + 1
+
+                if not keep(sorted(counts, key=counts.get, reverse=True)):
+                    dropped.extend(piece)
+
+            gone = set(dropped)
+            fresh = [face for face in fresh if face not in gone]
+            if dropped:
+                bmesh.ops.delete(self.bm, geom=dropped, context="FACES")
+
+        remap = [self.slot(name) for name in names]
+        for face in fresh:
+            face.material_index = remap[face.material_index]
 
         if matrix is not None:
             bmesh.ops.transform(self.bm, matrix=matrix, verts=[vert for vert in self.bm.verts if vert not in before_verts])
@@ -206,8 +240,59 @@ class Model:
         return made
 
 
+# The order a building goes up in. A part of a model is one of these stages, so
+# the game can raise it piece by piece (`BuildAnimation` in Unity).
+STAGES = ("S0", "S1", "S2", "S3")
+# Where a loose piece of a model taken from another file belongs, by what it is mostly made of.
+STAGE_BY_MATERIAL = {
+    "M_Stone": 0, "M_Dirt": 0, "M_Grass": 0, "M_Rock_Dark": 0,
+    "M_Wall": 1, "M_Wood": 1,
+    "M_Roof": 2,
+}
+
+
+class Staged:
+    """
+    A building in the four stages it is built in: `base` the ground work,
+    `walls`, `roof`, and `extra` the things that finish it. Each stage is its own
+    mesh under one empty, named `<name>__S0` .. `<name>__S3`.
+    """
+
+    def __init__(self, root_name, name):
+        self.root_name = root_name
+        self.stages = [Model(name + "__" + stage) for stage in STAGES]
+        self.base, self.walls, self.roof, self.extra = self.stages
+
+    def take(self, source, matrix=None):
+        """Adds another object's mesh, each loose piece of it to the stage its main material belongs to."""
+        for index, model in enumerate(self.stages):
+            model.take(source, matrix, keep=lambda names, index=index: STAGE_BY_MATERIAL.get(names[0], 3) == index)
+
+    def finish(self):
+        root = bpy.data.objects.new(self.root_name, None)
+        bpy.context.scene.collection.objects.link(root)
+        for model in self.stages:
+            if len(model.bm.faces) == 0:
+                model.bm.free()
+                continue
+
+            made = model.finish()
+            made.parent = root
+
+        return root
+
+
 def placed(x, y, scale, turn=0.0):
     return Matrix.Translation((x, y, 0)) @ Matrix.Rotation(turn, 4, "Z") @ Matrix.Diagonal((scale, scale, scale, 1.0))
+
+
+def family(made):
+    """An object and everything parented under it."""
+    found = [made]
+    for child in made.children:
+        found.extend(family(child))
+
+    return found
 
 
 def render_preview(models, path, columns=3, spacing=1.9):
@@ -231,6 +316,8 @@ def render_preview(models, path, columns=3, spacing=1.9):
     scene.display.shading.color_type = "MATERIAL"
     scene.display.shading.show_shadows = True
     scene.display.shading.show_cavity = True
+    # Back faces are not drawn in Unity. Hiding them here shows a face wound the wrong way as a hole.
+    scene.display.shading.show_backface_culling = True
     scene.world = scene.world or bpy.data.worlds.new("World")
     scene.world.color = (0.45, 0.62, 0.8)
     scene.render.resolution_x = 1500
@@ -243,19 +330,96 @@ def render_preview(models, path, columns=3, spacing=1.9):
         made.location = (0, 0, 0)
 
 
-def export_fbx(models, file_name):
-    """Writes the models for Unity: y up, one unit to a metre, flat-shaded."""
-    os.makedirs(MODELS_DIR, exist_ok=True)
+def audit():
+    """
+    Counts what Unity would show wrong: faces wound inward and edges with one
+    face. A mesh must be closed for "outward" to mean anything, so both must be
+    0. Returns the names of the objects that fail.
+    """
+    failed = []
     for made in bpy.data.objects:
-        made.select_set(made in models)
+        if made.type != "MESH":
+            continue
+
+        bm = bmesh.new()
+        bm.from_mesh(made.data)
+        bm.normal_update()
+        before = [face.normal.copy() for face in bm.faces]
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        bm.normal_update()
+        flipped = sum(1 for face, normal in zip(bm.faces, before) if face.normal.dot(normal) < 0.0)
+        boundary = sum(1 for edge in bm.edges if len(edge.link_faces) == 1)
+        bm.free()
+        mirrored = made.scale.x * made.scale.y * made.scale.z < 0
+        if flipped or boundary or mirrored:
+            failed.append("%s flipped=%d boundary=%d mirrored=%s" % (made.name, flipped, boundary, mirrored))
+
+    return failed
+
+
+def export_palette():
+    """
+    Writes what the materials are made of beside the models. An FBX carries a
+    material's name and little else, so Unity builds its materials from this
+    file. The colours are linear, as Blender keeps them.
+    """
+    path = os.path.join(MODELS_DIR, "Materials.json")
+    known = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as handle:
+            known = {entry["name"]: entry for entry in json.load(handle)["materials"]}
+
+    for made in bpy.data.materials:
+        if made.users == 0 or not made.use_nodes:
+            continue
+
+        bsdf = made.node_tree.nodes.get("Principled BSDF")
+        if bsdf is None:
+            continue
+
+        color = bsdf.inputs["Base Color"].default_value
+        glow = bsdf.inputs["Emission Color"].default_value
+        known[made.name] = {
+            "name": made.name,
+            "r": round(color[0], 4), "g": round(color[1], 4), "b": round(color[2], 4),
+            "roughness": round(bsdf.inputs["Roughness"].default_value, 3),
+            "emissionR": round(glow[0], 4), "emissionG": round(glow[1], 4), "emissionB": round(glow[2], 4),
+            "emissionStrength": round(bsdf.inputs["Emission Strength"].default_value, 3),
+        }
+
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump({"materials": [known[name] for name in sorted(known)]}, handle, indent=2)
+        handle.write("\n")
+
+
+def export_fbx(models, file_name):
+    """
+    Writes the models, and everything parented under them, for Unity: y up, one
+    unit to a metre, flat-shaded. Nothing is written if a mesh fails the audit.
+    """
+    failed = audit()
+    if failed:
+        raise RuntimeError("These meshes would show wrong in Unity:\n  " + "\n  ".join(failed))
+
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    chosen = set()
+    for made in models:
+        chosen.update(family(made))
+
+    for made in bpy.data.objects:
+        made.select_set(made in chosen)
 
     bpy.ops.export_scene.fbx(
-        filepath=os.path.join(MODELS_DIR, file_name), use_selection=True, object_types={"MESH"},
+        filepath=os.path.join(MODELS_DIR, file_name), use_selection=True, object_types={"EMPTY", "MESH"},
         axis_forward="-Z", axis_up="Y", apply_scale_options="FBX_SCALE_UNITS",
         bake_space_transform=True, mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False)
+    export_palette()
 
 
 def report(models):
     for made in models:
-        size = made.dimensions
-        print("MODEL %s %.2f x %.2f x %.2f, %d faces, %s" % (made.name, size.x, size.y, size.z, len(made.data.polygons), [m.name for m in made.data.materials]))
+        meshes = [part for part in family(made) if part.type == "MESH"]
+        low = [min((part.matrix_world @ Vector(corner))[axis] for part in meshes for corner in part.bound_box) for axis in range(3)]
+        high = [max((part.matrix_world @ Vector(corner))[axis] for part in meshes for corner in part.bound_box) for axis in range(3)]
+        faces = sum(len(part.data.polygons) for part in meshes)
+        print("MODEL %s %.2f x %.2f x %.2f, %d faces in %d parts" % (made.name, high[0] - low[0], high[1] - low[1], high[2] - low[2], faces, len(meshes)))

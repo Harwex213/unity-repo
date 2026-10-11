@@ -36,8 +36,11 @@ namespace Hexwex.View
         private static readonly Color ToxicColor = new Color(0.52f, 0.2f, 0.62f);
 
         [SerializeField] private Material surfaceMaterial;
+        /// <summary>How fast a building goes up: 1 is the full show of <see cref="BuildAnimation.Seconds"/>, 2 is twice as quick.</summary>
+        [SerializeField] private float buildSpeed = 1f;
 
         private readonly Dictionary<string, HexVisual> _visuals = new Dictionary<string, HexVisual>();
+        private readonly List<BuildAnimation> _builds = new List<BuildAnimation>();
 
         private sealed class HexVisual
         {
@@ -49,6 +52,12 @@ namespace Hexwex.View
             /// <summary>The scale the content rests at: ruins lie flat.</summary>
             public Vector3 ContentScale = Vector3.one;
             public float Height;
+        }
+
+        public float BuildSpeed
+        {
+            get { return buildSpeed; }
+            set { buildSpeed = Mathf.Max(0f, value); }
         }
 
         public Material SurfaceMaterial
@@ -129,8 +138,21 @@ namespace Hexwex.View
             visual.Content.transform.localScale = Vector3.Scale(visual.ContentScale, pulse);
         }
 
+        /// <summary>The buildings going up are raised a little further every frame.</summary>
+        private void Update()
+        {
+            for (int index = _builds.Count - 1; index >= 0; index -= 1)
+            {
+                if (_builds[index].Step(Time.unscaledDeltaTime * buildSpeed))
+                {
+                    _builds.RemoveAt(index);
+                }
+            }
+        }
+
         public void Clear()
         {
+            _builds.Clear();
             foreach (HexVisual visual in _visuals.Values)
             {
                 Destroy(visual.Root);
@@ -183,6 +205,10 @@ namespace Hexwex.View
                 return;
             }
 
+            // A building on a hex that showed scenery a moment ago has just been built.
+            // A hex drawn for the first time shows what already stands on it.
+            bool isJustBuilt = kind.HasValue && !isRuined && visual.ContentKey != null && visual.ContentKey.StartsWith("scenery");
+
             if (visual.Content != null)
             {
                 Destroy(visual.Content);
@@ -201,6 +227,11 @@ namespace Hexwex.View
                 visual.ContentScale = new Vector3(1f, 0.35f, 1f);
                 visual.Content.transform.localScale = visual.ContentScale;
                 visual.Content.transform.localRotation = Quaternion.Euler(6f, 0f, -8f);
+            }
+
+            if (isJustBuilt)
+            {
+                _builds.Add(new BuildAnimation(visual.Content.transform, surfaceMaterial));
             }
         }
 
