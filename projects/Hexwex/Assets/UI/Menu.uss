@@ -1,4 +1,4 @@
-/* The main menu. Built by Hexwex.View.MainMenu, over the HUD. */
+/* The main menu, after the menus of Warcraft III. Built by Hexwex.View.MainMenu, over the HUD. */
 
 .main-menu {
     position: absolute;
@@ -25,7 +25,37 @@
     top: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(8, 10, 16, 0.62);
+    background-color: rgba(4, 6, 14, 0.84);
+}
+
+/* Two dark bands with a gold line, as in a cutscene. */
+.main-menu__band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background-color: rgb(3, 4, 7);
+    border-color: rgba(190, 150, 70, 0.75);
+}
+
+.main-menu__band--top {
+    top: 0;
+    border-bottom-width: 2px;
+}
+
+.main-menu__band--bottom {
+    bottom: 0;
+    border-top-width: 2px;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    padding-right: 40px;
+}
+
+.main-menu__version {
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: rgba(226, 190, 104, 0.7);
 }
 
 .main-menu__layout {
@@ -33,7 +63,7 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding: 60px 110px;
+    padding: 0 110px;
 }
 
 .main-menu__layout:disabled {
@@ -43,46 +73,43 @@
 /* The title block, on the left */
 
 .main-menu__title-block {
-    width: 620px;
+    width: 800px;
     align-items: flex-start;
 }
 
-.main-menu__emblem {
-    width: 150px;
-    height: 150px;
-    margin-bottom: 14px;
+.main-menu__heading {
+    margin-left: 14px;
+    font-size: 24px;
+    letter-spacing: 6px;
+    color: rgb(226, 190, 104);
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+/* The logo is 1792 by 512. */
+.main-menu__logo {
+    width: 800px;
+    height: 229px;
+    margin: -14px 0 -22px -18px;
     -unity-background-scale-mode: scale-to-fit;
 }
 
-.main-menu__heading {
-    font-size: 26px;
-    letter-spacing: 4px;
-    color: rgb(226, 190, 104);
-}
-
-.main-menu__title {
-    margin: 2px 0;
-    font-size: 132px;
-    -unity-font-style: bold;
-    color: rgb(250, 246, 234);
-    text-shadow: 0 6px 14px rgba(0, 0, 0, 0.75);
-}
-
 .main-menu__subtitle {
-    font-size: 34px;
+    margin-left: 14px;
+    font-size: 30px;
     -unity-font-style: italic;
-    color: rgb(200, 198, 188);
+    color: rgb(214, 210, 196);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
 }
 
 .main-menu-bar {
     flex-direction: row;
     align-items: center;
-    margin-top: 44px;
+    margin: 44px 0 0 14px;
     padding: 10px 14px;
-    background-color: rgba(16, 18, 26, 0.82);
+    background-color: rgba(12, 16, 30, 0.9);
     border-width: 2px;
-    border-color: rgba(226, 190, 104, 0.45);
-    border-radius: 8px;
+    border-color: rgb(122, 94, 42);
+    border-radius: 4px;
 }
 
 .main-menu-bar__label {
@@ -101,14 +128,15 @@
     height: 52px;
     margin: 0 0 0 14px;
     padding: 4px;
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgb(22, 32, 60);
     border-width: 2px;
-    border-color: rgba(226, 190, 104, 0.45);
-    border-radius: 8px;
+    border-color: rgb(122, 94, 42);
+    border-radius: 4px;
 }
 
 .main-menu-bar__button:hover {
-    background-color: rgba(226, 190, 104, 0.25);
+    background-color: rgb(40, 58, 104);
+    border-color: rgb(244, 212, 124);
 }
 
 .main-menu-bar__icon {
@@ -116,41 +144,146 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
-/* The entries, on the right */
+/* The slab on its chains, on the right */
 
-.main-menu__nav {
+.main-menu__hang {
     width: 560px;
+    align-self: stretch;
 }
 
+.main-menu__chains {
+    flex-grow: 1;
+    min-height: 90px;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0 86px;
+}
+
+.main-menu__chain {
+    width: 30px;
+}
+
+/* What is left under the slab: a little more than above, so the slab hangs just over the middle. */
+.main-menu__hang-rest {
+    flex-grow: 1.25;
+}
+
+/* The frame: dark iron outside, gold inside it. */
+.main-menu__panel {
+    padding: 5px;
+    background-color: rgb(42, 34, 22);
+    border-width: 3px;
+    border-color: rgb(10, 9, 8);
+    border-radius: 6px;
+}
+
+.main-menu__panel-inner {
+    padding: 44px 26px 22px 26px;
+    background-color: rgba(11, 15, 30, 0.97);
+    border-width: 2px;
+    border-top-color: rgb(244, 212, 124);
+    border-left-color: rgb(226, 190, 104);
+    border-right-color: rgb(150, 116, 52);
+    border-bottom-color: rgb(122, 94, 42);
+    border-radius: 3px;
+    align-items: stretch;
+}
+
+/* The emblem sits astride the top of the frame, where the chains come down. */
+.main-menu__crest {
+    position: absolute;
+    left: 50%;
+    top: -52px;
+    width: 104px;
+    height: 104px;
+    translate: -50% 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.main-menu__stud {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+}
+
+.main-menu__stud--top-left {
+    left: 6px;
+    top: 6px;
+}
+
+.main-menu__stud--top-right {
+    right: 6px;
+    top: 6px;
+}
+
+.main-menu__stud--bottom-left {
+    left: 6px;
+    bottom: 6px;
+}
+
+.main-menu__stud--bottom-right {
+    right: 6px;
+    bottom: 6px;
+}
+
+.main-menu__panel-title {
+    font-size: 26px;
+    letter-spacing: 6px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(244, 212, 124);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.main-menu__rule {
+    height: 2px;
+    margin: 12px 24px;
+    background-color: rgba(190, 150, 70, 0.55);
+}
+
+/* An entry: a blue plate in a gold rim, lit from above. */
 .main-menu-entry {
     flex-direction: row;
     align-items: center;
-    margin: 8px 0;
-    padding: 12px 18px;
-    background-color: rgba(16, 18, 26, 0.72);
+    margin: 6px 0;
+    padding: 9px 14px;
+    background-color: rgb(20, 29, 56);
     border-width: 2px;
-    border-color: rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    border-top-color: rgb(176, 138, 64);
+    border-left-color: rgb(150, 116, 52);
+    border-right-color: rgb(96, 74, 34);
+    border-bottom-color: rgb(78, 60, 28);
+    border-radius: 3px;
     color: rgb(236, 232, 220);
-    transition-property: background-color, border-color, translate;
-    transition-duration: 0.12s;
+    transition-property: background-color, border-color;
+    transition-duration: 0.1s;
 }
 
 .main-menu-entry--active {
-    background-color: rgba(52, 44, 22, 0.9);
-    border-color: rgb(226, 190, 104);
-    translate: -14px 0;
+    background-color: rgb(38, 56, 104);
+    border-top-color: rgb(255, 236, 170);
+    border-left-color: rgb(250, 222, 140);
+    border-right-color: rgb(226, 190, 104);
+    border-bottom-color: rgb(206, 168, 86);
+}
+
+.main-menu-entry:active {
+    background-color: rgb(14, 20, 40);
 }
 
 .main-menu-entry__frame {
-    width: 76px;
-    height: 76px;
-    margin-right: 18px;
-    padding: 8px;
-    background-color: rgba(0, 0, 0, 0.45);
+    width: 62px;
+    height: 62px;
+    margin-right: 16px;
+    padding: 5px;
+    background-color: rgb(6, 8, 16);
     border-width: 2px;
-    border-color: rgba(226, 190, 104, 0.6);
-    border-radius: 8px;
+    border-color: rgb(150, 116, 52);
+    border-radius: 3px;
+}
+
+.main-menu-entry--active .main-menu-entry__frame {
+    border-color: rgb(250, 222, 140);
 }
 
 .main-menu-entry__icon {
@@ -159,38 +292,52 @@
 }
 
 .main-menu-entry__label {
-    font-size: 20px;
-    letter-spacing: 2px;
-    color: rgb(226, 190, 104);
+    font-size: 17px;
+    letter-spacing: 3px;
+    color: rgb(190, 156, 84);
 }
 
 .main-menu-entry__title {
-    font-size: 38px;
+    font-size: 32px;
     -unity-font-style: bold;
-    color: rgb(250, 246, 234);
+    color: rgb(244, 222, 160);
+    text-shadow: 0 2px 3px rgba(0, 0, 0, 0.9);
 }
 
-/* The exit, in the lower left corner */
-
-.main-menu__footer {
-    position: absolute;
-    left: 110px;
-    bottom: 56px;
+.main-menu-entry--active .main-menu-entry__label {
+    color: rgb(244, 212, 124);
 }
 
+.main-menu-entry--active .main-menu-entry__title {
+    color: rgb(255, 248, 222);
+}
+
+/* A plain plate: the exit at the foot of the slab, and the close of a window. */
 .main-menu-button {
     margin: 0;
-    padding: 12px 34px;
+    padding: 10px 34px;
     font-size: 24px;
-    color: rgb(236, 232, 220);
-    background-color: rgba(16, 18, 26, 0.85);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    color: rgb(244, 222, 160);
+    background-color: rgb(20, 29, 56);
     border-width: 2px;
-    border-color: rgba(226, 190, 104, 0.6);
-    border-radius: 8px;
+    border-top-color: rgb(176, 138, 64);
+    border-left-color: rgb(150, 116, 52);
+    border-right-color: rgb(96, 74, 34);
+    border-bottom-color: rgb(78, 60, 28);
+    border-radius: 3px;
 }
 
 .main-menu-button:hover {
-    background-color: rgba(226, 190, 104, 0.3);
+    color: rgb(255, 248, 222);
+    background-color: rgb(38, 56, 104);
+    border-color: rgb(250, 222, 140);
+}
+
+.main-menu-button--exit {
+    align-self: center;
+    width: 260px;
 }
 
 /* The credits */

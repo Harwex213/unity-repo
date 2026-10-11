@@ -18,14 +18,16 @@ namespace Hexwex.View
     }
 
     /// <summary>
-    /// The main menu (<c>ui/components/main-menu</c>), after the campaign screen
-    /// of Warcraft III: the title block on the left, the list of entries on the
-    /// right and the exit in the lower left corner. It covers the whole game, and
+    /// The main menu (<c>ui/components/main-menu</c>), after the menus of
+    /// Warcraft III: the logo on the left, and on the right a framed slab that
+    /// hangs on two chains from the top of the screen, with the entries on it as
+    /// gold-rimmed plates and the exit at its foot. It covers the whole game, and
     /// the game takes no input while it is open.
     ///
     /// The prototype shows a painted picture behind the menu. Here the picture is
     /// the game itself: the island of the waiting session turns slowly under a
-    /// dark shade. A start fades the menu out over the freshly created game.
+    /// dark shade, between two dark bands as in a cutscene. A start fades the
+    /// menu out over the freshly created game.
     /// </summary>
     public sealed class MainMenu : MonoBehaviour
     {
@@ -153,20 +155,17 @@ namespace Hexwex.View
         {
             VisualElement shade = Add(_root, "main-menu__shade");
             shade.pickingMode = PickingMode.Ignore;
+            Add(_root, "main-menu__band main-menu__band--top").pickingMode = PickingMode.Ignore;
+            VisualElement foot = Add(_root, "main-menu__band main-menu__band--bottom");
+            foot.pickingMode = PickingMode.Ignore;
+            Label(foot, "Hexwex · прототип", "main-menu__version");
 
             _layout = Add(_root, "main-menu__layout");
 
             VisualElement title = Add(_layout, "main-menu__title-block");
-            VisualElement emblem = Add(title, "main-menu__emblem");
-            Texture2D emblemTexture = Resources.Load<Texture2D>("Icons/menu-emblem");
-            if (emblemTexture != null)
-            {
-                emblem.style.backgroundImage = new StyleBackground(emblemTexture);
-            }
-
             Label(title, "Кампания управляющего", "main-menu__heading");
-            Label(title, "Остров", "main-menu__title");
-            Label(title, "Бремя отходов", "main-menu__subtitle");
+            SetIcon(Add(title, "main-menu__logo"), "logo");
+            Label(title, "Остров · Бремя отходов", "main-menu__subtitle");
 
             VisualElement bar = Add(title, "main-menu-bar");
             Label(bar, "Сложность", "main-menu-bar__label");
@@ -180,20 +179,160 @@ namespace Hexwex.View
             bar.Add(chronicle);
             SetIcon(Add(chronicle, "main-menu-bar__icon"), "factions");
 
-            VisualElement nav = Add(_layout, "main-menu__nav");
+            // The slab hangs from the top of the screen on two chains.
+            VisualElement hang = Add(_layout, "main-menu__hang");
+            VisualElement chains = Add(hang, "main-menu__chains");
+            chains.pickingMode = PickingMode.Ignore;
+            chains.Add(new Chain());
+            chains.Add(new Chain());
+
+            VisualElement panel = Add(hang, "main-menu__panel");
+            VisualElement inner = Add(panel, "main-menu__panel-inner");
+            foreach (string corner in new[] { "top-left", "top-right", "bottom-left", "bottom-right" })
+            {
+                VisualElement stud = new Stud();
+                stud.AddToClassList("main-menu__stud");
+                stud.AddToClassList("main-menu__stud--" + corner);
+                inner.Add(stud);
+            }
+
+            Label(inner, "Главное меню", "main-menu__panel-title");
+            Add(inner, "main-menu__rule");
+
+            VisualElement nav = Add(inner, "main-menu__nav");
             AddEntry(nav, "Пролог", "Обучение", "scouting", () => StartGame(true));
             AddEntry(nav, "Глава первая", "Новая игра", "stronghold", () => StartGame(false));
             AddEntry(nav, "Летопись", "Фракции", "factions", OpenFactions);
             AddEntry(nav, "Архив", "Технологии", "technology", OpenTechs);
             AddEntry(nav, "Эпилог", "Авторы", "population", OpenCredits);
 
-            VisualElement footer = Add(_root, "main-menu__footer");
+            Add(inner, "main-menu__rule");
             Button exit = new Button(Exit) { text = "Выход" };
             exit.AddToClassList("main-menu-button");
-            footer.Add(exit);
+            exit.AddToClassList("main-menu-button--exit");
+            inner.Add(exit);
+            // The emblem sits astride the top of the frame, over everything on it.
+            SetIcon(Add(panel, "main-menu__crest"), "logo-mark");
+            Add(hang, "main-menu__hang-rest").pickingMode = PickingMode.Ignore;
 
             _overlay = Add(_root, "overlay");
             _overlay.style.display = DisplayStyle.None;
+        }
+
+        /// <summary>A chain drawn link by link down the whole height of the element: a link seen flat, then one seen edge on.</summary>
+        private sealed class Chain : VisualElement
+        {
+            private static readonly Color Iron = new Color(0.36f, 0.33f, 0.3f);
+            private static readonly Color Shine = new Color(0.62f, 0.56f, 0.46f);
+            private static readonly Color Dark = new Color(0.07f, 0.06f, 0.06f);
+
+            public Chain()
+            {
+                AddToClassList("main-menu__chain");
+                pickingMode = PickingMode.Ignore;
+                generateVisualContent += Draw;
+            }
+
+            private void Draw(MeshGenerationContext context)
+            {
+                Painter2D painter = context.painter2D;
+                float middle = contentRect.width * 0.5f;
+                float height = contentRect.height;
+                const float linkLength = 30f;
+                const float linkHalf = 8f;
+                const float step = 21f;
+
+                // Drawn from the bottom up, so the lowest link always meets the slab whole.
+                int index = 0;
+                for (float bottom = height + 6f; bottom > -linkLength; bottom -= step)
+                {
+                    float top = bottom - linkLength;
+                    if (index % 2 == 0)
+                    {
+                        Link(painter, middle, top, bottom, linkHalf, Dark, 7f);
+                        Link(painter, middle, top, bottom, linkHalf, Iron, 4.5f);
+                        Link(painter, middle - 1f, top + 1f, bottom - 1f, linkHalf - 1f, Shine, 1.2f);
+                    }
+                    else
+                    {
+                        Bar(painter, middle, top + 3f, bottom - 3f, Dark, 8f);
+                        Bar(painter, middle, top + 4f, bottom - 4f, Iron, 5f);
+                        Bar(painter, middle - 1f, top + 5f, bottom - 5f, Shine, 1.2f);
+                    }
+
+                    index += 1;
+                }
+            }
+
+            private static void Link(Painter2D painter, float x, float top, float bottom, float half, Color color, float width)
+            {
+                painter.strokeColor = color;
+                painter.lineWidth = width;
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(x - half, top + half));
+                painter.Arc(new Vector2(x, top + half), half, 180f, 360f);
+                painter.LineTo(new Vector2(x + half, bottom - half));
+                painter.Arc(new Vector2(x, bottom - half), half, 0f, 180f);
+                painter.ClosePath();
+                painter.Stroke();
+            }
+
+            private static void Bar(Painter2D painter, float x, float top, float bottom, Color color, float width)
+            {
+                painter.strokeColor = color;
+                painter.lineWidth = width;
+                painter.lineCap = LineCap.Round;
+                painter.BeginPath();
+                painter.MoveTo(new Vector2(x, top));
+                painter.LineTo(new Vector2(x, bottom));
+                painter.Stroke();
+            }
+        }
+
+        /// <summary>A gold hexagonal stud, for the corners of the slab.</summary>
+        private sealed class Stud : VisualElement
+        {
+            private static readonly Color Rim = new Color(0.35f, 0.25f, 0.08f);
+            private static readonly Color Gold = new Color(0.89f, 0.72f, 0.36f);
+            private static readonly Color Light = new Color(1f, 0.93f, 0.7f);
+
+            public Stud()
+            {
+                pickingMode = PickingMode.Ignore;
+                generateVisualContent += Draw;
+            }
+
+            private void Draw(MeshGenerationContext context)
+            {
+                Painter2D painter = context.painter2D;
+                Vector2 center = contentRect.center;
+                float radius = Mathf.Min(contentRect.width, contentRect.height) * 0.5f;
+                Hexagon(painter, center, radius, Rim);
+                Hexagon(painter, center, radius * 0.8f, Gold);
+                Hexagon(painter, center + new Vector2(-radius * 0.12f, -radius * 0.14f), radius * 0.36f, Light);
+            }
+
+            private static void Hexagon(Painter2D painter, Vector2 center, float radius, Color color)
+            {
+                painter.fillColor = color;
+                painter.BeginPath();
+                for (int corner = 0; corner < 6; corner += 1)
+                {
+                    float angle = (corner * 60f - 90f) * Mathf.Deg2Rad;
+                    Vector2 point = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                    if (corner == 0)
+                    {
+                        painter.MoveTo(point);
+                    }
+                    else
+                    {
+                        painter.LineTo(point);
+                    }
+                }
+
+                painter.ClosePath();
+                painter.Fill();
+            }
         }
 
         private void AddEntry(VisualElement parent, string label, string title, string icon, Action run)
