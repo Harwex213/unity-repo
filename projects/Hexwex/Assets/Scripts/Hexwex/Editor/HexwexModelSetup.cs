@@ -44,6 +44,7 @@ namespace Hexwex.EditorTools
             public float g;
             public float b;
             public float roughness;
+            public float metallic;
             public float emissionR;
             public float emissionG;
             public float emissionB;
@@ -60,7 +61,7 @@ namespace Hexwex.EditorTools
         /// Builds one URP Lit material per entry of the palette the Blender scripts
         /// write. An FBX carries a material's name and little else, so the look is
         /// rebuilt here: Blender keeps a base colour linear and Unity reads a
-        /// material colour as gamma, roughness turns into smoothness, and emission
+        /// material colour as gamma, roughness turns into smoothness, a metal stays a metal, and emission
         /// stays linear, scaled by its strength.
         /// </summary>
         private static Dictionary<string, Material> RebuildMaterials()
@@ -88,7 +89,7 @@ namespace Hexwex.EditorTools
                 material.shader = lit;
                 material.SetColor("_BaseColor", new Color(entry.r, entry.g, entry.b, 1f).gamma);
                 material.SetFloat("_Smoothness", 1f - entry.roughness);
-                material.SetFloat("_Metallic", 0f);
+                material.SetFloat("_Metallic", entry.metallic);
 
                 if (entry.emissionStrength > 0f)
                 {
@@ -208,6 +209,8 @@ namespace Hexwex.EditorTools
             importer.animationType = ModelImporterAnimationType.None;
             importer.useFileScale = true;
             importer.globalScale = 1f;
+            // The models bring their own normals: rounded edges, flat faces.
+            importer.importNormals = ModelImporterNormals.Import;
             importer.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
             importer.materialLocation = ModelImporterMaterialLocation.InPrefab;
             foreach (KeyValuePair<string, Material> entry in materials)

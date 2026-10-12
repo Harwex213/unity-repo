@@ -37,6 +37,8 @@ namespace Hexwex.View
         private static readonly Color RootColor = new Color(0.27f, 0.23f, 0.21f);
         private static readonly Color ToxicColor = new Color(0.52f, 0.2f, 0.62f);
         private static readonly Color HuskColor = new Color(0.55f, 0.55f, 0.52f);
+        /// <summary>The top of a hex that breaks up: the event does not say what grew on it.</summary>
+        private static readonly Color CrumbleColor = new Color(0.42f, 0.47f, 0.3f);
         private static readonly Color EnemyColor = new Color(0.72f, 0.2f, 0.18f);
         /// <summary>The player's army wears one strong colour, so it reads against any biome.</summary>
         private static readonly Color ArmyColor = new Color(0.2f, 0.4f, 0.95f);
@@ -60,6 +62,7 @@ namespace Hexwex.View
         private const float FallSeconds = 0.7f;
 
         private readonly List<Effect> _fallen = new List<Effect>();
+        private DebrisField _debris;
         private const float TurnDegreesPerSecond = 540f;
 
         private static readonly Dictionary<string, GameObject> UnitPrefabs = new Dictionary<string, GameObject>();
@@ -142,6 +145,7 @@ namespace Hexwex.View
             }
 
             BuildFog();
+            _debris = new DebrisField(transform, surfaceMaterial);
         }
 
         public void Clear()
@@ -156,7 +160,8 @@ namespace Hexwex.View
             _shots.Clear();
             _effects.Clear();
             _fallen.Clear();
-            _sim = null;
+            _debris = null;
+
             _targetIsland = -1;
             _targetHex = -1;
         }
@@ -235,6 +240,7 @@ namespace Hexwex.View
             DrawUnits(alpha, viewCamera);
             DrawShots(alpha);
             DrawEffects();
+            _debris?.Step(Time.unscaledDeltaTime);
             DrawFallen();
         }
 
@@ -294,16 +300,17 @@ namespace Hexwex.View
                 GameObject top = new GameObject("Top");
                 top.transform.SetParent(cell.transform, false);
                 top.transform.localScale = new Vector3(HexInset, HexHeight, HexInset);
-                top.AddComponent<MeshFilter>().sharedMesh = HexMeshes.Prism;
+                Material ground = Props.Ground != null ? Props.Ground : surfaceMaterial;
+                top.AddComponent<MeshFilter>().sharedMesh = HexMeshes.Tile;
                 MeshRenderer topRenderer = top.AddComponent<MeshRenderer>();
-                topRenderer.sharedMaterials = new[] { surfaceMaterial, surfaceMaterial };
+                topRenderer.sharedMaterials = new[] { ground, ground };
                 top.AddComponent<MeshCollider>().sharedMesh = HexMeshes.Prism;
                 BattleHexHandle handle = top.AddComponent<BattleHexHandle>();
                 handle.Island = island.Index;
                 handle.Hex = index;
                 visual.Tops.Add(topRenderer);
 
-                Transform rock = Props.Part(cell.transform, HexMeshes.Root, surfaceMaterial, Vector3.zero, new Vector3(HexInset, 0.7f + (float)rng.Next() * 1.3f, HexInset), RootColor * (0.85f + (float)rng.Next() * 0.3f));
+                Transform rock = Props.Part(cell.transform, HexMeshes.Root, ground, Vector3.zero, new Vector3(HexInset, 0.7f + (float)rng.Next() * 1.3f, HexInset), RootColor * (0.85f + (float)rng.Next() * 0.3f));
                 rock.name = "Root";
 
                 // What still stands on the player's island: the stronghold and the buildings.
@@ -311,16 +318,12 @@ namespace Hexwex.View
                 {
                     StructureKind kind = hex.Stronghold ? StructureKind.Stronghold : StructureHp.ToKind(hex.Building.Value);
                     double hp = _sim.StructureHpByHex[index];
-                    if (hp > 0 || hex.Stronghold)
+                    GameObject structure = Props.CreateStructure(kind, surfaceMaterial, cell.transform);
+                    structure.transform.localPosition = Vector3.up * HexHeight;
+                    if (hp <= 0)
                     {
-                        GameObject structure = Props.CreateStructure(kind, surfaceMaterial, cell.transform);
-                        structure.transform.localPosition = Vector3.up * HexHeight;
-                        if (hp <= 0)
-                        {
-                            // Ruins: the same stronghold, sunk and knocked over.
-                            structure.transform.localScale = new Vector3(1f, 0.35f, 1f);
-                            structure.transform.localRotation = Quaternion.Euler(6f, 0f, -8f);
-                        }
+                        // What was razed stays as its ruin: broken walls and a heap of rubble.
+                        Props.MakeRuin(structure, surfaceMaterial);
                     }
                 }
             }
@@ -613,18 +616,14 @@ namespace Hexwex.View
                     break;
                 case SimEventType.Razed:
                     AddPuff(simEvent, new Color(0.95f, 0.55f, 0.2f), 1.3f, 0.55f);
+                    _debris?.Collapse(ToWorld(simEvent.X, simEvent.Y, HexHeight));
                     break;
                 case SimEventType.Ferry:
                     AddPuff(simEvent, new Color(0.9f, 0.9f, 1f), 0.4f, 0.3f);
                     break;
                 case SimEventType.Crumble:
-                    Transform piece = Props.Part(transform, HexMeshes.Prism, surfaceMaterial, ToWorld(simEvent.X, simEvent.Y), new Vector3(HexInset, HexHeight, HexInset), RootColor);
-                    piece.name = "Crumble";
-                    // The prism has a cap and sides: both fall.
-                    MeshRenderer pieceRenderer = piece.GetComponent<MeshRenderer>();
-                    pieceRenderer.sharedMaterials = new[] { surfaceMaterial, surfaceMaterial };
-                    Props.Paint(pieceRenderer, RootColor * 0.8f, 1);
-                    _effects.Add(new Effect { Root = piece, StartAt = Time.unscaledTime, Seconds = 0.9f, Size = 1f, IsFalling = true });
+                    // The hex splits into its six wedges and falls away with the rock under it.
+                    _debris?.Shatter(ToWorld(simEvent.X, simEvent.Y), HexHeight, CrumbleColor);
                     break;
             }
         }

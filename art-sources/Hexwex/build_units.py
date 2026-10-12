@@ -1,4 +1,4 @@
-"""Builds the units and monsters of the Hexwex battle as low-poly figures and exports them for Unity.
+"""Builds the units and monsters of the Hexwex battle as rounded figures and exports them for Unity.
 
 Run from the repository root:
 
@@ -50,6 +50,8 @@ RIGHT = 0.1
 LEFT = -0.1
 # A rider sits this high on the horse and shows no legs.
 SADDLE = 0.14
+# A figure is small: its edges are rounded finer than a building's.
+FIGURE_SOFT = 0.003
 
 
 class Figure:
@@ -57,14 +59,14 @@ class Figure:
 
     def __init__(self, key):
         self.key = key
-        self.body = Model("Unit_" + key)
+        self.body = Model("Unit_" + key, soft=FIGURE_SOFT)
         self.parts = {}
         self.pivots = {}
 
     def part(self, name, pivot=None):
         """The part of that name. The first call sets the joint it turns about."""
         if name not in self.parts:
-            self.parts[name] = Model(self.key + "__" + name)
+            self.parts[name] = Model(self.key + "__" + name, soft=FIGURE_SOFT)
             self.pivots[name] = Vector(pivot)
 
         return self.parts[name]
@@ -97,29 +99,65 @@ def rod(model, thickness, length, at, mat, lean=0.0, sideways=0.0):
     elif sideways:
         tilt = ("Y", math.radians(sideways))
 
-    model.tube(thickness, length, at, mat, sides=4, tilt=tilt, turn=math.pi / 4)
+    model.tube(thickness, length, at, mat, sides=5, tilt=tilt)
 
 
-def man(fig, torso, legs="M_Wood", skin="M_Skin", arms=None, lift=0.0, with_legs=True):
-    """A man: two legs, a torso, two arms and a head. `lift` raises him, as onto a saddle."""
+def man(fig, torso, legs="M_Wood", skin="M_Skin", arms=None, lift=0.0, with_legs=True, bulk=1.0, reach=0.0):
+    """
+    A man: two legs in boots, hips, a chest wider at the shoulders, a neck, two
+    arms that end in hands, and a head with a nose and hair. `lift` raises him,
+    as onto a saddle. `bulk` makes him broader without making him taller, and
+    `reach` holds his arms out ahead of him by that many degrees. He is built of
+    limbs that narrow and of rounded masses, not of blocks, and stands about 0.4
+    tall.
+    """
+    def wide(width, depth):
+        return (width * bulk, depth * bulk)
+
     if with_legs:
-        for name, x in (("LegL", -0.035), ("LegR", 0.035)):
-            fig.part(name, (x, 0, lift + 0.14)).box((0.05, 0.055, 0.14), (x, 0, lift), legs)
+        for name, x in (("LegL", -0.034 * bulk), ("LegR", 0.034 * bulk)):
+            leg = fig.part(name, (x, 0, lift + 0.15))
+            leg.taper(wide(0.036, 0.04), wide(0.052, 0.058), 0.13, (x, 0, lift + 0.02), legs)
+            # The boot: a shaft and a toe that points forward.
+            leg.taper(wide(0.044, 0.05), wide(0.04, 0.044), 0.035, (x, 0, lift), "M_Wood")
+            leg.ball((0.044 * bulk, 0.07 * bulk, 0.03), (x, -0.02 * bulk, lift + 0.014), "M_Wood")
 
-    fig.body.box((0.14, 0.09, 0.15), (0, 0, lift + 0.14), torso)
-    for name, x in (("ArmL", -0.09), ("ArmR", 0.09)):
-        arm = fig.part(name, (x, 0, lift + 0.27))
-        arm.box((0.04, 0.045, 0.13), (x, 0, lift + 0.15), arms or torso)
-        arm.box((0.04, 0.045, 0.03), (x, 0, lift + 0.12), skin)
+    body = fig.body
+    body.ball((0.12 * bulk, 0.085 * bulk, 0.07), (0, 0, lift + 0.16), legs if with_legs else torso)
+    body.taper(wide(0.108, 0.074), wide(0.14, 0.088), 0.1, (0, 0, lift + 0.16), torso)
+    body.ball((0.15 * bulk, 0.09 * bulk, 0.06), (0, 0, lift + 0.262), torso)
+    # A belt at the waist.
+    body.taper(wide(0.114, 0.08), wide(0.114, 0.08), 0.014, (0, 0, lift + 0.158), "M_Wood")
+    body.taper(wide(0.036, 0.036), wide(0.032, 0.032), 0.03, (0, 0, lift + 0.28), skin)
 
-    fig.body.box((0.09, 0.09, 0.09), (0, 0, lift + 0.3), skin)
+    # An arm hangs from the shoulder, or is held out ahead by `reach`.
+    swing = math.radians(180 - reach)
+    out = Vector((0, -math.sin(swing), math.cos(swing)))
+    for name, x in (("ArmL", -0.088 * bulk), ("ArmR", 0.088 * bulk)):
+        shoulder = Vector((x, 0, lift + 0.265))
+        arm = fig.part(name, shoulder)
+        arm.ball((0.052 * bulk, 0.056 * bulk, 0.05), shoulder, arms or torso)
+        arm.taper(wide(0.042, 0.046), wide(0.03, 0.032), 0.115, shoulder, arms or torso, tilt=("X", swing))
+        arm.ball((0.03 * bulk, 0.034 * bulk, 0.038), shoulder + out * 0.13, skin)
+
+    # The head: the skull, the jaw under it, a nose, and hair over the back and the crown.
+    body.ball((0.084, 0.09, 0.09), (0, 0, lift + 0.348), skin)
+    body.ball((0.066, 0.07, 0.05), (0, -0.008, lift + 0.318), skin)
+    body.ball((0.014, 0.02, 0.022), (0, -0.046, lift + 0.338), skin)
+    if skin == "M_Skin":
+        body.ball((0.09, 0.088, 0.07), (0, 0.012, lift + 0.366), "M_Wood")
+        for x in (-0.017, 0.017):
+            body.ball((0.011, 0.008, 0.011), (x, -0.041, lift + 0.354), "M_Chitin")
 
 
 def helmet(fig, mat="M_Steel", lift=0.0, crest=None):
-    fig.body.box((0.1, 0.1, 0.05), (0, 0, lift + 0.36), mat)
-    fig.body.box((0.1, 0.02, 0.03), (0, 0.045, lift + 0.33), mat)
+    """A round helm with a brim, a nose guard, and a guard over the neck."""
+    fig.body.ball((0.1, 0.104, 0.085), (0, 0.002, lift + 0.37), mat)
+    fig.body.taper((0.104, 0.108), (0.098, 0.102), 0.012, (0, 0.002, lift + 0.362), mat)
+    fig.body.box((0.014, 0.012, 0.04), (0, -0.05, lift + 0.33), mat)
+    fig.body.box((0.086, 0.016, 0.04), (0, 0.044, lift + 0.325), mat)
     if crest:
-        fig.body.box((0.02, 0.09, 0.05), (0, 0.01, lift + 0.41), crest)
+        fig.body.box((0.016, 0.09, 0.04), (0, 0.006, lift + 0.405), crest)
 
 
 def shield(fig, mat, lift=0.0, round_one=False):
@@ -184,25 +222,38 @@ def hood(fig, mat, lift=0.0):
 
 
 def beast_legs(fig, mat, x, front, back, size, tall):
-    """Four legs hinged at the belly: front left, front right, back left, back right."""
+    """Four legs hinged at the belly: front left, front right, back left, back right. Each has a thigh, a shank and a foot."""
     spots = ((-x, front), (x, front), (-x, back), (x, back))
     for index, (at_x, at_y) in enumerate(spots):
-        fig.part("Leg%d" % (index + 1), (at_x, at_y, tall)).box((size[0], size[1], tall), (at_x, at_y, 0), mat)
+        leg = fig.part("Leg%d" % (index + 1), (at_x, at_y, tall))
+        leg.taper((size[0] * 0.8, size[1] * 0.8), (size[0] * 1.35, size[1] * 1.5), tall * 0.5, (at_x, at_y, tall * 0.5), mat)
+        leg.taper((size[0] * 0.62, size[1] * 0.62), (size[0] * 0.8, size[1] * 0.8), tall * 0.44, (at_x, at_y, tall * 0.07), mat)
+        leg.taper((size[0] * 0.85, size[1] * 0.95), (size[0] * 0.68, size[1] * 0.7), tall * 0.08, (at_x, at_y - size[1] * 0.1, 0), "M_Rock_Dark")
 
 
 def horse(fig):
     """A horse under a rider: the rider sits at `SADDLE` and shows no legs."""
     beast_legs(fig, "M_Horse", 0.045, -0.12, 0.12, (0.035, 0.04), 0.15)
     body = fig.body
-    body.box((0.13, 0.36, 0.12), (0, 0, 0.14), "M_Horse")
-    body.box((0.07, 0.07, 0.16), (0, -0.17, 0.2), "M_Horse")
-    body.box((0.07, 0.14, 0.07), (0, -0.24, 0.31), "M_Horse")
-    body.box((0.02, 0.1, 0.12), (0, -0.14, 0.26), "M_Rock_Dark")
-    body.box((0.03, 0.03, 0.14), (0, 0.19, 0.1), "M_Rock_Dark")
-    # The saddle cloth is the player's colour.
-    body.box((0.14, 0.14, 0.02), (0, 0.02, 0.26), "M_Team")
+    # The barrel, the chest in front of it and the haunches behind.
+    body.ball((0.13, 0.34, 0.13), (0, 0, 0.2), "M_Horse")
+    body.ball((0.125, 0.15, 0.14), (0, -0.11, 0.205), "M_Horse")
+    body.ball((0.135, 0.16, 0.145), (0, 0.11, 0.21), "M_Horse")
+    # The neck rises forward to the head, which narrows to the muzzle.
+    body.taper((0.07, 0.1), (0.05, 0.065), 0.17, (0, -0.15, 0.22), "M_Horse", tilt=("X", math.radians(28)))
+    body.ball((0.062, 0.1, 0.075), (0, -0.25, 0.375), "M_Horse", tilt=("X", math.radians(-35)))
+    body.ball((0.046, 0.07, 0.05), (0, -0.295, 0.34), "M_Horse", tilt=("X", math.radians(-35)))
+    for x in (-0.022, 0.022):
+        body.tube(0.011, 0.035, (x, -0.215, 0.4), "M_Horse", sides=6, top=0.002)
+        body.ball((0.012, 0.01, 0.012), (x * 1.2, -0.262, 0.385), "M_Chitin")
+    # The mane down the neck and the tail.
+    body.box((0.018, 0.13, 0.09), (0, -0.16, 0.27), "M_Rock_Dark", turn=0.0)
+    body.taper((0.02, 0.02), (0.035, 0.04), 0.16, (0, 0.2, 0.07), "M_Rock_Dark", tilt=("X", math.radians(-14)))
+    # The saddle and its cloth, in the player's colour.
+    body.ball((0.15, 0.17, 0.05), (0, 0.02, 0.258), "M_Team")
+    body.ball((0.09, 0.12, 0.045), (0, 0.02, 0.275), "M_Wood")
     for x in (-0.068, 0.068):
-        body.box((0.03, 0.06, 0.1), (x, 0.0, 0.14), "M_Wood")
+        body.taper((0.03, 0.05), (0.034, 0.06), 0.1, (x, 0.0, 0.14), "M_Wood")
 
 
 # ---------- the player's foot ----------
@@ -356,13 +407,17 @@ def wolf():
     fig = Figure("wolf")
     body = fig.body
     beast_legs(fig, "M_Fur", 0.04, -0.09, 0.1, (0.03, 0.035), 0.1)
-    body.box((0.11, 0.28, 0.1), (0, 0, 0.09), "M_Fur")
-    body.box((0.1, 0.1, 0.1), (0, -0.17, 0.13), "M_Fur")
-    body.box((0.05, 0.08, 0.045), (0, -0.25, 0.13), "M_Rock_Dark")
-    for x in (-0.032, 0.032):
-        body.tube(0.018, 0.045, (x, -0.15, 0.23), "M_Rock_Dark", sides=4, top=0.0)
-        body.box((0.012, 0.01, 0.012), (x * 0.8, -0.221, 0.19), "M_Eye")
-    rod(body, 0.014, 0.14, (0, 0.14, 0.15), "M_Fur", lean=-125)
+    # A deep chest, a lean belly behind it, and a thick neck carried low.
+    body.ball((0.11, 0.2, 0.115), (0, -0.04, 0.145), "M_Fur")
+    body.ball((0.095, 0.2, 0.095), (0, 0.07, 0.14), "M_Fur")
+    body.ball((0.09, 0.12, 0.1), (0, -0.14, 0.165), "M_Fur")
+    body.ball((0.085, 0.1, 0.085), (0, -0.2, 0.18), "M_Fur")
+    body.taper((0.05, 0.045), (0.034, 0.03), 0.075, (0, -0.225, 0.165), "M_Rock_Dark", tilt=("X", math.radians(95)))
+    body.ball((0.02, 0.018, 0.016), (0, -0.3, 0.166), "M_Chitin")
+    for x in (-0.03, 0.03):
+        body.tube(0.016, 0.045, (x, -0.185, 0.21), "M_Rock_Dark", sides=6, top=0.001)
+        body.ball((0.013, 0.01, 0.013), (x * 0.75, -0.238, 0.196), "M_Eye")
+    body.taper((0.03, 0.03), (0.012, 0.012), 0.15, (0, 0.15, 0.16), "M_Fur", tilt=("X", math.radians(-125)))
 
     return fig.finish()
 
@@ -412,10 +467,10 @@ def skeleton():
         body.box((0.11, 0.06, 0.012), (0, 0, z), "M_Bone")
     for name, x in (("ArmL", -0.075), ("ArmR", 0.075)):
         fig.part(name, (x, 0, 0.26)).box((0.02, 0.02, 0.14), (x, 0, 0.13), "M_Bone")
-    body.box((0.085, 0.085, 0.08), (0, 0, 0.29), "M_Bone")
-    body.box((0.06, 0.05, 0.025), (0, -0.01, 0.275), "M_Bone")
+    body.ball((0.082, 0.09, 0.085), (0, 0, 0.33), "M_Bone")
+    body.ball((0.058, 0.06, 0.04), (0, -0.012, 0.292), "M_Bone")
     for x in (-0.02, 0.02):
-        body.box((0.02, 0.012, 0.022), (x, -0.04, 0.32), "M_Chitin")
+        body.ball((0.022, 0.014, 0.024), (x, -0.038, 0.335), "M_Chitin")
     rod(fig.part("ArmR"), 0.011, 0.2, (0.085, -0.04, 0.15), "M_Rock_Rust", lean=-25)
 
     return fig.finish()
@@ -423,38 +478,37 @@ def skeleton():
 
 def zombie():
     fig = Figure("zombie")
+    # A dead man in what he was buried in. The arms reach out ahead of it, and claw at what they reach.
+    man(fig, "M_Moss", legs="M_Dirt", skin="M_Rot", reach=82)
     body = fig.body
-    for name, x in (("LegL", -0.035), ("LegR", 0.035)):
-        fig.part(name, (x, 0, 0.14)).box((0.05, 0.055, 0.14), (x, 0, 0), "M_Dirt")
-    body.box((0.14, 0.09, 0.15), (0, -0.01, 0.14), "M_Moss")
-    body.box((0.06, 0.092, 0.05), (0.03, -0.01, 0.16), "M_Rot")
-    # The arms reach out ahead of it, and claw at what they reach.
-    for name, x in (("ArmL", -0.09), ("ArmR", 0.09)):
-        rod(fig.part(name, (x, -0.02, 0.25)), 0.022, 0.14, (x, -0.02, 0.25), "M_Rot", lean=-95)
-    body.box((0.09, 0.09, 0.09), (0.01, -0.03, 0.28), "M_Rot")
-    for x in (-0.012, 0.03):
-        body.box((0.016, 0.012, 0.016), (x, -0.076, 0.33), "M_Chitin")
+    # A wound in the side, a slack jaw and sunken eyes.
+    body.ball((0.06, 0.03, 0.05), (0.035, -0.034, 0.21), "M_Leech")
+    body.ball((0.04, 0.03, 0.022), (0.004, -0.03, 0.305), "M_Chitin")
+    for x in (-0.017, 0.019):
+        body.ball((0.016, 0.01, 0.016), (x, -0.04, 0.354), "M_Chitin")
+    body.ball((0.07, 0.06, 0.03), (-0.01, 0.016, 0.385), "M_Dirt")
 
     return fig.finish()
 
 
 def ogre():
     fig = Figure("ogre")
+    man(fig, "M_Ogre", legs="M_Ogre", skin="M_Ogre", bulk=1.55)
     body = fig.body
-    for name, x in (("LegL", -0.05), ("LegR", 0.05)):
-        fig.part(name, (x, 0, 0.12)).box((0.07, 0.08, 0.12), (x, 0, 0), "M_Ogre")
-    body.box((0.2, 0.14, 0.05), (0, 0, 0.11), "M_Wood")
-    body.box((0.22, 0.15, 0.17), (0, 0, 0.15), "M_Ogre")
-    body.blob((0.2, 0.16, 0.12), (0, -0.03, 0.2), "M_Ogre", seed=6, rough=0.04)
-    for name, x in (("ArmL", -0.14), ("ArmR", 0.14)):
-        fig.part(name, (x, 0, 0.3)).box((0.065, 0.07, 0.17), (x, 0, 0.14), "M_Ogre")
-    body.box((0.09, 0.09, 0.08), (0, -0.01, 0.32), "M_Ogre")
-    for x in (-0.025, 0.025):
-        body.tube(0.012, 0.03, (x, -0.05, 0.325), "M_Bone", sides=4, top=0.0)
+    # A belly over a hide kilt, a heavy brow, and tusks from the lower jaw.
+    body.ball((0.2, 0.17, 0.15), (0, -0.02, 0.2), "M_Ogre")
+    body.taper((0.2, 0.15), (0.19, 0.14), 0.07, (0, 0, 0.1), "M_Wood")
+    body.ball((0.09, 0.03, 0.022), (0, -0.036, 0.366), "M_Ogre")
+    for x in (-0.02, 0.02):
+        body.ball((0.012, 0.008, 0.01), (x, -0.043, 0.352), "M_Eye")
+        body.tube(0.008, 0.03, (x * 1.2, -0.036, 0.312), "M_Bone", sides=6, top=0.001)
     # A club that is half a tree.
     arm = fig.part("ArmR")
-    rod(arm, 0.018, 0.2, (0.15, -0.05, 0.14), "M_Timber", lean=-30)
-    arm.tube(0.045, 0.16, (0.15, -0.15, 0.31), "M_Wood", sides=6, top=0.055, tilt=("X", math.radians(-30)))
+    rod(arm, 0.014, 0.2, (0.14, -0.05, 0.12), "M_Timber", lean=-30)
+    arm.tube(0.03, 0.16, (0.14, -0.15, 0.293), "M_Wood", sides=8, top=0.045, tilt=("X", math.radians(-30)))
+    for turn in range(5):
+        angle = turn * math.pi * 0.4
+        arm.tube(0.008, 0.02, (0.14 + math.cos(angle) * 0.04, -0.21 + math.sin(angle) * 0.02, 0.4), "M_Iron", sides=4, top=0.0)
     fig.resize(1.75)
 
     return fig.finish()
@@ -463,41 +517,54 @@ def ogre():
 def witch():
     fig = Figure("witch")
     body = fig.body
-    body.tube(0.11, 0.26, (0, 0, 0), "M_Roof", sides=8, top=0.055)
-    rod(fig.part("ArmL", (-0.075, -0.01, 0.24)), 0.018, 0.12, (-0.075, -0.01, 0.24), "M_Roof", lean=-150)
-    body.box((0.08, 0.08, 0.08), (0, 0, 0.26), "M_Rot")
-    body.tube(0.012, 0.03, (0, -0.045, 0.285), "M_Rot", sides=4, top=0.0, tilt=("X", math.radians(95)))
-    body.tube(0.11, 0.012, (0, 0, 0.335), "M_Night", sides=8)
-    body.tube(0.055, 0.17, (0, 0, 0.345), "M_Night", sides=8, top=0.0, tilt=("X", math.radians(-8)))
+    # A long robe that spreads to the ground, drawn in at the waist.
+    body.taper((0.2, 0.19), (0.1, 0.09), 0.17, (0, 0, 0), "M_Roof", sides=14)
+    body.taper((0.1, 0.09), (0.12, 0.085), 0.09, (0, 0, 0.17), "M_Roof", sides=14)
+    body.ball((0.13, 0.09, 0.05), (0, 0, 0.255), "M_Roof")
+    body.taper((0.03, 0.03), (0.028, 0.028), 0.03, (0, 0, 0.265), "M_Rot")
+    # A long face: a hooked nose, a chin, and the poison in her eyes.
+    body.ball((0.074, 0.08, 0.085), (0, 0, 0.325), "M_Rot")
+    body.ball((0.04, 0.045, 0.04), (0, -0.02, 0.292), "M_Rot")
+    body.tube(0.009, 0.035, (0, -0.036, 0.322), "M_Rot", sides=6, top=0.001, tilt=("X", math.radians(110)))
+    for x in (-0.016, 0.016):
+        body.ball((0.012, 0.008, 0.01), (x, -0.036, 0.336), "M_Toxic")
+    body.ball((0.09, 0.07, 0.09), (0, 0.02, 0.315), "M_Pale")
+    # The hat: a wide brim and a crooked point.
+    body.tube(0.1, 0.01, (0, 0, 0.356), "M_Night", sides=10)
+    body.tube(0.046, 0.09, (0, 0, 0.364), "M_Night", sides=10, top=0.026)
+    body.tube(0.026, 0.09, (0, 0.004, 0.45), "M_Night", sides=10, top=0.002, tilt=("X", math.radians(-28)))
+    body.tube(0.048, 0.012, (0, 0, 0.366), "M_Roof", sides=10)
+    for name, x in (("ArmL", -0.07), ("ArmR", 0.07)):
+        shoulder = Vector((x, -0.005, 0.25))
+        arm = fig.part(name, shoulder)
+        arm.taper((0.04, 0.04), (0.05, 0.05), 0.11, shoulder, "M_Roof", tilt=("X", math.radians(150)))
+        arm.ball((0.026, 0.03, 0.03), shoulder + Vector((0, -0.062, -0.107)), "M_Rot")
     # A staff with the poison alight on its head: she casts with it.
-    arm = fig.part("ArmR", (0.075, -0.01, 0.24))
-    rod(arm, 0.018, 0.12, (0.075, -0.01, 0.24), "M_Roof", lean=-150)
-    rod(arm, 0.008, 0.42, (0.11, -0.05, 0), "M_Wood")
-    arm.blob((0.06, 0.06, 0.06), (0.11, -0.05, 0.45), "M_Toxic", seed=2)
+    arm = fig.part("ArmR")
+    rod(arm, 0.007, 0.42, (0.09, -0.07, 0), "M_Wood")
+    arm.blob((0.06, 0.06, 0.06), (0.09, -0.07, 0.45), "M_Toxic", seed=2)
+    for turn in range(3):
+        angle = turn * math.pi * 2 / 3
+        arm.tube(0.006, 0.05, (0.09 + math.cos(angle) * 0.02, -0.07 + math.sin(angle) * 0.02, 0.4), "M_Wood", sides=5, top=0.002)
 
     return fig.finish()
 
 
 def vampire():
     fig = Figure("vampire")
+    man(fig, "M_Night", legs="M_Night", skin="M_Pale")
     body = fig.body
-    for name, x in (("LegL", -0.03), ("LegR", 0.03)):
-        fig.part(name, (x, 0, 0.16)).box((0.04, 0.05, 0.16), (x, 0, 0), "M_Night")
-    body.box((0.12, 0.08, 0.17), (0, 0, 0.16), "M_Night")
-    body.box((0.04, 0.082, 0.12), (0, 0, 0.19), "M_Cloth")
-    for name, x in (("ArmL", -0.08), ("ArmR", 0.08)):
-        arm = fig.part(name, (x, 0, 0.31))
-        arm.box((0.035, 0.04, 0.15), (x, 0, 0.17), "M_Night")
-        arm.box((0.03, 0.035, 0.03), (x, 0, 0.14), "M_Pale")
-    body.box((0.08, 0.085, 0.09), (0, 0, 0.34), "M_Pale")
-    body.box((0.085, 0.05, 0.03), (0, 0.02, 0.42), "M_Night")
-    for x in (-0.02, 0.02):
-        body.box((0.014, 0.01, 0.01), (x, -0.045, 0.385), "M_Eye")
+    # A red waistcoat, slicked black hair and eyes that burn.
+    body.ball((0.07, 0.03, 0.1), (0, -0.034, 0.215), "M_Cloth")
+    body.ball((0.09, 0.088, 0.066), (0, 0.014, 0.368), "M_Night")
+    body.tube(0.012, 0.03, (0, -0.02, 0.385), "M_Night", sides=6, top=0.001, tilt=("X", math.radians(120)))
+    for x in (-0.017, 0.017):
+        body.ball((0.012, 0.008, 0.01), (x, -0.041, 0.354), "M_Eye")
     # The cloak, black outside and red within, with its collar up.
-    body.box((0.2, 0.015, 0.3), (0, 0.055, 0.03), "M_Night")
-    body.box((0.18, 0.012, 0.28), (0, 0.044, 0.04), "M_Cloth")
-    for x in (-0.065, 0.065):
-        body.box((0.03, 0.06, 0.09), (x, 0.03, 0.33), "M_Night")
+    body.taper((0.24, 0.02), (0.15, 0.02), 0.27, (0, 0.058, 0.02), "M_Night", sides=10)
+    body.taper((0.22, 0.012), (0.135, 0.012), 0.255, (0, 0.047, 0.03), "M_Cloth", sides=10)
+    for x in (-0.06, 0.06):
+        body.taper((0.03, 0.06), (0.022, 0.05), 0.08, (x, 0.03, 0.285), "M_Night", sides=8)
     fig.resize(1.12)
 
     return fig.finish()
@@ -536,7 +603,8 @@ def plague_lord():
     """The boss: a robed giant, horned, with the poison burning in his hands and at his feet."""
     fig = Figure("plague_lord")
     body = fig.body
-    body.tube(0.2, 0.34, (0, 0, 0), "M_Night", sides=8, top=0.12)
+    body.tube(0.2, 0.34, (0, 0, 0), "M_Night", sides=12, top=0.12)
+    body.ball((0.28, 0.17, 0.1), (0, 0, 0.44), "M_Basalt")
     body.tube(0.21, 0.03, (0, 0, 0), "M_Toxic", sides=8)
     body.box((0.26, 0.14, 0.14), (0, 0, 0.32), "M_Basalt")
     body.box((0.06, 0.142, 0.12), (0, 0, 0.33), "M_Rot")
@@ -547,8 +615,8 @@ def plague_lord():
         rod(arm, 0.03, 0.2, (side * 0.16, -0.02, 0.4), "M_Night", lean=-140)
         arm.blob((0.07, 0.07, 0.07), (side * 0.16, -0.16, 0.25), "M_Toxic", seed=2)
     # The skull and its crown of horns.
-    body.box((0.1, 0.1, 0.1), (0, -0.01, 0.46), "M_Bone")
-    body.box((0.07, 0.06, 0.03), (0, -0.02, 0.44), "M_Bone")
+    body.ball((0.1, 0.11, 0.105), (0, -0.01, 0.51), "M_Bone")
+    body.ball((0.07, 0.07, 0.05), (0, -0.025, 0.462), "M_Bone")
     for side in (-1, 1):
         body.box((0.022, 0.012, 0.025), (side * 0.024, -0.06, 0.5), "M_Toxic")
         body.tube(0.022, 0.14, (side * 0.045, 0, 0.55), "M_Bone", sides=4, top=0.0, tilt=("Y", math.radians(side * 28)))

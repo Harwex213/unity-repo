@@ -22,6 +22,29 @@ namespace Hexwex.View
         private static Mesh _cube;
         private static Mesh _sphere;
         private static Mesh _cylinder;
+        private static Material _ground;
+        private static bool _groundLooked;
+
+        /// <summary>
+        /// The material of the land itself: the tops and sides of the hexes and the
+        /// rock under them. It takes a colour per renderer like the plain material,
+        /// and draws turf, soil and rock out of it. <c>null</c> when its shader is
+        /// missing; the caller then uses the plain material.
+        /// </summary>
+        public static Material Ground
+        {
+            get
+            {
+                if (!_groundLooked)
+                {
+                    _groundLooked = true;
+                    Shader shader = Resources.Load<Shader>("Shaders/HexwexGround");
+                    _ground = shader != null ? new Material(shader) { name = "M_Ground" } : null;
+                }
+
+                return _ground;
+            }
+        }
 
         public static Color Hex(string rgb)
         {
@@ -160,9 +183,13 @@ namespace Hexwex.View
             {
                 case BiomeId.Forrest:
                     Scatter(rng, 6, 0.64f, p => Piece(t, rng, rng.Next() < 0.5 ? "tree_a" : "tree_b", p, 0.85f, 1.2f));
+                    Scatter(rng, 9, 0.74f, p => Piece(t, rng, "grass_dark", p, 0.8f, 1.4f));
+                    Scatter(rng, 2, 0.7f, p => Piece(t, rng, "flower_white", p, 0.8f, 1.1f));
                     break;
                 case BiomeId.Taiga:
                     Scatter(rng, 6, 0.64f, p => Piece(t, rng, rng.Next() < 0.5 ? "pine_a" : "pine_b", p, 0.8f, 1.15f));
+                    Scatter(rng, 6, 0.74f, p => Piece(t, rng, "grass_dark", p, 0.7f, 1.2f));
+                    Scatter(rng, 2, 0.7f, p => Piece(t, rng, "pebbles", p, 0.8f, 1.2f));
                     break;
                 case BiomeId.Rainforest:
                     Scatter(rng, 5, 0.6f, p => Piece(t, rng, rng.Next() < 0.5 ? "jungle_a" : "jungle_b", p, 0.85f, 1.15f));
@@ -175,6 +202,7 @@ namespace Hexwex.View
                 case BiomeId.Mountains:
                     Piece(t, rng, "peak_a", Vector3.zero, 1f, 1.15f);
                     Scatter(rng, 2, 0.52f, p => Piece(t, rng, "peak_b", p, 0.7f, 1f));
+                    Scatter(rng, 4, 0.76f, p => Piece(t, rng, "pebbles", p, 0.9f, 1.5f));
                     break;
                 case BiomeId.Volcano:
                     Piece(t, rng, "volcano", Vector3.zero, 1f, 1.05f);
@@ -182,19 +210,23 @@ namespace Hexwex.View
                 case BiomeId.Hills:
                     Scatter(rng, 1, 0.2f, p => Piece(t, rng, "hill_a", p, 0.95f, 1.15f));
                     Scatter(rng, 3, 0.56f, p => Piece(t, rng, "hill_b", p, 0.8f, 1.1f));
+                    Scatter(rng, 8, 0.76f, p => Piece(t, rng, "grass_b", p, 0.8f, 1.3f));
                     break;
                 case BiomeId.Cliffs:
                     Scatter(rng, 3, 0.46f, p => Piece(t, rng, rng.Next() < 0.5 ? "cliff_a" : "cliff_b", p, 0.9f, 1.3f));
+                    Scatter(rng, 3, 0.74f, p => Piece(t, rng, "pebbles", p, 0.9f, 1.4f));
                     break;
                 case BiomeId.Crater:
                     Piece(t, rng, "crater", Vector3.zero, 1f, 1f);
                     break;
                 case BiomeId.Badlands:
                     Scatter(rng, 4, 0.58f, p => Piece(t, rng, rng.Next() < 0.5 ? "mesa_a" : "mesa_b", p, 0.85f, 1.25f));
+                    Scatter(rng, 4, 0.74f, p => Piece(t, rng, "pebbles_red", p, 0.9f, 1.4f));
                     break;
                 case BiomeId.Tundra:
                     Scatter(rng, 3, 0.6f, p => Piece(t, rng, rng.Next() < 0.5 ? "stone_a" : "stone_b", p, 0.8f, 1.3f));
                     Scatter(rng, 3, 0.66f, p => Piece(t, rng, "bush_moss", p, 0.8f, 1.2f));
+                    Scatter(rng, 3, 0.74f, p => Piece(t, rng, "pebbles", p, 0.8f, 1.3f));
                     break;
                 case BiomeId.PolarDesert:
                     Scatter(rng, 3, 0.54f, p => Piece(t, rng, rng.Next() < 0.5 ? "ice_a" : "ice_b", p, 0.8f, 1.3f));
@@ -209,11 +241,12 @@ namespace Hexwex.View
                     Scatter(rng, 1, 0.5f, p => Piece(t, rng, "snag", p, 0.9f, 1.2f));
                     break;
                 case BiomeId.Grassland:
-                    Scatter(rng, 8, 0.72f, p => Piece(t, rng, "grass", p, 0.8f, 1.4f));
-                    Scatter(rng, 3, 0.68f, p => Piece(t, rng, "flower", p, 0.9f, 1.3f));
+                    Scatter(rng, 16, 0.78f, p => Piece(t, rng, rng.Next() < 0.6 ? "grass" : "grass_b", p, 0.8f, 1.5f));
+                    Scatter(rng, 5, 0.72f, p => Piece(t, rng, rng.Next() < 0.5 ? "flower" : rng.Next() < 0.5 ? "flower_white" : "flower_red", p, 0.9f, 1.3f));
                     break;
                 case BiomeId.Plains:
-                    Scatter(rng, 7, 0.72f, p => Piece(t, rng, "straw", p, 0.8f, 1.4f));
+                    Scatter(rng, 14, 0.78f, p => Piece(t, rng, "straw", p, 0.8f, 1.5f));
+                    Scatter(rng, 2, 0.7f, p => Piece(t, rng, "pebbles", p, 0.7f, 1.1f));
                     break;
             }
 
@@ -258,6 +291,8 @@ namespace Hexwex.View
             {
                 GameObject instance = Object.Instantiate(prefab, parent, false);
                 instance.name = "Structure";
+                // What turns, flies and smokes on it.
+                instance.AddComponent<BuildingLife>().Bind(material);
 
                 return instance;
             }
@@ -365,6 +400,69 @@ namespace Hexwex.View
             }
 
             return mesh;
+        }
+
+        /// <summary>
+        /// Turns a standing building into its ruin. A modelled building is made in
+        /// the stages it was built in, so it comes apart the same way: the roof and
+        /// the fittings are gone, the walls stand broken to a third of their height
+        /// and out of true, and rubble lies heaped where they fell. A building with
+        /// no stages is sunk and knocked over, as before.
+        /// </summary>
+        public static void MakeRuin(GameObject structure, Material material)
+        {
+            bool hasStages = false;
+            foreach (Transform part in structure.GetComponentsInChildren<Transform>(true))
+            {
+                if (part.name.EndsWith("__S2") || part.name.EndsWith("__S3"))
+                {
+                    part.gameObject.SetActive(false);
+                    hasStages = true;
+                }
+                else if (part.name.Contains("__") && !part.name.EndsWith("__S0") && !part.name.EndsWith("__S1"))
+                {
+                    // What turned and flew on the building is gone with its roof.
+                    part.gameObject.SetActive(false);
+                }
+                else if (part.name.EndsWith("__S1"))
+                {
+                    Vector3 scale = part.localScale;
+                    part.localScale = new Vector3(scale.x, scale.y * 0.36f, scale.z);
+                    part.localRotation = part.localRotation * Quaternion.Euler(2.5f, -3f, 0f);
+                    hasStages = true;
+                }
+            }
+
+            if (!hasStages)
+            {
+                structure.transform.localScale = new Vector3(1f, 0.35f, 1f);
+                structure.transform.localRotation = Quaternion.Euler(6f, 0f, -8f);
+
+                return;
+            }
+
+            GameObject rubble = new GameObject("Rubble");
+            rubble.transform.SetParent(structure.transform, false);
+            Transform t = rubble.transform;
+            Rng rng = Rng.FromText("rubble:" + structure.transform.parent.name);
+            Color[] colors = { Hex("#8b8d93"), Hex("#5b5d66"), Hex("#cdbf9c"), Hex("#4a3324"), Hex("#3a2a40") };
+            for (int index = 0; index < 16; index += 1)
+            {
+                float angle = (float)rng.Next() * Mathf.PI * 2f;
+                float reach = 0.12f + Mathf.Sqrt((float)rng.Next()) * 0.46f;
+                // The heap is highest in the middle, where the roof came down.
+                float size = Mathf.Lerp(0.2f, 0.08f, reach / 0.58f) * (0.7f + (float)rng.Next() * 0.6f);
+                Transform stone = Part(t, Cube, material, new Vector3(Mathf.Cos(angle) * reach, size * 0.3f, Mathf.Sin(angle) * reach),
+                    new Vector3(size * 1.3f, size * 0.7f, size), colors[index % colors.Length] * (0.7f + (float)rng.Next() * 0.3f));
+                stone.localRotation = Quaternion.Euler((float)rng.Next() * 40f - 20f, (float)rng.Next() * 360f, (float)rng.Next() * 40f - 20f);
+            }
+
+            // Two charred beams lie across the heap.
+            for (int index = 0; index < 2; index += 1)
+            {
+                Transform beam = Part(t, Cube, material, new Vector3(index == 0 ? -0.12f : 0.16f, 0.16f, index == 0 ? 0.08f : -0.1f), new Vector3(0.05f, 0.05f, 0.62f), Hex("#241a14"));
+                beam.localRotation = Quaternion.Euler(index == 0 ? 18f : -12f, index == 0 ? 35f : 110f, 0f);
+            }
         }
 
         public static Transform Part(Transform parent, Mesh mesh, Material material, Vector3 position, Vector3 scale, Color color)

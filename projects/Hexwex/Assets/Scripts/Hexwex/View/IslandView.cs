@@ -41,6 +41,7 @@ namespace Hexwex.View
 
         private readonly Dictionary<string, HexVisual> _visuals = new Dictionary<string, HexVisual>();
         private readonly List<BuildAnimation> _builds = new List<BuildAnimation>();
+        private DebrisField _debris;
 
         private sealed class HexVisual
         {
@@ -148,11 +149,14 @@ namespace Hexwex.View
                     _builds.RemoveAt(index);
                 }
             }
+
+            _debris?.Step(Time.unscaledDeltaTime);
         }
 
         public void Clear()
         {
             _builds.Clear();
+            _debris?.Clear();
             foreach (HexVisual visual in _visuals.Values)
             {
                 Destroy(visual.Root);
@@ -174,9 +178,10 @@ namespace Hexwex.View
             GameObject top = new GameObject("Top");
             top.transform.SetParent(root.transform, false);
             top.transform.localScale = new Vector3(HexInset, height, HexInset);
-            top.AddComponent<MeshFilter>().sharedMesh = HexMeshes.Prism;
+            Material ground = Props.Ground != null ? Props.Ground : surfaceMaterial;
+            top.AddComponent<MeshFilter>().sharedMesh = HexMeshes.Tile;
             MeshRenderer topRenderer = top.AddComponent<MeshRenderer>();
-            topRenderer.sharedMaterials = new[] { surfaceMaterial, surfaceMaterial };
+            topRenderer.sharedMaterials = new[] { ground, ground };
             top.AddComponent<MeshCollider>().sharedMesh = HexMeshes.Prism;
             top.AddComponent<HexHandle>().HexId = hex.Id;
 
@@ -188,7 +193,7 @@ namespace Hexwex.View
             rock.transform.localScale = new Vector3(HexInset, depth, HexInset);
             rock.AddComponent<MeshFilter>().sharedMesh = HexMeshes.Root;
             MeshRenderer rockRenderer = rock.AddComponent<MeshRenderer>();
-            rockRenderer.sharedMaterial = surfaceMaterial;
+            rockRenderer.sharedMaterial = ground;
             Props.Paint(rockRenderer, RootColor * (0.85f + (float)rng.Next() * 0.3f));
 
             return new HexVisual { Root = root, Top = top.transform, TopRenderer = topRenderer, Height = height };
@@ -208,6 +213,8 @@ namespace Hexwex.View
             // A building on a hex that showed scenery a moment ago has just been built.
             // A hex drawn for the first time shows what already stands on it.
             bool isJustBuilt = kind.HasValue && !isRuined && visual.ContentKey != null && visual.ContentKey.StartsWith("scenery");
+            // A hex that showed a standing building and now shows none, or its ruin, has just lost it.
+            bool hasJustFallen = visual.ContentKey != null && !visual.ContentKey.StartsWith("scenery") && !visual.ContentKey.EndsWith(":ruined") && (!kind.HasValue || isRuined);
 
             if (visual.Content != null)
             {
@@ -223,10 +230,14 @@ namespace Hexwex.View
 
             if (isRuined)
             {
-                // Ruins: the same stronghold, sunk and knocked over.
-                visual.ContentScale = new Vector3(1f, 0.35f, 1f);
-                visual.Content.transform.localScale = visual.ContentScale;
-                visual.Content.transform.localRotation = Quaternion.Euler(6f, 0f, -8f);
+                // Ruins: broken walls and a heap of rubble where the stronghold stood.
+                Props.MakeRuin(visual.Content, surfaceMaterial);
+            }
+
+            if (hasJustFallen)
+            {
+                _debris ??= new DebrisField(transform, surfaceMaterial);
+                _debris.Collapse(visual.Root.transform.localPosition + Vector3.up * visual.Height, isRuined ? 1.3f : 1f);
             }
 
             if (isJustBuilt)

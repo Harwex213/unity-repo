@@ -1,7 +1,9 @@
 """What the Hexwex model scripts share: the palette, the mesh builder, the preview and the export.
 
-The style is that of art-sources/Ostrov/Buildings.blend: flat-shaded blocks in a
-small palette, one material per colour. Every model stands on z = 0 with its
+The style grew out of art-sources/Ostrov/Buildings.blend: solid shapes in a small
+palette, one material per colour. A model is built from plain blocks, tubes and
+balls; `Model.finish` then rounds every hard edge a little and shades the mesh
+smooth, so a wall catches the light on its corners as a built thing does. Every model stands on z = 0 with its
 middle on the origin and its front facing -Y. One hex is 2 units corner to corner.
 """
 
@@ -80,9 +82,20 @@ PALETTE = {
 }
 
 
+# How much of a metal each of these is. Everything else is not a metal at all.
+METALLIC = {"M_Metal": 0.85, "M_Steel": 0.9, "M_Iron": 0.8}
+
+# An edge sharper than this is rounded off, and stays a visible corner in the shading.
+HARD_EDGE = math.radians(28)
+
+
 def material(name):
     found = bpy.data.materials.get(name)
     if found:
+        bsdf = found.node_tree.nodes.get("Principled BSDF") if found.use_nodes else None
+        if bsdf is not None and name in METALLIC:
+            bsdf.inputs["Metallic"].default_value = METALLIC[name]
+
         return found
 
     color, roughness, emission = PALETTE[name]
@@ -92,6 +105,7 @@ def material(name):
     bsdf = made.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Base Color"].default_value = (*color, 1.0)
     bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = METALLIC.get(name, 0.0)
     if emission > 0:
         bsdf.inputs["Emission Color"].default_value = (*color, 1.0)
         bsdf.inputs["Emission Strength"].default_value = emission
@@ -102,10 +116,12 @@ def material(name):
 class Model:
     """One model, gathered into a single mesh with a slot per material."""
 
-    def __init__(self, name):
+    def __init__(self, name, soft=0.008):
         self.name = name
         self.bm = bmesh.new()
         self.slots = []
+        # How wide the rounding of a hard edge is. A figure a fifth the size of a house takes a finer one.
+        self.soft = soft
 
     def slot(self, material_name):
         if material_name not in self.slots:
@@ -130,6 +146,10 @@ class Model:
 
     def tube(self, radius, height, at, mat, sides=10, top=None, tilt=None, turn=0.0):
         """A cylinder or a cone standing on `at`. `tilt` is (axis, angle) about its foot."""
+        # Four sides is a square post and stays one. Anything rounder is made properly round.
+        if sides > 4:
+            sides = min(24, sides * 2)
+
         matrix = Matrix.Translation(Vector(at)) @ Matrix.Rotation(turn, 4, "Z")
         if tilt:
             matrix = matrix @ Matrix.Rotation(tilt[1], 4, tilt[0])
@@ -141,10 +161,70 @@ class Model:
         self._paint(made["verts"], mat)
 
     def dome(self, radius, at, mat, squash=1.0):
-        """A low-poly ball with its middle on `at`. The lower half is meant to sit inside a wall."""
+        """A ball with its middle on `at`. The lower half is meant to sit inside a wall."""
         matrix = Matrix.Translation(Vector(at)) @ Matrix.Diagonal((1.0, 1.0, squash, 1.0))
-        made = bmesh.ops.create_uvsphere(self.bm, u_segments=10, v_segments=6, radius=radius, matrix=matrix)
+        made = bmesh.ops.create_uvsphere(self.bm, u_segments=20, v_segments=12, radius=radius, matrix=matrix)
         self._paint(made["verts"], mat)
+
+    def ball(self, size, at, mat, turn=0.0, tilt=None):
+        """An egg `size` wide, deep and tall with its middle on `at`: a head, a belly, a shoulder."""
+        matrix = Matrix.Translation(Vector(at)) @ Matrix.Rotation(turn, 4, "Z")
+        if tilt:
+            matrix = matrix @ Matrix.Rotation(tilt[1], 4, tilt[0])
+
+        matrix = matrix @ Matrix.Diagonal((size[0] / 2, size[1] / 2, size[2] / 2, 1.0))
+        made = bmesh.ops.create_uvsphere(self.bm, u_segments=14, v_segments=9, radius=1.0, matrix=matrix)
+        self._paint(made["verts"], mat)
+
+    def taper(self, foot, head, height, at, mat, sides=12, tilt=None, turn=0.0):
+        """
+        A limb standing on `at`: oval in section, `foot` (width, depth) at the
+        bottom and `head` at the top. `tilt` is (axis, angle) about its foot.
+        """
+        matrix = Matrix.Translation(Vector(at)) @ Matrix.Rotation(turn, 4, "Z")
+        if tilt:
+            matrix = matrix @ Matrix.Rotation(tilt[1], 4, tilt[0])
+
+        made = bmesh.ops.create_cone(
+            self.bm, cap_ends=True, cap_tris=False, segments=sides,
+            radius1=0.5, radius2=0.5, depth=1.0, matrix=Matrix.Translation((0, 0, 0.5)))
+        for vert in made["verts"]:
+            width, depth = foot if vert.co.z < 0.5 else head
+            vert.co = matrix @ Vector((vert.co.x * width, vert.co.y * depth, vert.co.z * height))
+
+        self._paint(made["verts"], mat)
+
+    def spire(self, radius, height, at, mat, sides=6, seed=0, rough=0.18, top=0.0, cap=None, cap_from=0.6):
+        """
+        A horn of rock standing on `at`: rings of `sides` corners that narrow to
+        `top` and are knocked out of true, the same way for the same seed. It
+        keeps its facets, as broken stone does. `cap` paints everything above
+        `cap_from` of the height in another material: snow on a peak.
+        """
+        dice = random.Random(seed)
+        levels = (0.0, 0.3, 0.58, 0.82, 1.0)
+        base = Vector(at)
+        rings = []
+        for level in levels:
+            around = radius + (top - radius) * (level ** 0.8)
+            ring = []
+            for side in range(sides):
+                angle = side * math.tau / sides + dice.uniform(-0.25, 0.25) * rough * 4
+                reach = around * (1 + dice.uniform(-1, 1) * rough) if level > 0 else around
+                ring.append(self.bm.verts.new(base + Vector((
+                    math.cos(angle) * reach, math.sin(angle) * reach,
+                    height * level + (dice.uniform(-1, 1) * rough * height * 0.12 if 0 < level < 1 else 0)))))
+            rings.append(ring)
+
+        rock = self.slot(mat)
+        white = self.slot(cap) if cap else rock
+        for level in range(len(rings) - 1):
+            for side in range(sides):
+                made = self.bm.faces.new((rings[level][side], rings[level][(side + 1) % sides], rings[level + 1][(side + 1) % sides], rings[level + 1][side]))
+                made.material_index = white if levels[level] >= cap_from else rock
+
+        self.bm.faces.new(list(reversed(rings[0]))).material_index = rock
+        self.bm.faces.new(rings[-1]).material_index = white
 
     def blob(self, size, at, mat, seed=0, rough=0.0, turn=0.0, floor=None):
         """
@@ -153,7 +233,7 @@ class Model:
         way for the same seed. `floor` cuts off what would hang below that height.
         """
         matrix = Matrix.Translation(Vector(at)) @ Matrix.Rotation(turn, 4, "Z") @ Matrix.Diagonal((size[0] / 2, size[1] / 2, size[2] / 2, 1.0))
-        made = bmesh.ops.create_icosphere(self.bm, subdivisions=1, radius=1.0, matrix=matrix)
+        made = bmesh.ops.create_icosphere(self.bm, subdivisions=2, radius=1.0, matrix=matrix)
         dice = random.Random(seed)
         for vert in made["verts"]:
             if rough > 0:
@@ -163,8 +243,12 @@ class Model:
 
         self._paint(made["verts"], mat)
 
-    def gable(self, width, depth, height, at, mat, along="X"):
-        """A gabled roof standing on `at`, with its ridge along X or along Y."""
+    def gable(self, width, depth, height, at, mat, along="X", tiles=True):
+        """
+        A gabled roof standing on `at`, with its ridge along X or along Y. A roof
+        big enough to show them is laid with courses of tiles, each lapping the
+        one below, under a ridge beam.
+        """
         w, d = width / 2, depth / 2
         if along == "X":
             points = [(-w, -d, 0), (w, -d, 0), (w, d, 0), (-w, d, 0), (-w, 0, height), (w, 0, height)]
@@ -177,6 +261,32 @@ class Model:
         for face in faces:
             made = self.bm.faces.new([verts[i] for i in face])
             made.material_index = index
+
+        # The slope runs across the ridge: half the span out, the height up.
+        long_way, span = (width, depth) if along == "X" else (depth, width)
+        slope = math.hypot(span / 2, height)
+        if not tiles or slope < 0.18 or long_way < 0.18:
+            return
+
+        pitch = math.atan2(height, span / 2)
+        courses = max(3, int(round(slope / 0.075)))
+        course = slope / courses
+        turn = Matrix.Rotation(0.0 if along == "X" else math.pi / 2, 4, "Z")
+        for side in (-1, 1):
+            for row in range(courses):
+                # A course lies on the slope and sticks out a little over the one below it.
+                along_slope = (row + 0.5) * course - 0.012
+                out = side * (span / 2 - along_slope * math.cos(pitch))
+                up = along_slope * math.sin(pitch) + 0.012
+                tile = (
+                    Matrix.Translation(Vector(at)) @ turn @ Matrix.Translation((0, out, up))
+                    @ Matrix.Rotation(-side * pitch, 4, "X") @ Matrix.Diagonal((long_way + 0.03, course + 0.02, 0.016, 1.0)))
+                made = bmesh.ops.create_cube(self.bm, size=1.0, matrix=tile)
+                self._paint(made["verts"], mat)
+
+        ridge = Matrix.Translation(Vector(at)) @ turn @ Matrix.Translation((0, 0, height + 0.012)) @ Matrix.Diagonal((long_way + 0.05, 0.035, 0.03, 1.0))
+        made = bmesh.ops.create_cube(self.bm, size=1.0, matrix=ridge)
+        self._paint(made["verts"], mat)
 
     def take(self, source, matrix=None, keep=None):
         """
@@ -226,8 +336,30 @@ class Model:
         """Scales everything built so far about the origin: an ogre is a man drawn large."""
         bmesh.ops.scale(self.bm, vec=Vector((factor, factor, factor)), verts=self.bm.verts[:])
 
-    def finish(self):
+    def soften(self):
+        """
+        Rounds every hard edge by `soft` and marks which edges stay corners. A
+        block built by a script has edges like a razor, which nothing built has:
+        the rounding is what catches the light. Shells stay closed.
+        """
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces[:])
+        if self.soft > 0:
+            hard = [edge for edge in self.bm.edges if len(edge.link_faces) == 2 and edge.calc_face_angle(0.0) > HARD_EDGE]
+            if hard:
+                bmesh.ops.bevel(
+                    self.bm, geom=hard, offset=self.soft, offset_type="OFFSET", segments=2, profile=0.5,
+                    affect="EDGES", clamp_overlap=True)
+                bmesh.ops.dissolve_degenerate(self.bm, edges=self.bm.edges[:], dist=1e-6)
+                bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces[:])
+
+        for face in self.bm.faces:
+            face.smooth = True
+
+        for edge in self.bm.edges:
+            edge.smooth = len(edge.link_faces) != 2 or edge.calc_face_angle(0.0) < math.radians(50)
+
+    def finish(self):
+        self.soften()
         mesh = bpy.data.meshes.new(self.name)
         self.bm.to_mesh(mesh)
         self.bm.free()
@@ -236,6 +368,10 @@ class Model:
 
         made = bpy.data.objects.new(self.name, mesh)
         bpy.context.scene.collection.objects.link(made)
+        # A wide flat face keeps its own direction; only the rounding between two faces bends.
+        weighted = made.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
+        weighted.keep_sharp = True
+        weighted.weight = 100
 
         return made
 
@@ -256,12 +392,43 @@ class Staged:
     A building in the four stages it is built in: `base` the ground work,
     `walls`, `roof`, and `extra` the things that finish it. Each stage is its own
     mesh under one empty, named `<name>__S0` .. `<name>__S3`.
+
+    What moves on a building is a part of its own, with its origin on the joint
+    it turns about. It hangs on the root beside the stages, never deeper: the FBX
+    export turns and misplaces a part two levels down. The game raises it with
+    the last stage and takes it down with it. The game moves it by its name (`BuildingLife` in
+    Unity): `<name>__<kind>_<tag>`, with a number at the end where the kind
+    takes one.
+
+        SpinX, SpinY, SpinZ   turns about that axis; the number is degrees a second
+        Flag                  a strip of a flag; the number is its place from the pole
+        Pound                 rises and drops, as a stamp on ore
+        Bob                   floats up and down
+        Sway                  turns to and fro about the upright, as a vane in the wind
+        Swing                 hangs and swings, as a load on a rope
+
+    A marker is a point with no mesh, named the same way: `Smoke` where smoke
+    rises, `Dust` where a stamp comes down.
     """
 
     def __init__(self, root_name, name):
         self.root_name = root_name
+        self.name = name
         self.stages = [Model(name + "__" + stage) for stage in STAGES]
         self.base, self.walls, self.roof, self.extra = self.stages
+        self.movers = []
+        self.markers = []
+
+    def mover(self, kind, tag, pivot, number=None):
+        """A part that moves about `pivot`."""
+        name = "%s__%s_%s" % (self.name, kind, tag) + ("" if number is None else "_%d" % number)
+        model = Model(name)
+        self.movers.append((model, Vector(pivot)))
+
+        return model
+
+    def marker(self, kind, tag, at):
+        self.markers.append(("%s__%s_%s" % (self.name, kind, tag), Vector(at)))
 
     def take(self, source, matrix=None):
         """Adds another object's mesh, each loose piece of it to the stage its main material belongs to."""
@@ -276,8 +443,19 @@ class Staged:
                 model.bm.free()
                 continue
 
+            model.finish().parent = root
+
+        for model, pivot in self.movers:
+            bmesh.ops.translate(model.bm, vec=-pivot, verts=model.bm.verts[:])
             made = model.finish()
             made.parent = root
+            made.location = pivot
+
+        for name, at in self.markers:
+            made = bpy.data.objects.new(name, None)
+            bpy.context.scene.collection.objects.link(made)
+            made.parent = root
+            made.location = at
 
         return root
 
@@ -383,6 +561,7 @@ def export_palette():
             "name": made.name,
             "r": round(color[0], 4), "g": round(color[1], 4), "b": round(color[2], 4),
             "roughness": round(bsdf.inputs["Roughness"].default_value, 3),
+            "metallic": round(bsdf.inputs["Metallic"].default_value, 3),
             "emissionR": round(glow[0], 4), "emissionG": round(glow[1], 4), "emissionB": round(glow[2], 4),
             "emissionStrength": round(bsdf.inputs["Emission Strength"].default_value, 3),
         }
@@ -395,7 +574,7 @@ def export_palette():
 def export_fbx(models, file_name):
     """
     Writes the models, and everything parented under them, for Unity: y up, one
-    unit to a metre, flat-shaded. Nothing is written if a mesh fails the audit.
+    unit to a metre, with the normals the models are shaded by. Nothing is written if a mesh fails the audit.
     """
     failed = audit()
     if failed:
@@ -412,7 +591,7 @@ def export_fbx(models, file_name):
     bpy.ops.export_scene.fbx(
         filepath=os.path.join(MODELS_DIR, file_name), use_selection=True, object_types={"EMPTY", "MESH"},
         axis_forward="-Z", axis_up="Y", apply_scale_options="FBX_SCALE_UNITS",
-        bake_space_transform=True, mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False)
+        bake_space_transform=True, mesh_smooth_type="OFF", use_mesh_modifiers=True, add_leaf_bones=False, bake_anim=False)
     export_palette()
 
 

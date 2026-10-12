@@ -110,11 +110,19 @@ def bush(model, at, size, seed):
     model.blob((size * 0.6, size * 0.6, size * 0.6), (at[0] + size * 0.3, at[1] - size * 0.1, at[2] + size * 0.2), "M_Leaf_Light", seed=seed + 1, rough=0.12, floor=at[2])
 
 
-def banner(model, at, tall, cloth="M_Cloth"):
-    """A pole with a pennant flying to the side."""
-    model.tube(0.008, tall, at, "M_Wood", sides=5)
-    model.tube(0.014, 0.03, (at[0], at[1], at[2] + tall), "M_Metal", sides=5, top=0.0)
-    model.box((0.1, 0.008, 0.06), (at[0] + 0.055, at[1], at[2] + tall - 0.07), cloth)
+def flag(made, tag, at, tall, cloth="M_Cloth", length=0.1, drop=0.06):
+    """
+    A pole with a pennant that flies. The cloth is three strips, numbered from the
+    pole; the game hangs each on the one before it, so a wave runs down the cloth.
+    """
+    made.extra.tube(0.008, tall, at, "M_Wood", sides=5)
+    made.extra.tube(0.014, 0.03, (at[0], at[1], at[2] + tall), "M_Metal", sides=5, top=0.0)
+    strip = length / 3
+    for index in range(3):
+        start = at[0] + 0.006 + index * strip
+        high = drop * (1 - 0.14 * index)
+        part = made.mover("Flag", tag, (start, at[1], at[2] + tall - 0.04), number=index)
+        part.box((strip + 0.003, 0.007, high), (start + strip / 2, at[1], at[2] + tall - 0.04 - high / 2), cloth)
 
 
 def cottage(house, at, size, turn, lit=False):
@@ -144,6 +152,8 @@ def cottage(house, at, size, turn, lit=False):
             spot(0, 0, 0.03 + tall + roof_tall * share), "M_Roof", turn=turn)
     house.roof.box((0.05 * size, 0.05 * size, roof_tall * 0.9), spot(wide * 0.25, deep * 0.12, 0.03 + tall + roof_tall * 0.25), "M_Stone", turn=turn)
     house.roof.box((0.065 * size, 0.065 * size, 0.014), spot(wide * 0.25, deep * 0.12, 0.03 + tall + roof_tall * 1.15), "M_Rock_Dark", turn=turn)
+    if lit:
+        house.marker("Smoke", "hearth%d" % round((x + 1) * 50), spot(wide * 0.25, deep * 0.12, 0.03 + tall + roof_tall * 1.2))
 
     house.extra.box((0.07 * size, 0.016, 0.11 * size), spot(-wide * 0.2, -deep / 2 - 0.008, 0.03), "M_Wood", turn=turn)
     house.extra.box((0.07 * size, 0.014, 0.07 * size), spot(wide * 0.22, -deep / 2 - 0.007, 0.03 + tall * 0.4), "M_Lamp" if lit else "M_Glass", turn=turn)
@@ -186,15 +196,30 @@ def farm():
     fence(extra, (0.58, -0.44, 0.03), (0.58, 0.2, 0.03), posts=5)
     # The scarecrow.
     extra.box((0.016, 0.016, 0.2), (0.3, 0.02, 0.055), "M_Wood")
-    extra.box((0.14, 0.014, 0.014), (0.3, 0.02, 0.2), "M_Wood")
-    extra.box((0.07, 0.03, 0.07), (0.3, 0.02, 0.15), "M_Cloth")
-    extra.blob((0.05, 0.05, 0.05), (0.3, 0.02, 0.27), "M_Straw", seed=3)
     for y in (0.36, 0.44):
         extra.tube(0.045, 0.09, (0.3 - 0.045, y, 0.075), "M_Straw", sides=8, tilt=("Y", math.radians(90)))
     barrel(extra, (-0.5, -0.2, 0.03))
     barrel(extra, (-0.42, -0.24, 0.03))
+    # The weather vane on the barn turns with the wind.
     extra.box((0.012, 0.012, 0.06), (-0.3, 0.14, 0.54), "M_Iron")
-    extra.box((0.08, 0.008, 0.03), (-0.3, 0.14, 0.59), "M_Metal")
+    vane = made.mover("Sway", "vane", (-0.3, 0.14, 0.6))
+    vane.box((0.1, 0.008, 0.03), (-0.3, 0.14, 0.59), "M_Metal")
+    vane.tube(0.014, 0.03, (-0.36, 0.14, 0.605), "M_Metal", sides=4, top=0.0, tilt=("Y", math.radians(-90)))
+    # A wind pump in the corner of the yard: a braced mast and a fan that turns.
+    for x, y in ((0.46, 0.3), (0.54, 0.3), (0.46, 0.38), (0.54, 0.38)):
+        extra.taper((0.016, 0.016), (0.012, 0.012), 0.42, (x, y, 0.03), "M_Wood", sides=4, tilt=("X", math.radians(4 if y < 0.34 else -4)))
+    extra.box((0.1, 0.1, 0.014), (0.5, 0.34, 0.24), "M_Timber")
+    extra.box((0.06, 0.06, 0.03), (0.5, 0.34, 0.44), "M_Iron")
+    extra.box((0.012, 0.14, 0.05), (0.5, 0.43, 0.43), "M_Metal")
+    fan = made.mover("SpinY", "fan", (0.5, 0.3, 0.455), number=170)
+    fan.tube(0.022, 0.03, (0.5, 0.315, 0.455), "M_Iron", sides=8, tilt=("X", math.radians(90)))
+    for index in range(8):
+        fan.taper((0.012, 0.005), (0.05, 0.005), 0.13, (0.5, 0.3, 0.455), "M_Timber" if index % 2 else "M_Wall", sides=4, tilt=("Y", index * math.tau / 8))
+    # The scarecrow shifts on its pole.
+    crow = made.mover("Sway", "scarecrow", (0.3, 0.02, 0.055))
+    crow.box((0.14, 0.014, 0.014), (0.3, 0.02, 0.2), "M_Wood")
+    crow.box((0.07, 0.03, 0.07), (0.3, 0.02, 0.15), "M_Cloth")
+    crow.blob((0.05, 0.05, 0.05), (0.3, 0.02, 0.27), "M_Straw", seed=3)
 
     return made.finish()
 
@@ -225,9 +250,26 @@ def mine():
     roof.gable(0.36, 0.32, 0.1, (0.32, -0.02, 0.54), "M_Roof", along="X")
 
     # The winding wheel, the rails, a loaded cart and the ore that has come up.
-    extra.tube(0.07, 0.02, (0.32, -0.03, 0.4), "M_Iron", sides=10, tilt=("X", math.radians(90)))
+    # The winding wheel turns over the shaft.
+    wheel = made.mover("SpinY", "winder", (0.32, -0.04, 0.4), number=110)
+    wheel.tube(0.07, 0.02, (0.32, -0.03, 0.4), "M_Iron", sides=10, tilt=("X", math.radians(90)))
+    for index in range(4):
+        wheel.taper((0.014, 0.024), (0.014, 0.024), 0.065, (0.32, -0.04, 0.4), "M_Metal", sides=4, tilt=("Y", index * math.tau / 4 + 0.4))
     extra.tube(0.02, 0.024, (0.32, -0.032, 0.45), "M_Metal", sides=6, tilt=("X", math.radians(90)))
     extra.box((0.012, 0.012, 0.16), (0.32, -0.02, 0.2), "M_Iron")
+    # The stamp that breaks the ore: an iron head on a shaft, lifted in its frame and let fall on the block.
+    for x in (0.03, 0.19):
+        extra.box((0.03, 0.03, 0.34), (x, -0.36, 0.04), "M_Wood")
+    extra.box((0.2, 0.04, 0.03), (0.11, -0.36, 0.36), "M_Wood")
+    extra.box((0.2, 0.03, 0.02), (0.11, -0.36, 0.24), "M_Timber")
+    extra.box((0.12, 0.12, 0.05), (0.11, -0.36, 0.04), "M_Rock_Dark")
+    for index, (x, y) in enumerate(((0.07, -0.4), (0.15, -0.41), (0.12, -0.31))):
+        extra.blob((0.045, 0.045, 0.035), (x, y, 0.1), "M_Metal" if index == 1 else "M_Rock", seed=index + 21, rough=0.16)
+    stamp = made.mover("Pound", "stamp", (0.11, -0.36, 0.09))
+    stamp.box((0.075, 0.075, 0.075), (0.11, -0.36, 0.09), "M_Iron")
+    stamp.box((0.022, 0.022, 0.25), (0.11, -0.36, 0.165), "M_Timber")
+    stamp.box((0.05, 0.05, 0.02), (0.11, -0.36, 0.3), "M_Iron")
+    made.marker("Dust", "stamp", (0.11, -0.36, 0.1))
     for x in (-0.22, -0.14):
         extra.box((0.012, 0.36, 0.012), (x, -0.28, 0.04), "M_Iron")
     for y in (-0.42, -0.32, -0.22, -0.12):
@@ -271,16 +313,21 @@ def sawmill():
 
     door(extra, (-0.3, -0.13, 0.07), "front")
     window(extra, (-0.09, 0.12, 0.17), "right")
-    # The log on the table and the blade through it.
+    # The log on the table and the blade that turns through it.
     extra.tube(0.05, 0.38, (0.1, 0.11, 0.22), "M_Timber", sides=8, tilt=("Y", math.radians(90)))
-    extra.tube(0.14, 0.014, (0.33, 0.118, 0.19), "M_Iron", sides=14, tilt=("X", math.radians(90)))
-    extra.tube(0.03, 0.02, (0.33, 0.121, 0.3), "M_Metal", sides=6, tilt=("X", math.radians(90)))
-    # The water wheel on the cabin's side.
-    extra.tube(0.2, 0.05, (-0.515, 0.12, 0.27), "M_Wood", sides=12, tilt=("Y", math.radians(-90)))
-    extra.tube(0.15, 0.054, (-0.513, 0.12, 0.27), "M_Timber", sides=12, tilt=("Y", math.radians(-90)))
+    blade = made.mover("SpinY", "blade", (0.33, 0.111, 0.19), number=560)
+    blade.tube(0.14, 0.014, (0.33, 0.118, 0.19), "M_Iron", sides=14, tilt=("X", math.radians(90)))
+    for index in range(14):
+        blade.taper((0.03, 0.012), (0.004, 0.012), 0.022, (0.33 + math.cos(index * math.tau / 14) * 0.136, 0.111, 0.19 + math.sin(index * math.tau / 14) * 0.136), "M_Iron", sides=4, tilt=("Y", math.pi / 2 - index * math.tau / 14 + 0.5))
+    blade.tube(0.03, 0.02, (0.33, 0.121, 0.19), "M_Metal", sides=6, tilt=("X", math.radians(90)))
+    # The water wheel on the cabin's side turns in the race.
+    wheel = made.mover("SpinX", "wheel", (-0.54, 0.12, 0.27), number=48)
+    wheel.tube(0.2, 0.05, (-0.515, 0.12, 0.27), "M_Wood", sides=12, tilt=("Y", math.radians(-90)))
+    wheel.tube(0.15, 0.054, (-0.513, 0.12, 0.27), "M_Timber", sides=12, tilt=("Y", math.radians(-90)))
     for index in range(8):
         angle = index * math.tau / 8
-        extra.box((0.07, 0.03, 0.012), (-0.54, 0.12 + math.cos(angle) * 0.2, 0.264 + math.sin(angle) * 0.2), "M_Timber")
+        wheel.box((0.07, 0.03, 0.012), (-0.54, 0.12 + math.cos(angle) * 0.2, 0.264 + math.sin(angle) * 0.2), "M_Timber")
+    made.marker("Smoke", "chimney", (-0.42, 0.26, 0.64))
     # Logs waiting, planks done, and the stump where the axe lives.
     for index, (y, z) in enumerate(((-0.36, 0.05), (-0.265, 0.05), (-0.17, 0.05), (-0.31, 0.13), (-0.22, 0.13), (-0.265, 0.21))):
         extra.tube(0.047, 0.5, (0.02, y, z + 0.047), "M_Timber" if index in (3, 5) else "M_Wood", sides=8, tilt=("Y", math.radians(90)))
@@ -361,7 +408,8 @@ def masons_guild():
     plate(extra, 0.2, 0.05, (-0.2, -0.11, 0.38), "front", "M_Metal", thick=0.02)
     for x in (-0.42, 0.02):
         window(extra, (x, -0.11, 0.2), "front", lit=True)
-    banner(extra, (0.16, -0.12, 0.1), 0.5)
+    flag(made, "guild", (0.16, -0.12, 0.1), 0.5)
+    made.marker("Smoke", "forge", (-0.4, 0.3, 0.8))
     # The yard: blocks cut and stacked, and one hanging from the crane.
     for index, (x, y, z, size, turn) in enumerate((
             (0.34, -0.3, 0.07, (0.2, 0.15, 0.1), 0.0), (0.35, -0.3, 0.17, (0.17, 0.13, 0.09), 0.25),
@@ -371,8 +419,9 @@ def masons_guild():
     extra.box((0.06, 0.06, 0.66), (0.46, 0.3, 0.07), "M_Wood")
     extra.box((0.4, 0.05, 0.05), (0.32, 0.3, 0.66), "M_Wood")
     extra.tube(0.012, 0.3, (0.44, 0.3, 0.4), "M_Timber", sides=4, tilt=("Y", math.radians(-52)))
-    extra.box((0.012, 0.012, 0.26), (0.17, 0.3, 0.4), "M_Iron")
-    extra.box((0.13, 0.11, 0.1), (0.17, 0.3, 0.3), "M_Wall")
+    load = made.mover("Swing", "load", (0.17, 0.3, 0.66))
+    load.box((0.012, 0.012, 0.26), (0.17, 0.3, 0.4), "M_Iron")
+    load.box((0.13, 0.11, 0.1), (0.17, 0.3, 0.3), "M_Wall")
     # A statue half out of its block.
     extra.box((0.12, 0.12, 0.05), (-0.46, -0.32, 0.07), "M_Stone")
     extra.box((0.08, 0.07, 0.13), (-0.46, -0.32, 0.12), "M_Rock_Light")
@@ -418,9 +467,10 @@ def observatory():
     # An armillary sphere on a pedestal: three gold rings round a small globe.
     extra.tube(0.05, 0.12, (-0.42, -0.24, 0.1), "M_Stone", sides=6)
     extra.blob((0.06, 0.06, 0.06), (-0.42, -0.24, 0.32), "M_Glass", seed=2)
-    extra.tube(0.09, 0.012, (-0.42, -0.24, 0.314), "M_Metal", sides=12)
-    extra.tube(0.09, 0.012, (-0.42 - 0.006, -0.24, 0.32), "M_Metal", sides=12, tilt=("Y", math.radians(90)))
-    extra.tube(0.09, 0.012, (-0.42, -0.24 - 0.006, 0.32), "M_Metal", sides=12, tilt=("X", math.radians(-90)))
+    rings = made.mover("SpinZ", "armillary", (-0.42, -0.24, 0.32), number=36)
+    rings.tube(0.09, 0.012, (-0.42, -0.24, 0.314), "M_Metal", sides=12)
+    rings.tube(0.09, 0.012, (-0.42 - 0.006, -0.24, 0.32), "M_Metal", sides=12, tilt=("Y", math.radians(90)))
+    rings.tube(0.09, 0.012, (-0.42, -0.24 - 0.006, 0.32), "M_Metal", sides=12, tilt=("X", math.radians(-90)))
     lantern(extra, (0.2, -0.42, 0.05), tall=0.2)
     bush(extra, (-0.3, 0.38, 0.1), 0.12, 5)
 
@@ -517,11 +567,11 @@ def converter():
 
     # The vessel where the poison turns into clean air, the pipes that feed it, and what it gives off.
     extra.tube(0.2, 0.76, (0, 0, 0.26), "M_Glow", sides=10)
-    extra.dome(0.11, (0, 0, 1.55), "M_Glow")
+    made.mover("Bob", "orb", (0, 0, 1.55)).dome(0.11, (0, 0, 1.55), "M_Glow")
     for angle in (45, 135, 225, 315):
         x, y = math.cos(math.radians(angle)) * 0.46, math.sin(math.radians(angle)) * 0.46
         extra.box((0.28, 0.05, 0.05), (x * 0.6, y * 0.6, 0.46), "M_Iron", turn=math.radians(angle))
-        extra.blob((0.07, 0.07, 0.09), (x, y, 0.88), "M_Glow", seed=int(angle), rough=0.05)
+        made.mover("Bob", "spark%d" % angle, (x, y, 0.88)).blob((0.07, 0.07, 0.09), (x, y, 0.88), "M_Glow", seed=int(angle), rough=0.05)
     for angle in (0, 90, 180, 270):
         x, y = math.cos(math.radians(angle)) * 0.5, math.sin(math.radians(angle)) * 0.5
         extra.tube(0.04, 0.16, (x, y, 0.07), "M_Iron", sides=6)
@@ -572,8 +622,7 @@ def stronghold(castle):
         lantern(extra, (x, -reach - 0.06, 0.04), tall=0.2)
     for x in (-reach, reach):
         for y in (-reach, reach):
-            extra.tube(0.006, 0.14, (x, y, 0.58), "M_Wood", sides=5)
-            extra.box((0.07, 0.006, 0.04), (x + 0.04, y, 0.67), "M_Cloth")
+            flag(made, "tower%d%d" % (x > 0, y > 0), (x, y, 0.58), 0.16, length=0.09, drop=0.05)
 
     return made.finish()
 

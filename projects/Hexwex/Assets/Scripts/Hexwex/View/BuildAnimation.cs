@@ -34,6 +34,8 @@ namespace Hexwex.View
         private readonly Transform _model;
         private readonly Vector3 _modelScale;
         private readonly Stage[] _stages = new Stage[4];
+        /// <summary>What moves on the building: it hangs beside the stages and goes up with the last of them.</summary>
+        private readonly List<Stage> _fittings = new List<Stage>();
         private readonly Transform _scaffold;
         private readonly List<Transform> _dust = new List<Transform>();
         private float _elapsed;
@@ -70,6 +72,18 @@ namespace Hexwex.View
                     {
                         _stages[index] = new Stage { Transform = part, Position = part.localPosition, Scale = part.localScale };
                         _hasStages = true;
+                    }
+                }
+            }
+
+            if (_hasStages)
+            {
+                Transform home = System.Array.Find(_stages, stage => stage.Transform != null).Transform.parent;
+                foreach (Transform part in home)
+                {
+                    if (part.name.Contains("__") && !System.Array.Exists(_stages, stage => stage.Transform == part))
+                    {
+                        _fittings.Add(new Stage { Transform = part, Position = part.localPosition, Scale = part.localScale });
                     }
                 }
             }
@@ -115,6 +129,14 @@ namespace Hexwex.View
                 {
                     stage.Transform.localPosition = stage.Position;
                     stage.Transform.localScale = stage.Scale;
+                }
+            }
+
+            foreach (Stage fitting in _fittings)
+            {
+                if (fitting.Transform != null)
+                {
+                    fitting.Transform.localScale = fitting.Scale;
                 }
             }
 
@@ -218,6 +240,16 @@ namespace Hexwex.View
                 stage.Transform.localScale = Vector3.Scale(stage.Scale, scale);
                 // The offset is in the world's up, whatever way the model is turned.
                 stage.Transform.localPosition = stage.Position + stage.Transform.parent.InverseTransformVector(offset);
+            }
+
+            // What moves on the building pops into place with the last stage.
+            float last = EaseOutBack(Mathf.Clamp01((elapsed - StageStart[3]) / StageLength[3]));
+            foreach (Stage fitting in _fittings)
+            {
+                if (fitting.Transform != null)
+                {
+                    fitting.Transform.localScale = fitting.Scale * last;
+                }
             }
         }
 

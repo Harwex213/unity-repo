@@ -40,7 +40,7 @@ HOVER = 0.34
 
 
 def marker(name):
-    return Model("Mark_" + name)
+    return Model("Mark_" + name, soft=0.005)
 
 
 def flying_rock(model, radius, top_mat, under_mat, seed=0.0):
