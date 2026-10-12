@@ -538,7 +538,7 @@ namespace Hexwex.View
             bar.name = "Health";
             bar.gameObject.SetActive(false);
 
-            return new UnitVisual { Root = t, Model = model, Pose = model != null ? new FigurePose(model, unit.Id) : null, Bar = bar, BarWidth = unit.IsStructure ? 0.9f : 0.55f, Height = height, Yaw = isPlayer ? 180f : 0f };
+            return new UnitVisual { Root = t, Model = model, Pose = model != null ? new FigurePose(model, unit.Id, unit.Stats.Key) : null, Bar = bar, BarWidth = unit.IsStructure ? 0.9f : 0.55f, Height = height, Yaw = isPlayer ? 180f : 0f };
         }
 
         /* ---------- shots ---------- */
