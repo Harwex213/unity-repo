@@ -171,6 +171,8 @@ namespace Hexwex.View
 
         private void Start()
         {
+            // The island's and the battle's sky; the globe hangs in the night instead.
+            _islandSky = worldCamera.backgroundColor;
             hud.Bind(this);
             NewGame(nickname);
 
@@ -649,6 +651,8 @@ namespace Hexwex.View
             islandView.gameObject.SetActive(!ShowWorld && !ShowBattle);
             globeView.gameObject.SetActive(ShowWorld && !ShowBattle);
             battleView.gameObject.SetActive(ShowBattle);
+            // The globe hangs in the night, as in the prototype; the island and the battle are under the day sky.
+            worldCamera.backgroundColor = ShowWorld && !ShowBattle ? GlobeView.Sky : _islandSky;
         }
 
         /// <summary>
@@ -813,9 +817,6 @@ namespace Hexwex.View
                 {
                     _islandOrbit = cameraRig.Current;
                     _islandSunRotation = sun.transform.rotation;
-                    // The globe hangs in the night, as in the prototype.
-                    _islandSky = worldCamera.backgroundColor;
-                    worldCamera.backgroundColor = GlobeView.Sky;
                     WorldCell home = Session.World.Get(Session.Human.CellId);
                     Vector3 direction = home != null ? globeView.DirectionOf(home) : Vector3.back;
                     // Seen a little from the side, so what stands on the cells reads as standing.
@@ -831,7 +832,6 @@ namespace Hexwex.View
                 {
                     _globeOrbit = cameraRig.Current;
                     sun.transform.rotation = _islandSunRotation;
-                    worldCamera.backgroundColor = _islandSky;
                     if (_islandOrbit.HasValue)
                     {
                         cameraRig.Current = _islandOrbit.Value;

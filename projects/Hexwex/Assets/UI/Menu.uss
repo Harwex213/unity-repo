@@ -9,12 +9,19 @@
     color: rgb(236, 232, 220);
     opacity: 1;
     transition-property: opacity;
-    transition-duration: 0.7s;
-    transition-timing-function: ease-in;
+    transition-duration: 0.9s;
+    transition-timing-function: ease-out;
+}
+
+/* The menu comes in as the prototype's does: it fades up over the painting. */
+.main-menu.entering {
+    opacity: 0;
 }
 
 /* A start fades the menu out over the freshly created game. */
 .main-menu.leaving {
+    transition-duration: 0.7s;
+    transition-timing-function: ease-in;
     opacity: 0;
 }
 
@@ -26,6 +33,11 @@
     right: 0;
     bottom: 0;
     background-color: rgba(4, 6, 14, 0.84);
+}
+
+/* The painting carries its own shade; the plain one stays for when it is missing. */
+.main-menu.painted .main-menu__shade {
+    background-color: rgba(0, 0, 0, 0);
 }
 
 /* Two dark bands with a gold line, as in a cutscene. */
@@ -75,6 +87,15 @@
 .main-menu__title-block {
     width: 800px;
     align-items: flex-start;
+    transition-property: translate, opacity;
+    transition-duration: 0.9s;
+    transition-timing-function: ease-out;
+}
+
+/* The title slides in from the left as the menu opens. */
+.main-menu.entering .main-menu__title-block {
+    translate: -60px 0;
+    opacity: 0;
 }
 
 .main-menu__heading {
@@ -149,6 +170,14 @@
 .main-menu__hang {
     width: 560px;
     align-self: stretch;
+    transition-property: translate;
+    transition-duration: 1.1s;
+    transition-timing-function: ease-out-back;
+}
+
+/* The slab drops on its chains as the menu opens, and settles with a little swing. */
+.main-menu.entering .main-menu__hang {
+    translate: 0 -140px;
 }
 
 .main-menu__chains {

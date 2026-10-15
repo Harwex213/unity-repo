@@ -56,16 +56,7 @@ namespace Hexwex.View
             _root.pickingMode = PickingMode.Ignore;
 
             _plates = Layer("plates");
-
-            VisualElement top = El("top-bar", _root);
-            _resources = El("resources", top);
-            _status = El("status", top);
-
-            VisualElement middle = Layer("middle");
-            _players = El("players", middle);
-            _hexPanel = El("hex-panel", middle);
-
-            _bottom = El("bottom-bar", _root);
+            BuildFrame();
 
             _notice = new Label();
             _notice.AddToClassList("notice");
@@ -94,7 +85,7 @@ namespace Hexwex.View
         {
             switch (stepId)
             {
-                case GuideStepId.Build: return _bottom != null ? _bottom.Q(className: "cards") : null;
+                case GuideStepId.Build: return _buildRow != null ? _buildRow.Q(className: "cards") : null;
                 case GuideStepId.Tax: return _resources;
                 case GuideStepId.Scout: return _hexPanel;
                 case GuideStepId.Battle: return _bottom != null ? _bottom.Q(className: "hint") : null;
@@ -154,16 +145,30 @@ namespace Hexwex.View
             }
 
             RefreshResources();
-            RefreshStatus();
+            RefreshTurn();
+            RefreshTopRight();
+            RefreshToxic();
             RefreshPlayers();
             RefreshHexPanel();
             RefreshBottom();
+            RefreshEndTurn();
             RefreshPlates();
             RefreshOverlay();
         }
 
         private void Update()
         {
+            if (_root != null && _game != null && Session != null)
+            {
+                PlaceHexPanel();
+            }
+
+            // A hover card whose owner was rebuilt away has nothing to stand over.
+            if (_hintOwner != null && _hintOwner.panel == null)
+            {
+                CloseHint(_hintOwner);
+            }
+
             if (_notice != null && _notice.style.display == DisplayStyle.Flex && Time.unscaledTime > _noticeUntil)
             {
                 _notice.style.display = DisplayStyle.None;
@@ -196,84 +201,53 @@ namespace Hexwex.View
             }
         }
 
-        private void RefreshResources()
-        {
-            _resources.Clear();
-            _chipByResource.Clear();
-            Player player = Session.Human;
-            TaxPlan plan = Session.HumanTaxPlan;
-
-            foreach (ResourceInfo info in ResourceTable.All)
-            {
-                VisualElement chip = El("chip", _resources);
-                _chipByResource[info.Id] = chip;
-                chip.tooltip = info.Label + ": " + info.Feeds;
-                Icon(info.Icon, "chip-icon", chip);
-
-                // While the collection plays, the counters grow as the motes land.
-                int amount = player.Resources[info.Id] + Landed(info.Id);
-                // In the tax phase the power shown is what is still free to spend.
-                string text = info.Id == ResourceId.Power && plan != null ? plan.PowerLeft(player) + "/" + amount : amount.ToString();
-                Text(text, info.Kind == ResourceKind.Negative ? "chip-value negative" : "chip-value", chip);
-            }
-        }
-
-        private void RefreshStatus()
-        {
-            _status.Clear();
-            // The meter is the island's own reckoning: a rival's island shows the rival's.
-            Player player = _game.ViewedPlayer;
-            MeterZone zone = ToxicSlot.GetZone(ToxicSlot.MeterLevel(player.ToxicMeter));
-
-            VisualElement meter = El("meter", _status);
-            VisualElement meterHead = El("row", meter);
-            Icon("toxicity", "chip-icon", meterHead);
-            Text(player.ToxicMeter + " / " + ToxicSlot.MeterMax + " · " + zone.Status, "meter-label", meterHead);
-            VisualElement bar = El("meter-bar", meter);
-            _meterBar = bar;
-            VisualElement fill = El("meter-fill level-" + zone.Level, bar);
-            fill.style.width = Length.Percent(100f * player.ToxicMeter / ToxicSlot.MeterMax);
-
-            Button techs = Btn("Технологии", "small-button", () =>
-            {
-                _techsOpen = true;
-                RefreshOverlay();
-            }, _status);
-            techs.SetEnabled(Session.Stage == GameStage.Play);
-
-            Button page = Btn(_game.ShowWorld ? "К острову" : "Карта мира", "small-button", _game.ToggleWorld, _status);
-            page.SetEnabled(_game.CanSwitchPage);
-
-            string phase = Session.Stage == GameStage.Setup ? "Расстановка"
-                : Session.Phase == Phase.Build ? "Фаза строительства"
-                : Session.Phase == Phase.Tax ? "Фаза сбора налогов"
-                : Session.Phase == Phase.Scout ? "Фаза разведки"
-                : "Фаза зачистки";
-            Text("Ход " + Session.Turn + " · " + phase, "turn", _status);
-        }
-
         private void RefreshPlayers()
         {
             _players.Clear();
+            _players.style.display = _game.ShowBattle ? DisplayStyle.None : DisplayStyle.Flex;
 
             // A click on a row opens that player's island, read-only. The player's own row comes back home.
             bool canVisit = _game.CanSwitchPage;
+            bool isSetup = Session.Stage != GameStage.Play;
             foreach (Player player in Session.Players)
             {
                 Player current = player;
+                Color color = Props.Hex(player.Color);
                 Button row = new Button(() => _game.ViewIsland(current.Id));
                 row.AddToClassList("player");
                 row.EnableInClassList("eliminated", player.Eliminated);
                 row.EnableInClassList("viewed", canVisit && !_game.ShowWorld && player == _game.ViewedPlayer);
-                row.tooltip = player.Eliminated ? "Выбыл из игры" : player.IsHuman ? "Ваш остров" : "Посмотреть остров";
                 row.SetEnabled(canVisit);
                 _players.Add(row);
-                VisualElement swatch = El("swatch", row);
-                swatch.style.backgroundColor = Props.Hex(player.Color);
+                VisualElement banner = El("player-banner", row);
+                banner.style.backgroundColor = color;
                 VisualElement body = El("player-body", row);
-                Text(player.Nickname, "player-name", body);
-                Text("зданий " + GameOver.BuildingCount(player) + " · армия " + player.Army + " · техн. " + player.Techs, "player-meta", body);
+                Label name = Text(player.Nickname, "player-name", body);
+                name.style.color = color;
+
+                // The army, the buildings and the technologies, each by its icon, as the prototype's row has them.
+                VisualElement stats = El("player-stats", body);
+                PlayerStat(stats, player.Army, "army");
+                PlayerStat(stats, GameOver.BuildingCount(player), "building");
+                PlayerStat(stats, player.Techs, "science");
+
+                // Before the game starts a check mark shows whose stronghold stands.
+                if (isSetup)
+                {
+                    VisualElement check = El(player.StrongholdHexId != null ? "player-check done" : "player-check", row);
+                    if (player.StrongholdHexId != null)
+                    {
+                        Icon("check", "player-check-icon", check);
+                    }
+                }
             }
+        }
+
+        private void PlayerStat(VisualElement parent, int amount, string icon)
+        {
+            VisualElement stat = El("player-stat", parent);
+            Text(amount.ToString(), "player-stat-value", stat);
+            Icon(icon, "player-stat-icon", stat);
         }
 
         /// <summary>What the hex under the pointer, or the selected hex, is and what it rolls.</summary>
@@ -426,8 +400,18 @@ namespace Hexwex.View
         private void RefreshBottom()
         {
             _bottom.Clear();
-            _bottom.style.display = Session.Outcome == null ? DisplayStyle.Flex : DisplayStyle.None;
+            bool isBuilding = false;
+            RefreshBottomContent(ref isBuilding);
+            RefreshBuildRow(isBuilding && Session.Outcome == null);
+            // The message bar shows only when it has something to say, over the building bar when that is up.
+            _bottom.style.bottom = isBuilding ? 224f : 16f;
+            // In battle there are no resources beside it, so the bar may run wider.
+            _bottom.EnableInClassList("wide", _game.ShowBattle);
+            _bottom.style.display = Session.Outcome == null && _bottom.childCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        }
 
+        private void RefreshBottomContent(ref bool isBuilding)
+        {
             if (_game.IsReadonly && !_game.ShowWorld && !_game.ShowBattle)
             {
                 Text("Остров игрока " + _game.ViewedPlayer.Nickname + " — только просмотр", "hint", _bottom);
@@ -438,7 +422,7 @@ namespace Hexwex.View
 
             if (Session.Stage == GameStage.Setup)
             {
-                Text("Поставьте твердыню на свободный гекс своего острова.", "hint", _bottom);
+                Text(Session.Human.StrongholdHexId == null ? "Кликните свободный гекс, чтобы поставить твердыню." : "Твердыня стоит. Кликните другой гекс, чтобы перенести её.", "hint", _bottom);
                 TextField seed = new TextField { value = _game.PendingNickname ?? "" };
                 seed.AddToClassList("seed-field");
                 seed.RegisterValueChangedCallback(change => _game.PendingNickname = change.newValue);
@@ -466,7 +450,6 @@ namespace Hexwex.View
             if (Session.Phase == Phase.Scout)
             {
                 Text("Фаза разведки идёт на карте мира.", "hint", _bottom);
-                Btn("Закончить разведку", "end-button", _game.EndPhase, _bottom);
 
                 return;
             }
@@ -474,54 +457,19 @@ namespace Hexwex.View
             if (Session.Phase == Phase.Tax)
             {
                 Text("Кубики брошены. Выберите здание, чтобы сменить грань за власть.", "hint", _bottom);
-                Btn(_game.Collecting ? "Сбор…" : "Собрать налоги", "end-button", _game.EndPhase, _bottom).SetEnabled(!_game.Collecting);
 
                 return;
             }
 
-            Player player = Session.Human;
-            int discount = Session.Effects.StoneDiscount;
-            VisualElement cards = El("cards", _bottom);
-
-            foreach (Building building in Buildings.All)
-            {
-                if (!Buildings.IsUnlocked(player, building))
-                {
-                    continue;
-                }
-
-                Building current = building;
-                string classes = "card";
-                classes += _game.ArmedBuilding == building.Id ? " armed" : "";
-                classes += Buildings.CanAfford(player.Resources, building, discount) ? "" : " poor";
-
-                Button card = new Button(() => _game.ArmBuilding(current.Id));
-                foreach (string name in classes.Split(' '))
-                {
-                    card.AddToClassList(name);
-                }
-
-                cards.Add(card);
-                Icon(building.ArtName, "card-icon", card);
-                Text(building.Label, "card-label", card);
-
-                BuildCost cost = Buildings.EffectiveCost(building, discount);
-                VisualElement costRow = El("row", card);
-                AddCost(costRow, "stone", cost.Stone);
-                AddCost(costRow, "wood", cost.Wood);
-                AddCost(costRow, "hammers", cost.Hammers);
-            }
-
-            VisualElement tools = El("tools", _bottom);
-            Btn("Снос", _game.DemolishMode ? "small-button armed" : "small-button", _game.ToggleDemolish, tools);
-            Btn(_game.SoilMode ? "Отменить очистку" : "Очистка почвы", _game.SoilMode ? "small-button armed" : "small-button", _game.ToggleSoilCleanse, tools);
-
+            isBuilding = true;
             if (_game.SoilMode)
             {
                 Text(_game.SoilSacrificeHexId == null ? "Выберите гекс, который будет уничтожен." : "Выберите гекс, который станет чистым.", "hint", _bottom);
             }
-
-            Btn("Закончить строительство", "end-button", _game.EndPhase, _bottom);
+            else if (_game.DemolishMode)
+            {
+                Text("Кликните по гексу со зданием, чтобы снести его.", "hint", _bottom);
+            }
         }
 
         /// <summary>
@@ -678,7 +626,6 @@ namespace Hexwex.View
             if (!Session.IsExplorationOpen)
             {
                 Text("Карта мира. Разведка и перелёт откроются в фазе разведки.", "hint", _bottom);
-                Btn("К острову", "end-button", _game.ToggleWorld, _bottom);
 
                 return;
             }
@@ -689,7 +636,6 @@ namespace Hexwex.View
                     : "Разведайте гекс на границе тумана и перелетите в соседний. Остров, который остался на месте, оставит в гексе свой яд.",
                 "hint",
                 _bottom);
-            Btn("Закончить разведку", "end-button", _game.EndPhase, _bottom);
         }
 
         /// <summary>Who holds the islands of the world: the six factions, their strengths and weaknesses.</summary>

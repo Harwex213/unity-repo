@@ -24,15 +24,23 @@ namespace Hexwex.View
     /// gold-rimmed plates and the exit at its foot. It covers the whole game, and
     /// the game takes no input while it is open.
     ///
-    /// The prototype shows a painted picture behind the menu. Here the picture is
-    /// the game itself: the island of the waiting session turns slowly under a
-    /// dark shade, between two dark bands as in a cutscene. A start fades the
-    /// menu out over the freshly created game.
+    /// Behind it is the prototype's painting of the castle in the clouds, alive
+    /// as the prototype has it: clouds drift, the sun throws rays, banners sway,
+    /// torches flicker, motes rise and the picture follows the pointer a little.
+    /// It lies between two dark bands, as in a cutscene. A start fades the menu
+    /// and the painting out over the freshly created game.
     /// </summary>
     public sealed class MainMenu : MonoBehaviour
     {
         /// <summary>The open menu fades out over this time before the game takes the input.</summary>
         private const float FadeOutSeconds = 0.7f;
+        /// <summary>The painting fades in over this time, a little slower than the menu over it, as in the prototype.</summary>
+        private const float BackdropFadeInSeconds = 1.2f;
+        /// <summary>How fast the parallax catches up with the pointer, per second.</summary>
+        private const float PointerEase = 3.6f;
+
+        private static readonly int PointerId = Shader.PropertyToID("_Pointer");
+        private static readonly int FadeId = Shader.PropertyToID("_Fade");
 
         private static readonly string[] DifficultyLabels = { "Лёгкая", "Средняя", "Сложная" };
 
@@ -51,6 +59,10 @@ namespace Hexwex.View
         private int _activeIndex = 1;
         private float _closeAt;
         private Action _rebuildOverlay;
+        private Transform _backdrop;
+        private Material _backdropMaterial;
+        private Vector2 _pointer;
+        private float _openedAt;
 
         private enum MenuState
         {
@@ -92,19 +104,110 @@ namespace Hexwex.View
         public void Open()
         {
             _state = MenuState.Open;
+            _openedAt = Time.unscaledTime;
             _root.style.display = DisplayStyle.Flex;
             _root.RemoveFromClassList("leaving");
+            // The menu comes in: it fades up, the title slides in and the slab drops on its chains.
+            _root.AddToClassList("entering");
+            _root.schedule.Execute(() => _root.RemoveFromClassList("entering")).StartingIn(40);
             CloseOverlay();
-            SetActive(_activeIndex);
+            // With the learn guide on, the keyboard starts on the prologue, as the prototype's does.
+            bool isGuideOn = _game != null && _game.LearnGuide != null && _game.LearnGuide.Guide.Enabled;
+            SetActive(isGuideOn ? 0 : _activeIndex);
             _hud.SetVisible(false);
+        }
+
+        /// <summary>
+        /// Draws the prototype's painted background, or keeps it out of the way.
+        /// The painting and its life are a shader (<c>Hexwex/MenuBackdrop</c>) on a
+        /// quad that fills the camera's view just past its near plane, so it covers
+        /// the island turning behind. It fades in as the menu opens and out with it.
+        /// </summary>
+        private void UpdateBackdrop()
+        {
+            Camera view = Camera.main;
+            bool isShown = _state != MenuState.Closed && view != null && (_backdrop != null || BuildBackdrop());
+            if (!isShown)
+            {
+                if (_backdrop != null && _backdrop.gameObject.activeSelf)
+                {
+                    _backdrop.gameObject.SetActive(false);
+                }
+
+                return;
+            }
+
+            if (_backdrop.parent != view.transform)
+            {
+                _backdrop.SetParent(view.transform, false);
+            }
+
+            _backdrop.gameObject.SetActive(true);
+            float distance = view.nearClipPlane + 0.02f;
+            float tall = 2f * distance * Mathf.Tan(view.fieldOfView * 0.5f * Mathf.Deg2Rad) * 1.02f;
+            _backdrop.localPosition = Vector3.forward * distance;
+            _backdrop.localRotation = Quaternion.identity;
+            _backdrop.localScale = new Vector3(tall * view.aspect, tall, 1f);
+
+            // The parallax follows the pointer, eased. The prototype counts y down the screen.
+            Mouse mouse = Mouse.current;
+            if (mouse != null && Screen.width > 0 && Screen.height > 0)
+            {
+                Vector2 at = mouse.position.ReadValue();
+                // A pointer off the window says nothing about where the player looks: it counts as at the edge.
+                Vector2 target = new Vector2(Mathf.Clamp(at.x / Screen.width * 2f - 1f, -1f, 1f), Mathf.Clamp(1f - at.y / Screen.height * 2f, -1f, 1f));
+                _pointer += (target - _pointer) * (1f - Mathf.Exp(-PointerEase * Time.unscaledDeltaTime));
+            }
+
+            float now = Time.unscaledTime;
+            float fade = _state == MenuState.Leaving
+                ? Mathf.Clamp01((_closeAt - now) / FadeOutSeconds)
+                : Mathf.Clamp01((now - _openedAt) / BackdropFadeInSeconds);
+            _backdropMaterial.SetVector(PointerId, _pointer);
+            _backdropMaterial.SetFloat(FadeId, fade);
+        }
+
+        private bool BuildBackdrop()
+        {
+            Shader shader = Resources.Load<Shader>("Shaders/HexwexMenuBackdrop");
+            Texture2D art = Resources.Load<Texture2D>("Menu/menu-bg");
+            Texture2D mask = Resources.Load<Texture2D>("Menu/menu-bg-mask");
+            if (shader == null || art == null || mask == null)
+            {
+                return false;
+            }
+
+            _backdropMaterial = new Material(shader) { name = "M_MenuBackdrop" };
+            _backdropMaterial.SetTexture("_Art", art);
+            _backdropMaterial.SetTexture("_Mask", mask);
+            _backdropMaterial.SetFloat("_ArtAspect", (float)art.width / art.height);
+
+            Mesh quad = new Mesh { name = "Backdrop" };
+            quad.SetVertices(new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f) });
+            quad.SetTriangles(new[] { 0, 2, 1, 1, 2, 3 }, 0);
+            quad.bounds = new Bounds(Vector3.zero, Vector3.one * 1000f);
+
+            GameObject made = new GameObject("Menu backdrop");
+            made.AddComponent<MeshFilter>().sharedMesh = quad;
+            MeshRenderer renderer = made.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = _backdropMaterial;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            _backdrop = made.transform;
+            _root.AddToClassList("painted");
+
+            return true;
         }
 
         private void Update()
         {
+            UpdateBackdrop();
+
             if (_state == MenuState.Leaving && Time.unscaledTime >= _closeAt)
             {
                 _state = MenuState.Closed;
                 _root.style.display = DisplayStyle.None;
+                UpdateBackdrop();
 
                 return;
             }
@@ -207,7 +310,7 @@ namespace Hexwex.View
             AddEntry(nav, "Эпилог", "Авторы", "population", OpenCredits);
 
             Add(inner, "main-menu__rule");
-            Button exit = new Button(Exit) { text = "Выход" };
+            Button exit = new Button(Exit) { text = "Выход", tooltip = "Выйти из игры" };
             exit.AddToClassList("main-menu-button");
             exit.AddToClassList("main-menu-button--exit");
             inner.Add(exit);
@@ -217,6 +320,14 @@ namespace Hexwex.View
 
             _overlay = Add(_root, "overlay");
             _overlay.style.display = DisplayStyle.None;
+            // A click on the dark around a window closes it, as in the prototype.
+            _overlay.RegisterCallback<PointerDownEvent>(down =>
+            {
+                if (down.target == _overlay)
+                {
+                    CloseOverlay();
+                }
+            });
         }
 
         /// <summary>A chain drawn link by link down the whole height of the element: a link seen flat, then one seen edge on.</summary>

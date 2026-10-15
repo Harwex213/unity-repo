@@ -1,10 +1,13 @@
-/* The HUD of the island scene. Built by Hexwex.View.Hud. */
+/* The HUD of the island scene. Built by Hexwex.View.Hud (Hud.cs, HudFrame.cs).
+   The layout is the prototype's island page: players upper left, the turn in the
+   middle of the top edge, the toxicity flask on the right, resources and the
+   building bar lower left, the end-turn wheel lower right. The look is its own:
+   dark glass panels with a hairline edge, gold for what matters, soft motion. */
 
 .hud {
     flex-grow: 1;
-    flex-direction: column;
-    color: rgb(236, 232, 220);
-    font-size: 20px;
+    color: rgb(240, 236, 226);
+    font-size: 18px;
 }
 
 .row {
@@ -17,40 +20,343 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
-/* Top bar */
+/* ---------- the frame ---------- */
 
-.top-bar {
+.frame {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* A panel: dark glass, a hairline edge, a lighter line along its top. */
+.panel {
+    background-color: rgba(12, 18, 31, 0.94);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.09);
+    border-top-color: rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
+}
+
+/* ---------- players, upper left ---------- */
+
+.players {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    width: 300px;
+    padding: 8px;
+}
+
+.players .player {
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 18px;
-    background-color: rgba(20, 24, 30, 0.86);
-    border-bottom-width: 2px;
-    border-bottom-color: rgba(0, 0, 0, 0.5);
+    margin: 0 0 4px 0;
+    padding: 6px 8px 6px 6px;
+    background-color: rgba(255, 255, 255, 0);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 10px;
+    color: rgb(240, 236, 226);
+    -unity-text-align: middle-left;
+    transition-property: background-color, border-color;
+    transition-duration: 0.12s;
+}
+
+.players .player:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.players .player.viewed {
+    background-color: rgba(226, 190, 104, 0.12);
+    border-color: rgba(226, 190, 104, 0.55);
+}
+
+.players .player:disabled {
+    opacity: 1;
+}
+
+.players .player.eliminated {
+    opacity: 0.4;
+}
+
+.player-banner {
+    width: 5px;
+    height: 40px;
+    margin-right: 10px;
+    border-radius: 3px;
+}
+
+.player-body {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.player-name {
+    font-size: 19px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+}
+
+.player-stats {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.player-stat {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 12px;
+}
+
+.player-stat-value {
+    font-size: 15px;
+    color: rgb(178, 184, 198);
+}
+
+.player-stat-icon {
+    width: 20px;
+    height: 20px;
+    margin-left: 3px;
+}
+
+.player-check {
+    width: 26px;
+    height: 26px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.18);
+    border-radius: 13px;
+    align-items: center;
+    justify-content: center;
+}
+
+.player-check.done {
+    border-color: rgba(150, 214, 110, 0.9);
+    background-color: rgba(150, 214, 110, 0.15);
+}
+
+.player-check-icon {
+    width: 18px;
+    height: 18px;
+}
+
+/* ---------- the turn, top middle ---------- */
+
+.turn-panel {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    translate: -50% 0;
+    min-width: 230px;
+    padding: 8px 30px 10px 30px;
+    align-items: center;
+}
+
+.turn-number {
+    font-size: 30px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
+    -unity-text-align: middle-center;
+}
+
+.turn-phase {
+    font-size: 16px;
+    letter-spacing: 1px;
+    color: rgb(190, 196, 210);
+    -unity-text-align: middle-center;
+}
+
+.top-right {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    flex-direction: row;
+}
+
+.pill-button {
+    margin: 0 0 0 8px;
+    padding: 9px 18px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
+    background-color: rgba(13, 19, 32, 0.84);
+    border-width: 1px;
+    border-color: rgba(226, 190, 104, 0.45);
+    border-radius: 20px;
+    transition-property: background-color, border-color;
+    transition-duration: 0.12s;
+}
+
+.pill-button:hover {
+    background-color: rgba(226, 190, 104, 0.18);
+    border-color: rgb(240, 207, 122);
+}
+
+.pill-button:disabled {
+    opacity: 0.4;
+}
+
+/* ---------- the toxicity flask, right ---------- */
+
+.toxic-panel {
+    position: absolute;
+    right: 16px;
+    top: 76px;
+    bottom: 300px;
+    width: 104px;
+    padding: 10px 8px 12px 8px;
+    align-items: center;
+}
+
+.toxic-head {
+    align-items: center;
+}
+
+.toxic-icon {
+    width: 34px;
+    height: 34px;
+}
+
+.toxic-title {
+    margin-top: 2px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
+}
+
+.flask {
+    flex-grow: 1;
+    margin: 8px 0;
+    align-items: center;
+}
+
+.flask-neck {
+    width: 18px;
+    height: 12px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-width: 1px;
+    border-bottom-width: 0;
+    border-color: rgba(255, 255, 255, 0.25);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.flask-body {
+    flex-grow: 1;
+    width: 34px;
+    overflow: hidden;
+    justify-content: flex-end;
+    background-color: rgba(0, 0, 0, 0.35);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.28);
+    border-radius: 17px;
+}
+
+.flask-fill {
+    width: 100%;
+    border-radius: 16px;
+    background-color: rgb(120, 206, 120);
+    transition-property: height;
+    transition-duration: 0.6s;
+    transition-timing-function: ease-out;
+}
+
+.flask-fill.level-1 {
+    background-color: rgb(222, 200, 90);
+}
+
+.flask-fill.level-2 {
+    background-color: rgb(232, 140, 70);
+}
+
+.flask-fill.level-3 {
+    background-color: rgb(196, 80, 210);
+}
+
+.flask-tick {
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    height: 2px;
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.flask-tick.passed {
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.toxic-count {
+    font-size: 15px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.toxic-status {
+    margin-top: 2px;
+    font-size: 12px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+    color: rgb(150, 214, 110);
+}
+
+.toxic-status.level-1 {
+    color: rgb(232, 210, 110);
+}
+
+.toxic-status.level-2 {
+    color: rgb(240, 160, 90);
+}
+
+.toxic-status.level-3 {
+    color: rgb(214, 130, 232);
+}
+
+/* ---------- resources and the building bar, lower left ---------- */
+
+.dock {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    right: 260px;
+    align-items: flex-start;
 }
 
 .resources {
     flex-direction: row;
-    align-items: center;
+    margin-bottom: 10px;
 }
 
-.chip {
+.resource-panel {
+    margin-right: 10px;
+    padding: 8px 12px;
+}
+
+.resource-row {
+    flex-direction: row;
+}
+
+.resource {
     flex-direction: row;
     align-items: center;
-    margin-right: 14px;
-    padding: 4px 10px 4px 6px;
-    background-color: rgba(255, 255, 255, 0.07);
+    width: 86px;
+    padding: 4px 2px;
     border-radius: 8px;
 }
 
-.chip-icon {
-    width: 34px;
-    height: 34px;
-    margin-right: 6px;
+.resource:hover {
+    background-color: rgba(255, 255, 255, 0.07);
 }
 
-.chip-value {
-    font-size: 22px;
+.resource-icon {
+    width: 32px;
+    height: 32px;
+    margin-right: 8px;
+}
+
+.resource-amount {
+    font-size: 20px;
     -unity-font-style: bold;
 }
 
@@ -58,117 +364,310 @@
     color: rgb(255, 122, 122);
 }
 
-.status {
+.build-row {
     flex-direction: row;
+    align-items: flex-end;
+}
+
+.tools {
+    margin-right: 10px;
+    padding: 6px;
+    justify-content: center;
+}
+
+.tool {
+    width: 40px;
+    height: 40px;
+    margin: 2px 0;
+    padding: 5px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition-property: background-color, border-color, scale;
+    transition-duration: 0.12s;
+}
+
+.tool:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(240, 207, 122, 0.6);
+    scale: 1.05 1.05;
+}
+
+.tool.active {
+    background-color: rgba(255, 120, 100, 0.2);
+    border-color: rgb(255, 130, 110);
+}
+
+.tool-icon {
+    flex-grow: 1;
+}
+
+.cards {
+    flex-direction: row;
+    padding: 8px;
+}
+
+.card {
+    width: 116px;
+    height: 122px;
+    margin: 0 3px;
+    padding: 8px 2px 6px 2px;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: rgb(240, 236, 226);
+    transition-property: translate, background-color, border-color;
+    transition-duration: 0.14s;
+    transition-timing-function: ease-out;
+}
+
+.card:hover {
+    translate: 0 -6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(240, 207, 122, 0.7);
+}
+
+.card.armed {
+    translate: 0 -6px;
+    background-color: rgba(124, 216, 107, 0.16);
+    border-color: rgb(124, 216, 107);
+}
+
+.card.poor .card-icon {
+    opacity: 0.55;
+}
+
+.card.poor .card-label {
+    color: rgb(190, 150, 140);
+}
+
+.card.locked {
+    opacity: 0.38;
+}
+
+.card.trophy {
+    border-color: rgba(196, 80, 210, 0.45);
+}
+
+.card-icon {
+    width: 64px;
+    height: 64px;
+}
+
+.card-label {
+    font-size: 13px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+/* ---------- the end-turn wheel, lower right ---------- */
+
+.end-turn {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+}
+
+.end-turn-panel {
+    width: 228px;
+    padding: 12px 14px 10px 14px;
     align-items: center;
 }
 
-.meter {
-    width: 380px;
-    margin-right: 18px;
-}
-
-.meter-label {
-    font-size: 18px;
-}
-
-.meter-bar {
-    height: 10px;
-    margin-top: 4px;
-    background-color: rgba(255, 255, 255, 0.14);
-    border-radius: 5px;
-    overflow: hidden;
-}
-
-.meter-fill {
-    height: 100%;
-    background-color: rgb(120, 200, 120);
-}
-
-.meter-fill.level-1 {
-    background-color: rgb(222, 200, 90);
-}
-
-.meter-fill.level-2 {
-    background-color: rgb(230, 140, 70);
-}
-
-.meter-fill.level-3 {
-    background-color: rgb(196, 80, 200);
-}
-
-.turn {
-    margin-left: 18px;
+.end-banner {
+    margin: 0 0 10px 0;
+    padding: 8px 34px;
     font-size: 22px;
     -unity-font-style: bold;
+    color: rgb(26, 22, 12);
+    background-color: rgb(236, 196, 92);
+    border-width: 0;
+    border-radius: 10px;
+    transition-property: background-color, scale;
+    transition-duration: 0.12s;
 }
 
-/* Middle: players on the left, the hex panel on the right */
+.end-banner:hover {
+    background-color: rgb(250, 216, 122);
+    scale: 1.04 1.04;
+}
 
-.middle {
-    flex-grow: 1;
+.end-banner:disabled {
+    opacity: 0.5;
+}
+
+.wheel {
+    width: 156px;
+    height: 156px;
+}
+
+.wheel-icon {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    translate: -50% -50%;
+    opacity: 0.55;
+}
+
+.wheel-icon.active {
+    width: 46px;
+    height: 46px;
+    opacity: 1;
+}
+
+.wheel-caption {
+    margin-top: 6px;
+    font-size: 17px;
+    color: rgb(214, 218, 228);
+    -unity-text-align: middle-center;
+}
+
+/* ---------- the message bar, bottom middle ---------- */
+
+.bottom-bar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    translate: -50% 0;
+    max-width: 44%;
     flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 14px 18px;
+    align-items: center;
+    padding: 10px 16px;
 }
 
-.players {
-    width: 330px;
-    padding: 10px;
-    background-color: rgba(20, 24, 30, 0.8);
+.bottom-bar.wide {
+    left: 16px;
+    right: 16px;
+    translate: 0 0;
+    max-width: none;
+}
+
+.hint {
+    flex-shrink: 1;
+    font-size: 17px;
+    white-space: normal;
+    color: rgb(214, 218, 228);
+}
+
+.bottom-bar .chip,
+.bottom-bar .small-button {
+    flex-shrink: 0;
+}
+
+.chip {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 12px;
+    padding: 4px 10px 4px 6px;
+    background-color: rgba(255, 255, 255, 0.07);
     border-radius: 10px;
 }
 
-.player {
-    flex-direction: row;
-    align-items: center;
-    padding: 6px 4px;
+.chip-icon {
+    width: 30px;
+    height: 30px;
+    margin-right: 6px;
 }
 
-.player.eliminated {
-    opacity: 0.4;
-}
-
-.swatch {
-    width: 12px;
-    height: 40px;
-    margin-right: 10px;
-    border-radius: 3px;
-}
-
-.player-name {
+.chip-value {
     font-size: 20px;
     -unity-font-style: bold;
 }
 
-.player-meta {
+.small-button {
+    margin: 3px 6px;
+    padding: 8px 14px;
     font-size: 16px;
-    color: rgb(170, 172, 168);
-}
-
-.hex-panel {
-    width: 400px;
-    padding: 14px;
-    background-color: rgba(20, 24, 30, 0.88);
+    color: rgb(240, 236, 226);
+    background-color: rgba(255, 255, 255, 0.08);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
 }
 
-.panel-title {
-    font-size: 26px;
+.small-button:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.small-button.armed {
+    border-color: rgb(255, 130, 110);
+    background-color: rgba(255, 120, 100, 0.22);
+}
+
+.small-button:disabled {
+    opacity: 0.45;
+}
+
+.end-button {
+    margin: 0 0 0 10px;
+    padding: 12px 26px;
+    font-size: 20px;
     -unity-font-style: bold;
+    color: rgb(26, 22, 12);
+    background-color: rgb(236, 196, 92);
+    border-width: 0;
+    border-radius: 10px;
+}
+
+.end-button:hover {
+    background-color: rgb(250, 216, 122);
+}
+
+.end-button:disabled {
+    opacity: 0.45;
+}
+
+.seed-field {
+    width: 220px;
+    margin: 0 6px;
+    font-size: 18px;
+}
+
+.seed-field .unity-text-field__input {
+    color: rgb(240, 236, 226);
+    background-color: rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+}
+
+/* ---------- the hex card ---------- */
+
+/* On the world map and in battle it stands at the right edge. */
+.hex-panel {
+    position: absolute;
+    right: 16px;
+    top: 76px;
+    width: 380px;
+    padding: 14px 16px;
+}
+
+/* On the island it floats over the hex it is about. */
+.hex-panel.floating {
+    background-color: rgba(10, 15, 27, 0.97);
+    width: 330px;
+    padding: 12px 14px;
+}
+
+.panel-title {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
 }
 
 .panel-subtitle {
-    font-size: 22px;
+    font-size: 19px;
     -unity-font-style: bold;
 }
 
 .panel-text {
-    margin-top: 6px;
-    font-size: 18px;
+    margin-top: 5px;
+    font-size: 15px;
     white-space: normal;
-    color: rgb(200, 200, 192);
+    color: rgb(196, 202, 214);
 }
 
 .toxic {
@@ -187,25 +686,25 @@
     flex-direction: row;
     align-items: center;
     margin: 4px 0 0 0;
-    padding: 6px 8px;
-    background-color: rgba(255, 255, 255, 0.07);
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
-    border-radius: 6px;
-    color: rgb(236, 232, 220);
+    padding: 5px 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    color: rgb(240, 236, 226);
 }
 
 .face:hover {
-    background-color: rgba(255, 255, 255, 0.16);
+    background-color: rgba(255, 255, 255, 0.13);
 }
 
 .face.static:hover {
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 .face.chosen {
-    border-color: rgb(255, 214, 110);
-    background-color: rgba(255, 214, 110, 0.16);
+    border-color: rgb(240, 207, 122);
+    background-color: rgba(240, 207, 122, 0.16);
 }
 
 .face.refused {
@@ -213,164 +712,124 @@
 }
 
 .face-icon {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     margin-right: 6px;
 }
 
 .face-amount {
     margin-right: 12px;
-    font-size: 20px;
+    font-size: 18px;
     -unity-font-style: bold;
 }
 
 .face-toxicity {
     margin-right: 12px;
-    font-size: 18px;
+    font-size: 16px;
     color: rgb(214, 140, 232);
 }
 
 .face-note {
     flex-grow: 1;
     -unity-text-align: middle-right;
-    font-size: 16px;
-    color: rgb(170, 172, 168);
+    font-size: 14px;
+    color: rgb(170, 176, 190);
 }
 
 .suggestion {
     margin-top: 4px;
 }
 
-/* Bottom bar */
+.cell-buttons {
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
 
-.bottom-bar {
+/* ---------- hover cards ---------- */
+
+.card-hint {
+    position: absolute;
+    max-width: 340px;
+    padding: 10px 12px;
+    background-color: rgba(9, 13, 24, 0.96);
+    border-color: rgba(240, 207, 122, 0.35);
+}
+
+.hint-title {
+    font-size: 17px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
+    margin-bottom: 4px;
+}
+
+.hint-row {
     flex-direction: row;
     align-items: center;
-    justify-content: flex-end;
-    padding: 12px 18px;
-    background-color: rgba(20, 24, 30, 0.86);
-    border-top-width: 2px;
-    border-top-color: rgba(0, 0, 0, 0.5);
+    flex-wrap: wrap;
+    margin-top: 3px;
 }
 
-.hint {
-    flex-grow: 1;
-    font-size: 20px;
-    color: rgb(214, 210, 196);
+.hint-text {
+    font-size: 14px;
+    white-space: normal;
+    color: rgb(214, 218, 228);
+    margin-right: 4px;
 }
 
-.cards {
-    flex-grow: 1;
+.hint-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 2px;
+}
+
+.hint-cost {
     flex-direction: row;
-}
-
-.card {
-    width: 150px;
-    margin: 0 8px 0 0;
-    padding: 8px;
     align-items: center;
-    background-color: rgba(255, 255, 255, 0.08);
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
-    border-radius: 8px;
-    color: rgb(236, 232, 220);
-}
-
-.card:hover {
-    background-color: rgba(255, 255, 255, 0.18);
-}
-
-.card.armed {
-    border-color: rgb(255, 214, 110);
-    background-color: rgba(255, 214, 110, 0.2);
-}
-
-.card.poor {
-    opacity: 0.5;
-}
-
-.card-icon {
-    width: 56px;
-    height: 56px;
     margin-right: 6px;
 }
 
-.card-label {
-    font-size: 17px;
-    -unity-text-align: middle-center;
-    white-space: normal;
+.hint-cost.short .hint-text {
+    color: rgb(255, 120, 110);
 }
 
-.cost-icon {
-    width: 22px;
-    height: 22px;
+.hint-faces {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
 }
 
-.cost-value {
-    margin: 0 6px 0 2px;
-    font-size: 17px;
-}
-
-.tools {
-    margin: 0 14px;
-}
-
-.small-button {
-    margin: 3px 6px;
-    padding: 8px 14px;
-    font-size: 18px;
-    color: rgb(236, 232, 220);
-    background-color: rgba(255, 255, 255, 0.1);
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
+.hint-face {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 4px 4px 0;
+    padding: 2px 6px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-width: 1px;
+    border-color: rgba(150, 214, 110, 0.4);
     border-radius: 6px;
 }
 
-.small-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+.hint-note {
+    margin-top: 4px;
+    font-size: 13px;
+    -unity-font-style: italic;
+    white-space: normal;
+    color: rgb(160, 168, 184);
 }
 
-.small-button.armed {
-    border-color: rgb(255, 120, 100);
-    background-color: rgba(255, 120, 100, 0.22);
-}
-
-.end-button {
-    margin: 0 0 0 10px;
-    padding: 14px 26px;
-    font-size: 22px;
-    -unity-font-style: bold;
-    color: rgb(28, 26, 18);
-    background-color: rgb(236, 196, 92);
-    border-width: 0;
-    border-radius: 8px;
-}
-
-.end-button:hover {
-    background-color: rgb(250, 216, 122);
-}
-
-.end-button:disabled {
-    opacity: 0.45;
-}
-
-.seed-field {
-    width: 240px;
-    margin-right: 6px;
-    font-size: 20px;
-}
-
-/* Notice and the plates above the hexes */
+/* ---------- the notice, the plates over the hexes, what flies ---------- */
 
 .notice {
     position: absolute;
-    top: 96px;
+    top: 104px;
     align-self: center;
     padding: 10px 22px;
-    font-size: 22px;
+    font-size: 19px;
     color: rgb(255, 244, 214);
-    background-color: rgba(40, 30, 20, 0.92);
-    border-radius: 8px;
+    background-color: rgba(28, 22, 14, 0.94);
+    border-width: 1px;
+    border-color: rgba(240, 207, 122, 0.45);
+    border-radius: 12px;
 }
 
 .plates {
@@ -387,199 +846,32 @@
     align-items: center;
     padding: 3px 8px;
     translate: -50% -100%;
-    background-color: rgba(20, 24, 30, 0.9);
-    border-width: 2px;
-    border-color: rgba(255, 255, 255, 0.25);
-    border-radius: 6px;
+    background-color: rgba(13, 19, 32, 0.9);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
 }
 
 .plate.changed {
-    border-color: rgb(255, 214, 110);
+    border-color: rgb(240, 207, 122);
 }
 
 .plate-icon {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     margin-right: 3px;
 }
 
 .plate-amount {
     margin-right: 6px;
-    font-size: 20px;
+    font-size: 18px;
     -unity-font-style: bold;
 }
 
 .plate-toxicity {
-    font-size: 17px;
+    font-size: 15px;
     color: rgb(214, 140, 232);
 }
-
-/* Modals */
-
-.overlay {
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(6, 8, 12, 0.66);
-}
-
-.modal {
-    width: 620px;
-    padding: 26px;
-    align-items: center;
-    background-color: rgb(28, 32, 40);
-    border-width: 2px;
-    border-color: rgba(255, 255, 255, 0.16);
-    border-radius: 12px;
-}
-
-.modal.wide {
-    width: 820px;
-    max-height: 86%;
-}
-
-.modal .end-button {
-    margin: 20px 0 0 0;
-}
-
-.modal-title {
-    margin: 8px 0;
-    font-size: 30px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-    white-space: normal;
-}
-
-.reels {
-    flex-direction: row;
-    margin: 14px 0;
-}
-
-.reel {
-    width: 110px;
-    height: 110px;
-    margin: 0 8px;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(255, 255, 255, 0.08);
-    border-width: 3px;
-    border-color: rgb(120, 200, 120);
-    border-radius: 10px;
-}
-
-.reel.bad {
-    border-color: rgb(196, 80, 200);
-}
-
-.reel-icon {
-    width: 80px;
-    height: 80px;
-}
-
-.tech-list {
-    align-self: stretch;
-    flex-grow: 1;
-}
-
-.tech {
-    margin: 3px 0;
-    padding: 8px 12px;
-    align-items: stretch;
-    background-color: rgba(255, 255, 255, 0.06);
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
-    border-radius: 6px;
-    color: rgb(236, 232, 220);
-}
-
-.tech.available {
-    border-color: rgba(236, 196, 92, 0.7);
-}
-
-.tech.available:hover {
-    background-color: rgba(236, 196, 92, 0.18);
-}
-
-.tech.owned {
-    border-color: rgba(120, 200, 120, 0.7);
-    opacity: 1;
-}
-
-.tech.locked {
-    opacity: 0.5;
-}
-
-.seed-field .unity-text-field__input {
-    color: rgb(24, 24, 24);
-    background-color: rgb(236, 232, 220);
-}
-
-/* The cell panel of the global map */
-
-.cell-buttons {
-    margin-top: 10px;
-    flex-wrap: wrap;
-}
-
-.small-button:disabled {
-    opacity: 0.45;
-}
-
-.player-body {
-    flex-shrink: 1;
-}
-
-/* The battle bar: the long hint gives way, the controls keep their size. */
-
-.bottom-bar .chip,
-.bottom-bar .small-button {
-    flex-shrink: 0;
-}
-
-.bottom-bar .hint {
-    flex-shrink: 1;
-    white-space: normal;
-}
-
-/* A row of the players panel is a button: it opens that player's island. */
-
-.players .player {
-    margin: 0;
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
-    border-radius: 6px;
-    color: rgb(236, 232, 220);
-    -unity-text-align: middle-left;
-}
-
-.players .player:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.players .player.viewed {
-    border-color: rgb(226, 190, 104);
-    background-color: rgba(226, 190, 104, 0.14);
-}
-
-.players .player:disabled {
-    opacity: 1;
-}
-
-.players .player.eliminated {
-    opacity: 0.4;
-}
-
-.player-name,
-.player-meta {
-    -unity-text-align: middle-left;
-}
-
-/* What flies: the motes of the tax collection and the numbers of a hit. */
 
 .flight {
     position: absolute;
@@ -587,8 +879,8 @@
     align-items: center;
     padding: 3px 9px 3px 5px;
     translate: -50% -50%;
-    background-color: rgba(20, 24, 30, 0.9);
-    border-width: 2px;
+    background-color: rgba(13, 19, 32, 0.9);
+    border-width: 1px;
     border-color: rgb(236, 196, 92);
     border-radius: 14px;
 }
@@ -613,10 +905,76 @@
     color: rgb(250, 244, 220);
 }
 
-/* The slot: a reel in motion has no verdict yet. */
+/* ---------- modals ---------- */
+
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(4, 7, 14, 0.7);
+}
+
+.modal {
+    width: 620px;
+    padding: 26px;
+    align-items: center;
+    background-color: rgb(16, 22, 36);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.12);
+    border-top-color: rgba(240, 207, 122, 0.5);
+    border-radius: 16px;
+}
+
+.modal.wide {
+    width: 820px;
+    max-height: 86%;
+}
+
+.modal .end-button {
+    margin: 20px 0 0 0;
+}
+
+.modal-title {
+    margin: 8px 0;
+    font-size: 28px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    color: rgb(240, 207, 122);
+}
+
+.reels {
+    flex-direction: row;
+    margin: 14px 0;
+}
+
+.reel {
+    width: 110px;
+    height: 110px;
+    margin: 0 8px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-width: 2px;
+    border-color: rgb(120, 200, 120);
+    border-radius: 14px;
+}
+
+.reel.bad {
+    border-color: rgb(196, 80, 200);
+}
 
 .reel.spinning {
     border-color: rgba(255, 255, 255, 0.35);
+}
+
+.reel-icon {
+    width: 80px;
+    height: 80px;
 }
 
 .slot-result {
@@ -624,15 +982,35 @@
     align-self: stretch;
 }
 
-/* A long zone name must not run under the buttons beside the meter. */
-
-.meter .row {
-    overflow: hidden;
+.tech-list {
+    align-self: stretch;
+    flex-grow: 1;
 }
 
-.meter-label {
-    flex-shrink: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.tech {
+    margin: 3px 0;
+    padding: 8px 12px;
+    align-items: stretch;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    color: rgb(240, 236, 226);
+}
+
+.tech.available {
+    border-color: rgba(236, 196, 92, 0.7);
+}
+
+.tech.available:hover {
+    background-color: rgba(236, 196, 92, 0.16);
+}
+
+.tech.owned {
+    border-color: rgba(120, 200, 120, 0.7);
+    opacity: 1;
+}
+
+.tech.locked {
+    opacity: 0.5;
 }
