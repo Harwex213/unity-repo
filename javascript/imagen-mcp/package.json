@@ -1,0 +1,7 @@
+{
+  "name": "imagen-mcp",
+  "description": "tiny wrapper for npm package with MCP to imagen service",
+  "dependencies": {
+    "remote-imagegen-mcp": "0.1.0"
+  }
+}
