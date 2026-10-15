@@ -31,7 +31,7 @@
       "command": "node",
       "args": ["./javascript/imagen-mcp/node_modules/remote-imagegen-mcp/dist/main.js"],
       "env": {
-        "REMOTE_IMAGEGEN_TOKEN": "$REMOTE_IMAGEGEN_TOKEN"
+        "REMOTE_IMAGEGEN_TOKEN": "${REMOTE_IMAGEGEN_TOKEN}"
       }
     }
   }
