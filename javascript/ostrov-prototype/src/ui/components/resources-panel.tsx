@@ -1,5 +1,6 @@
 import { useSignals } from "@preact/signals-react/runtime";
 import { useEffect, useRef } from "react";
+import { populationOf } from "../../core/population";
 import { getResource } from "../../core/resources";
 import { useStore } from "../../store/store";
 import { Icon } from "./icon";
@@ -18,7 +19,9 @@ type TResourcesPanelProps = {
 
 /**
  * Two panels, two rows each. Every row lists resource ids from left to right.
- * Toxicity has its own meter, so it is not listed here.
+ * Toxicity has its own meter, so it is not listed here. The population cell
+ * shows the idle people; its hint splits the whole population into idle,
+ * workers and army.
  */
 const PANEL_LAYOUT: readonly (readonly (readonly TResourceId[])[])[] = [
   [
@@ -67,9 +70,19 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
     };
   }, [registry]);
 
-  if (!pool) {
+  const player = store.derived.humanPlayer.value;
+  if (!pool || !player) {
     return null;
   }
+
+  const people = populationOf(player);
+  const setIconRef = (id: TResourceId) => (node: HTMLElement | null) => {
+    if (node) {
+      iconRefs.current.set(id, node);
+    } else {
+      iconRefs.current.delete(id);
+    }
+  };
 
   return (
     <div className="resources-panels" data-tutorial="tax">
@@ -77,28 +90,22 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
         <div key={panelIndex} className="panel resources-panel">
           {rows.flatMap((ids, rowIndex) => ids.map((id, columnIndex) => {
             const resource = getResource(id);
+            // The first column of the first panel stands at the left edge of the screen.
+            const edgeClass = panelIndex === 0 && columnIndex === 0 ? " resource--left-edge" : "";
 
             return (
               <div
                 key={resource.id}
-                className={`resource has-hint resource--${resource.kind}`}
+                className={`resource has-hint resource--${resource.kind} resource--${resource.id}${edgeClass}`}
                 style={{ gridRow: rowIndex + 1, gridColumn: columnIndex + 1 }}
               >
-                <span
-                  className="resource__icon"
-                  ref={(node) => {
-                    if (node) {
-                      iconRefs.current.set(resource.id, node);
-                    } else {
-                      iconRefs.current.delete(resource.id);
-                    }
-                  }}
-                >
+                <span className="resource__icon" ref={setIconRef(resource.id)}>
                   <Icon src={resource.icon} size="m" />
                 </span>
 
+                {/* The population shows the idle people: the ones the player can still send somewhere. */}
                 <span className="resource__amount">
-                  {formatAmount(pool[resource.id])}
+                  {resource.id === "population" ? people.idle : formatAmount(pool[resource.id])}
                 </span>
 
                 {/* Power picked in the tax phase leaves the pool when the phase ends. */}
@@ -117,10 +124,18 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
                     {resource.feeds}
                   </span>
 
-                  {resource.id === "power" && powerPlanned > 0 ? (
-                    <span className="hint__row">
-                      {`Выбрано граней на ${powerPlanned}: спишется в конце фазы налогов`}
-                    </span>
+                  {resource.id === "population" ? (
+                    <>
+                      <span className="hint__row">
+                        {`Свободно: ${people.idle}`}
+                      </span>
+                      <span className="hint__row">
+                        {`Работают: ${people.workers}`}
+                      </span>
+                      <span className="hint__row">
+                        {`Служат: ${people.army}`}
+                      </span>
+                    </>
                   ) : null}
                 </span>
               </div>
@@ -128,6 +143,7 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
           }))}
         </div>
       ))}
+
     </div>
   );
 };

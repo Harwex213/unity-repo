@@ -9,6 +9,7 @@ import {
   stepCleanup,
   summarizeCleanup,
 } from "../core/cleanup-sim";
+import { withSoldiersLost } from "../core/population";
 import { createRng, hashSeed } from "../core/rng";
 import { pendingIslands } from "../core/world-rules";
 import { repairIsland, structureHp, withStructureHp } from "../core/structure-hp";
@@ -64,7 +65,9 @@ const enterClearingAction = (store: TStore) => {
   const turn = store.game.turn.peek();
   const nickname = store.game.nickname.peek();
   const rng = createRng(hashSeed(`${nickname}:cleanup:${turn}`));
-  const roster = buildRoster(player.resources.population, store.derived.techEffects.peek().unlockedUnits, rng);
+  // Only the people in the army go to battle. The idle and the workers stay home.
+  // Every soldier is a militiaman: the stronghold recruits nothing else.
+  const roster = buildRoster(player.army);
   const level = createLevel(
     {
       player,
@@ -266,15 +269,14 @@ const finishClearingAction = (store: TStore) => {
     // The islands that joined in battle keep their exact battle coordinates.
     const grown = joinAnnexed(damaged.island, result.annexed);
 
-    next = {
-      ...withIslandHexes(damaged, grown.hexes),
-      army: result.survivors.length,
-      resources: {
-        ...player.resources,
-        population: Math.max(0, player.resources.population - peopleLost),
-        mana: Math.max(0, player.resources.mana - result.manaSpent),
+    // The fallen leave the army and the population; the survivors stay in the army.
+    next = withSoldiersLost(
+      {
+        ...withIslandHexes(damaged, grown.hexes),
+        resources: { ...player.resources, mana: Math.max(0, player.resources.mana - result.manaSpent) },
       },
-    };
+      peopleLost,
+    );
 
     const world = store.world.world.peek();
     const lair = world ? getCell(world, player.cellId) : null;

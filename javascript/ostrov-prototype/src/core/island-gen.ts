@@ -1,6 +1,7 @@
 import { BIOMES } from "./biomes";
 import { buildingsForBiome } from "./buildings";
 import { hexArea, hexId, hexNeighbors } from "./hex";
+import { WORKERS_PER_BUILDING } from "./population";
 import { createRng, hashSeed, pick, pickWeighted, randomInt } from "./rng";
 import { addResources, STARTING_POOL } from "./resources";
 import type { TRng } from "./rng";
@@ -127,6 +128,7 @@ const populateIsland = (island: TIsland, rng: TRng, fillChance: number): TIsland
       ...hex,
       building: building.id,
       toxicity: randomInt(rng, 0, 40),
+      workers: WORKERS_PER_BUILDING,
     };
   });
 
@@ -183,6 +185,8 @@ const RIVALS: readonly { readonly id: string; readonly nickname: string; readonl
 const HUMAN_PLAYER_ID = "human";
 const HUMAN_COLOR = "#8fd14f";
 const RIVAL_FILL_CHANCE = 0.55;
+/** Part of the starting population is already in the army; the rest is idle. */
+const HUMAN_STARTING_ARMY = 3;
 
 const createRival = (
   rival: (typeof RIVALS)[number],
@@ -191,6 +195,7 @@ const createRival = (
   const rng = createRng(hashSeed(`${seed}:${rival.id}`));
   const island = populateIsland(createIsland(rng), rng, RIVAL_FILL_CHANCE);
   const built = island.hexes.filter((hex) => hex.building !== null).length;
+  const army = built + randomInt(rng, 0, 8);
 
   return {
     id: rival.id,
@@ -198,11 +203,13 @@ const createRival = (
     color: rival.color,
     isHuman: false,
     island,
+    // The starting people stay idle; the workers and the army come on top.
     resources: addResources(STARTING_POOL, {
       food: randomInt(rng, 0, 40),
       mad: randomInt(rng, 0, 4),
+      population: built * WORKERS_PER_BUILDING + army,
     }),
-    army: built + randomInt(rng, 0, 8),
+    army,
     techs: randomInt(rng, 0, 6),
     cellId: "",
     strongholdHexId: null,
@@ -224,7 +231,7 @@ const createPlayers = (nickname: string): readonly TPlayer[] => {
     isHuman: true,
     island: createIsland(humanRng),
     resources: STARTING_POOL,
-    army: 0,
+    army: HUMAN_STARTING_ARMY,
     techs: 0,
     cellId: "",
     strongholdHexId: null,

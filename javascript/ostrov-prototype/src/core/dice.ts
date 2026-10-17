@@ -1,7 +1,13 @@
-import { averageAmount, averageToxicity, facesOn, getBuilding } from "./buildings";
-import { isStrongholdHex, STRONGHOLD_ART, STRONGHOLD_FACES, STRONGHOLD_LABEL } from "./stronghold";
+import { facesOn, getBuilding } from "./buildings";
+import {
+  isStrongholdHex,
+  STRONGHOLD_ALWAYS_YIELDS,
+  STRONGHOLD_ART,
+  STRONGHOLD_FACES,
+  STRONGHOLD_LABEL,
+} from "./stronghold";
 import { isRuinedStronghold } from "./structure-hp";
-import type { TFace, THex, TPlayer, TYieldResourceId } from "./types";
+import type { TAlwaysYield, TFace, THex, TPlayer } from "./types";
 
 /**
  * The die that stands on a hex: a building's die on its biome, or the
@@ -20,6 +26,8 @@ type THexDie = {
   readonly faces: readonly TFace[];
   /** Index of the face the biome adds, or -1 when the die has none. */
   readonly biomeFaceIndex: number;
+  /** What the hex pays every tax phase on top of the roll. Empty for a building. */
+  readonly alwaysYields: readonly TAlwaysYield[];
 };
 
 const hexDie = (player: TPlayer | null, hex: THex): THexDie | null => {
@@ -35,6 +43,7 @@ const hexDie = (player: TPlayer | null, hex: THex): THexDie | null => {
       art: STRONGHOLD_ART,
       faces: STRONGHOLD_FACES,
       biomeFaceIndex: -1,
+      alwaysYields: STRONGHOLD_ALWAYS_YIELDS,
     };
   }
 
@@ -52,19 +61,9 @@ const hexDie = (player: TPlayer | null, hex: THex): THexDie | null => {
     art: building.art,
     faces,
     biomeFaceIndex: hasBiomeFace ? faces.length - 1 : -1,
+    alwaysYields: [],
   };
 };
 
-/** The resources a die can pay, in face order and without repeats. */
-const dieResources = (die: THexDie): readonly TYieldResourceId[] => {
-  return [...new Set(die.faces.map((item) => item.resource))];
-};
-
-/** Mean yield and mean toxicity (face points) of one roll of the die. */
-const dieAverages = (die: THexDie) => ({
-  amount: averageAmount(die.faces),
-  toxicity: averageToxicity(die.faces),
-});
-
 export type { THexDie, THexDieSource };
-export { dieAverages, dieResources, hexDie };
+export { hexDie };

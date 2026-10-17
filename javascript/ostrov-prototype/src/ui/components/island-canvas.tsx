@@ -4,6 +4,7 @@ import { getBiome } from "../../core/biomes";
 import { buildRefusal } from "../../core/build-check";
 import { getBuilding } from "../../core/buildings";
 import { HEX_ART } from "../../core/hex-art";
+import { isStaffed } from "../../core/population";
 import { canPlaceStronghold, STRONGHOLD_HEX_ART } from "../../core/stronghold";
 import { isRuinedStronghold } from "../../core/structure-hp";
 import { purifyRefusal, sacrificeRefusal } from "../../core/soil-cleanse";
@@ -20,7 +21,6 @@ import {
 } from "../../core/hex";
 import { useStore } from "../../store/store";
 import { useIslandGround } from "../ground/use-island-ground";
-import { HexHpBar } from "./hex-hp-bar";
 import { HexPlates } from "./hex-plates";
 import type { CSSProperties, FC, PointerEvent as ReactPointerEvent } from "react";
 import type { TBuildingId, TGameStage, THex, TIsland, TPlayer } from "../../core/types";
@@ -103,25 +103,6 @@ const candidatePoints = (q: number, r: number) => {
       return `${(center.x + x).toFixed(2)},${(center.y + y).toFixed(2)}`;
     })
     .join(" ");
-};
-
-/** The hex grid toggle is remembered per browser. */
-const GRID_STORAGE_KEY = "ostrov-v6:hex-grid";
-
-const readGridPreference = () => {
-  try {
-    return window.localStorage.getItem(GRID_STORAGE_KEY) !== "off";
-  } catch {
-    return true;
-  }
-};
-
-const writeGridPreference = (isVisible: boolean) => {
-  try {
-    window.localStorage.setItem(GRID_STORAGE_KEY, isVisible ? "on" : "off");
-  } catch {
-    // Storage can be blocked; the toggle then lasts for this page only.
-  }
 };
 
 type TView = {
@@ -254,7 +235,6 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
   /** How far the pointer travelled in the gesture that just ended. */
   const lastMovedRef = useRef(0);
   const [view, setView] = useState<TView>({ x: 0, y: 0, scale: 1 });
-  const [isGridVisible, setGridVisible] = useState(readGridPreference);
 
   const hexes = player?.island.hexes ?? [];
   const playerId = player?.id ?? null;
@@ -336,38 +316,6 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       container.removeEventListener("wheel", onWheel);
     };
   }, []);
-
-  const toggleGrid = useCallback(() => {
-    setGridVisible((current) => {
-      writeGridPreference(!current);
-
-      return !current;
-    });
-  }, []);
-
-  // G toggles the hex grid, unless the player is typing in a field.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
-        return;
-      }
-
-      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) {
-        return;
-      }
-
-      if (event.code === "KeyG") {
-        toggleGrid();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [toggleGrid]);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     // The pointer is captured only once it starts to drag. Capturing it here
@@ -467,7 +415,8 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       const stateClass = isReadonly ? "" : hexStateClass(hex, stateContext);
       const isHovered = hex.id === hoveredHexId;
       const isSelected = hex.id === selectedHexId;
-      const entries: { key: string; className: string; rank: number; x: number; y: number }[] = [];
+      const entries: { key: string; className: string; rank: number; x: number; y: number; isSelection?: boolean }[] =
+        [];
 
       if (hex.id === strongholdHexId) {
         entries.push({
@@ -482,13 +431,28 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       // A candidate draws its own ring in the shimmer layer below.
       const outlineClass = stateClass === "hex--candidate" ? "" : stateClass;
 
-      if (outlineClass || isHovered || isSelected) {
+      // The selected hex keeps its animated gold ring under the cursor too,
+      // so the white hover ring is not drawn on it.
+      const showHover = isHovered && !isSelected;
+
+      if (outlineClass || showHover) {
         entries.push({
           key: `outline-${hex.id}`,
-          className: `hex-outline ${outlineClass} ${isHovered ? "hex--hovered" : ""} ${isSelected ? "hex--selected" : ""}`,
-          rank: isHovered ? 3 : isSelected ? 2 : 0,
+          className: `hex-outline ${outlineClass} ${showHover ? "hex--hovered" : ""}`,
+          rank: showHover ? 3 : 0,
           x: center.x,
           y: center.y,
+        });
+      }
+
+      if (isSelected) {
+        entries.push({
+          key: `selection-${hex.id}`,
+          className: "hex-selection",
+          rank: 2,
+          x: center.x,
+          y: center.y,
+          isSelection: true,
         });
       }
 
@@ -560,7 +524,7 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
       }}
     >
       <svg
-        className={`island-canvas__svg ${isGridVisible ? "" : "island-canvas__svg--grid-off"}`}
+        className="island-canvas__svg"
         role="presentation"
       >
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
@@ -666,7 +630,7 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
 
                 {building ? (
                   <image
-                    className={`hex__art ${pulseClass}`}
+                    className={`hex__art ${isStaffed(hex) ? "" : "hex__art--idle"} ${pulseClass}`}
                     style={pulseStyle}
                     href={building.hexArt}
                     x={-ART_SPAN / 2}
@@ -689,8 +653,6 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
                     preserveAspectRatio="xMidYMid meet"
                   />
                 ) : null}
-
-                <HexHpBar player={player} hex={hex} />
               </g>
             );
           })}
@@ -738,30 +700,31 @@ const IslandCanvas: FC<TIslandCanvasProps> = ({ registry }) => {
 
           {/* Highlight outlines go above every hex face, so no neighbour face
               covers them. Hover and selection go last, so they stay on top. */}
-          {outlines.map((outline) => (
-            <polygon
-              key={outline.key}
-              className={outline.className}
-              points={OUTLINE_POINTS}
-              transform={`translate(${outline.x} ${outline.y})`}
-            />
-          ))}
+          {outlines.map((outline) =>
+            outline.isSelection ? (
+              // The key holds the hex id, so a new selection remounts the
+              // group and replays the pop.
+              <g key={outline.key} className={outline.className} transform={`translate(${outline.x} ${outline.y})`}>
+                <g className="hex-selection__pop">
+                  <polygon className="hex-selection__glow" points={OUTLINE_POINTS} />
+                  <polygon className="hex-selection__ring" points={OUTLINE_POINTS} />
+                  <polygon className="hex-selection__sweep" points={OUTLINE_POINTS} pathLength={100} />
+                </g>
+              </g>
+            ) : (
+              <polygon
+                key={outline.key}
+                className={outline.className}
+                points={OUTLINE_POINTS}
+                transform={`translate(${outline.x} ${outline.y})`}
+              />
+            ),
+          )}
 
           {/* The plates go last: no hex, sprite or outline may cover them. */}
           <HexPlates scale={view.scale} />
         </g>
       </svg>
-
-      <button
-        type="button"
-        className={`island-canvas__grid-toggle ${isGridVisible ? "island-canvas__grid-toggle--on" : ""}`}
-        title="Сетка гексов (G)"
-        aria-pressed={isGridVisible}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={toggleGrid}
-      >
-        Сетка
-      </button>
     </div>
   );
 };

@@ -3,7 +3,7 @@ import { HEX_ART } from "./hex-art";
 import { ICONS } from "./icons";
 import { pick } from "./rng";
 import type { TRng } from "./rng";
-import type { TFace, TIsland, TPlayer } from "./types";
+import type { TAlwaysYield, TFace, TIsland, TPlayer, TYieldResourceId } from "./types";
 
 /**
  * The stronghold (твердыня) is the seat of a player's power. Every player puts
@@ -15,18 +15,28 @@ import type { TFace, TIsland, TPlayer } from "./types";
 
 const STRONGHOLD_LABEL = "Твердыня";
 /**
- * The stronghold's die: 3 wood, 3 stone, 3 food or 2 hammers. The stronghold
- * keeps the island's heart clean, so no face leaves toxicity. The die is the
- * same on every biome, so it has no biome face.
+ * The stronghold's die: 3 wood, 3 stone, 3 food or 2 hammers. Each face
+ * leaves as many toxicity points as it pays: 3 stone leave 3 points, 2 hammers
+ * leave 2. The tax phase turns a point into TOXICITY_PER_FACE_POINT_PCT percent
+ * of the hex, as for any building. The die is the same on every biome, so it
+ * has no biome face.
  */
+const strongholdFace = (resource: TYieldResourceId, amount: number): TFace => ({
+  resource,
+  amount,
+  toxicity: amount,
+});
+
 const STRONGHOLD_FACES: readonly TFace[] = [
-  { resource: "wood", amount: 3, toxicity: 0 },
-  { resource: "stone", amount: 3, toxicity: 0 },
-  { resource: "food", amount: 3, toxicity: 0 },
-  { resource: "hammers", amount: 2, toxicity: 0 },
+  strongholdFace("wood", 3),
+  strongholdFace("stone", 3),
+  strongholdFace("food", 3),
+  strongholdFace("hammers", 2),
 ];
 /** Power the stronghold pays at the end of every tax phase, on top of its roll. */
 const POWER_PER_TURN = 1;
+/** What the stronghold pays every tax phase without a roll. */
+const STRONGHOLD_ALWAYS_YIELDS: readonly TAlwaysYield[] = [{ resource: "power", amount: POWER_PER_TURN }];
 /** The 64px icon drawn next to the stronghold in panels and tooltips. */
 const STRONGHOLD_ART = ICONS.stronghold;
 /** The 256px sprite the island canvas draws on the stronghold hex. */
@@ -90,6 +100,7 @@ export {
   isStrongholdHex,
   pickStrongholdHex,
   POWER_PER_TURN,
+  STRONGHOLD_ALWAYS_YIELDS,
   STRONGHOLD_ART,
   STRONGHOLD_FACES,
   STRONGHOLD_HEX_ART,

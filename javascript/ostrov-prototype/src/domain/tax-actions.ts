@@ -1,6 +1,7 @@
 import { HEX_SIZE, hexToPixel } from "../core/hex";
 import { ICONS } from "../core/icons";
 import { revealDelays, revealDurationMs } from "../core/production-reveal";
+import { withAutoStaff } from "../core/population";
 import { getResource } from "../core/resources";
 import {
   collectTaxPlan,
@@ -131,6 +132,9 @@ const startTaxPhaseAction = (store: TStore) => {
   store.ui.busy.value = false;
   store.ui.taxPickHexId.value = null;
 
+  // The bots put their idle people to work before the dice roll.
+  store.game.players.value = store.game.players.peek().map((player) => (player.isHuman ? player : withAutoStaff(player)));
+
   const seed = store.game.nickname.peek();
   const plans = store.game.players.peek().map((player) => {
     const plan = rollTaxPlan(player, turn, seed);
@@ -212,9 +216,10 @@ const closeTaxPickAction = (store: TStore) => {
 };
 
 /**
- * Makes a face the one the building pays. Nothing is paid and no power leaves
- * the pool here: the plan remembers the choice until the phase ends. A refused
- * pick keeps the popup open and says why.
+ * Makes a face the one the building pays. The popup stays open. The plan
+ * remembers the choice, and the power it costs is derived from the plan, so a
+ * new pick replaces the old cost instead of adding to it. The power leaves the
+ * pool when the phase ends. A pick of the face already chosen changes nothing.
  */
 const pickTaxFaceAction = (store: TStore, hexId: string, faceIndex: number) => {
   if (!isTaxOpen(store)) {
@@ -227,6 +232,10 @@ const pickTaxFaceAction = (store: TStore, hexId: string, faceIndex: number) => {
     return;
   }
 
+  if (findRoll(plan, hexId)?.chosenIndex === faceIndex) {
+    return;
+  }
+
   const refusal = pickRefusal(player, plan, hexId, faceIndex);
   if (refusal) {
     showNotice(store, refusal.message);
@@ -235,7 +244,6 @@ const pickTaxFaceAction = (store: TStore, hexId: string, faceIndex: number) => {
   }
 
   replacePlan(store, withPick(plan, hexId, faceIndex));
-  store.ui.taxPickHexId.value = null;
 };
 
 const dropFlight = (store: TStore, id: string) => {

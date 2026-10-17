@@ -7,6 +7,7 @@ import { getResource } from "../../core/resources";
 import { DEAD_TOXICITY_PCT, facePayout } from "../../core/tax";
 import { pickCost, pickRefusal, POWER_BIOME_FACE_COST, POWER_FACE_COST } from "../../core/tax-plan";
 import { useStore } from "../../store/store";
+import { FaceChip } from "./die-faces";
 import { Icon } from "./icon";
 import { useFocusTrap } from "./use-focus-trap";
 import type { FC, KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -61,11 +62,11 @@ const nextIndex = (key: string, current: number, count: number) => {
 /**
  * The popup of one die in the tax phase. It lists every face of the die on
  * this biome, the biome face included, with what each face would really pay
- * here. The rolled face is marked and free; any other face costs power. A face
- * that cannot be taken stays in the list, dimmed, with the reason. The focused
- * face is previewed below the list: its payout, the hex's toxicity after it and
- * the power left. Nothing is paid here: the choice waits for the end of the
- * phase.
+ * here. The rolled face is marked and free; any other face costs power. A click
+ * on a face applies it at once, and the popup stays open. A face that cannot be
+ * taken stays in the list, dimmed, and its hover hint gives the reason. The box
+ * below the list shows the chosen face: its payout, the hex's toxicity after it
+ * and the power left. The power leaves the pool when the phase ends.
  */
 const TaxPickDialog: FC<TTaxPickDialogProps> = ({ registry, player, plan, hex, roll, effects, powerLeft }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -75,28 +76,28 @@ const TaxPickDialog: FC<TTaxPickDialogProps> = ({ registry, player, plan, hex, r
   const die = hexDie(player, hex);
   const biome = getBiome(hex.biome);
 
+  // The chosen face takes the focus when the popup opens.
   useEffect(() => {
     optionRefs.current[roll.chosenIndex]?.focus();
-  }, [roll.chosenIndex]);
+  }, []);
 
   if (!die) {
     return null;
   }
 
-  // The power already on this die comes back when another face is taken.
-  const refundable = pickCost(roll, roll.chosenIndex);
   const options = roll.faces.map((face, index) => {
     const paid = facePayout(face, hex, effects);
     const refusal = pickRefusal(player, plan, hex.id, index);
     const cost = pickCost(roll, index);
 
-    return { face, index, paid, refusal, cost, powerAfter: powerLeft + refundable - cost };
+    return { face, index, paid, refusal, cost };
   });
-  const preview = options[focused] ?? options[0];
+  const chosen = options[roll.chosenIndex];
 
   const pick = (index: number) => {
     const option = options[index];
-    if (!option || option.refusal) {
+    setFocused(index);
+    if (!option || option.refusal || index === roll.chosenIndex) {
       return;
     }
 
@@ -136,6 +137,10 @@ const TaxPickDialog: FC<TTaxPickDialogProps> = ({ registry, player, plan, hex, r
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
+        <button type="button" className="hex-modal__close tax-pick__close" onClick={registry.closeTaxPickAction}>
+          <Icon src={ICONS.close} label="Закрыть" size="m" />
+        </button>
+
         <div className="tax-pick__head">
           <img className="tax-pick__art" src={die.art} alt="" width={64} height={64} />
 
@@ -167,15 +172,14 @@ const TaxPickDialog: FC<TTaxPickDialogProps> = ({ registry, player, plan, hex, r
             const isRolled = option.index === roll.rolledIndex;
             const isChosen = option.index === roll.chosenIndex;
             const isBiome = option.index === roll.biomeFaceIndex;
-            const resource = getResource(option.face.resource);
             const classes = [
               "tax-pick__face",
+              option.refusal ? "has-hint" : "",
               isRolled ? "tax-pick__face--rolled" : "",
               isChosen ? "tax-pick__face--chosen" : "",
-              isBiome ? "tax-pick__face--biome" : "",
               option.refusal ? "tax-pick__face--refused" : "",
-              option.index === focused ? "tax-pick__face--focused" : "",
             ].join(" ");
+            const reasonId = `tax-pick-reason-${option.index}`;
 
             return (
               <button
@@ -188,33 +192,28 @@ const TaxPickDialog: FC<TTaxPickDialogProps> = ({ registry, player, plan, hex, r
                 className={classes}
                 aria-checked={isChosen}
                 aria-disabled={option.refusal !== null}
+                aria-describedby={option.refusal ? reasonId : undefined}
                 tabIndex={option.index === focused ? 0 : -1}
                 onFocus={() => setFocused(option.index)}
-                onMouseEnter={() => setFocused(option.index)}
                 onClick={() => pick(option.index)}
               >
-                <span className="tax-pick__face-yield">
-                  <Icon src={resource.icon} label={resource.label} size="m" />
-                  {option.paid.amount === option.face.amount
-                    ? `+${option.face.amount}`
-                    : `+${option.face.amount}→${option.paid.amount}`}
-                </span>
-
-                <span className="tax-pick__face-toxicity">
-                  <Icon src={ICONS.toxicity} label="Токсичность" />
-                  {`+${option.paid.toxicity}%`}
-                </span>
+                <FaceChip
+                  kind={isBiome ? "biome" : "plain"}
+                  resource={option.face.resource}
+                  amount={
+                    option.paid.amount === option.face.amount
+                      ? `+${option.face.amount}`
+                      : `+${option.face.amount}→${option.paid.amount}`
+                  }
+                  toxicity={`+${option.paid.toxicity}%`}
+                  isSelected={isChosen}
+                  title={isBiome ? `Зависит от биома: «${biome.label}»` : undefined}
+                />
 
                 <span className="tax-pick__tags">
                   {isRolled ? (
                     <span className="tax-pick__tag tax-pick__tag--rolled">
                       {"Выпало"}
-                    </span>
-                  ) : null}
-
-                  {isBiome ? (
-                    <span className="tax-pick__tag tax-pick__tag--biome">
-                      {"Грань биома"}
                     </span>
                   ) : null}
 
@@ -235,60 +234,52 @@ const TaxPickDialog: FC<TTaxPickDialogProps> = ({ registry, player, plan, hex, r
                     </>
                   )}
                 </span>
+
+                {option.refusal ? (
+                  <span className="hint tax-pick__refusal" id={reasonId} role="tooltip">
+                    <span className="hint__row">
+                      {option.refusal.message}
+                    </span>
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </div>
 
-        {preview ? (
-          <div
-            className={`tax-pick__preview ${preview.refusal ? "tax-pick__preview--refused" : ""}`}
-            aria-live="polite"
-          >
-            {preview.refusal ? (
-              <span className="tax-pick__reason">
-                {preview.refusal.message}
-              </span>
-            ) : (
-              <>
-                <span className="tax-pick__preview-row">
-                  {"Итог: "}
-                  <Icon src={getResource(preview.face.resource).icon} label={getResource(preview.face.resource).label} />
-                  {`+${preview.paid.amount} ${getResource(preview.face.resource).label.toLowerCase()}`}
-                </span>
-
-                <span className="tax-pick__preview-row">
-                  <Icon src={ICONS.toxicity} label="Токсичность" />
-                  {`Токсичность гекса: ${Math.round(hex.toxicity)}% → ${Math.min(
-                    DEAD_TOXICITY_PCT,
-                    Math.round(hex.toxicity + preview.paid.toxicity),
-                  )}%`}
-                </span>
-
-                <span className="tax-pick__preview-row">
-                  <Icon src={ICONS.power} label="Власть" />
-                  {`Власть: ${powerLeft} → ${preview.powerAfter}`}
-                </span>
-              </>
-            )}
+        {die.alwaysYields.length > 0 ? (
+          <div className="tax-pick__always">
+            {"Сверх грани, каждый ход: "}
+            {die.alwaysYields.map((item) => (
+              <FaceChip key={item.resource} kind="always" resource={item.resource} amount={`+${item.amount}`} />
+            ))}
           </div>
         ) : null}
 
-        <div className="modal__buttons">
-          <button type="button" className="button button--ghost" onClick={registry.closeTaxPickAction}>
-            {"Отмена"}
-          </button>
+        {chosen ? (
+          <div className="tax-pick__summary" aria-live="polite">
+            <span className="tax-pick__summary-row">
+              {"Итог: "}
+              <Icon src={getResource(chosen.face.resource).icon} label={getResource(chosen.face.resource).label} />
+              {`+${chosen.paid.amount} ${getResource(chosen.face.resource).label.toLowerCase()}`}
+            </span>
 
-          <button
-            type="button"
-            className="button button--primary"
-            disabled={!preview || preview.refusal !== null}
-            title={preview?.refusal?.message}
-            onClick={() => pick(focused)}
-          >
-            {preview && preview.cost > 0 ? `Выбрать за ${preview.cost}` : "Выбрать"}
-          </button>
-        </div>
+            <span className="tax-pick__summary-row">
+              <Icon src={ICONS.toxicity} label="Токсичность" />
+              {`Токсичность гекса: ${Math.round(hex.toxicity)}% → ${Math.min(
+                DEAD_TOXICITY_PCT,
+                Math.round(hex.toxicity + chosen.paid.toxicity),
+              )}%`}
+            </span>
+
+            <span className="tax-pick__summary-row">
+              <Icon src={ICONS.power} label="Власть" />
+              {chosen.cost > 0
+                ? `Власть: ${chosen.cost} за эту грань, осталось ${powerLeft}`
+                : `Власть: грань бесплатна, осталось ${powerLeft}`}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );

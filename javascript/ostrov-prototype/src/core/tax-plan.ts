@@ -1,7 +1,8 @@
 import { hasConverter } from "./buildings";
 import { hexDie } from "./dice";
 import { createRng, hashSeed, randomInt } from "./rng";
-import { POWER_PER_TURN } from "./stronghold";
+import { isStaffed } from "./population";
+import { STRONGHOLD_ALWAYS_YIELDS } from "./stronghold";
 import { DEAD_TOXICITY_PCT, facePayout, isDead, isFoodBlocked, withMadness } from "./tax";
 import { withMeterGain } from "./toxic-slot";
 import type { TPayoutEffects } from "./tax";
@@ -78,7 +79,7 @@ const dieKeyOf = (player: TPlayer, hex: THex): TBuildingId | "stronghold" | null
 };
 
 /**
- * Rolls every die on the island once. The rolls are seeded by the world seed,
+ * Rolls every working die on the island once. The rolls are seeded by the world seed,
  * the turn and the player, so a turn always rolls the same, and opening the
  * phase twice cannot re-roll it.
  */
@@ -89,7 +90,8 @@ const rollTaxPlan = (player: TPlayer, turn: number, seed: string): TTaxPlan => {
   for (const hex of player.island.hexes) {
     const die = hexDie(player, hex);
     const dieKey = dieKeyOf(player, hex);
-    if (!die || !dieKey || die.faces.length === 0) {
+    // A building without its workers stands still: no roll, no yield, no toxicity.
+    if (!die || !dieKey || die.faces.length === 0 || !isStaffed(hex)) {
       continue;
     }
 
@@ -199,7 +201,9 @@ const planPayouts = (player: TPlayer, plan: TTaxPlan, effects: TPayoutEffects): 
     payouts.push({ hexId: hex.id, resource: face.resource, amount: paid.amount, toxicity: isConverted ? 0 : paid.toxicity });
 
     if (roll.dieKey === "stronghold") {
-      payouts.push({ hexId: hex.id, resource: "power", amount: POWER_PER_TURN, toxicity: 0 });
+      for (const item of STRONGHOLD_ALWAYS_YIELDS) {
+        payouts.push({ hexId: hex.id, resource: item.resource, amount: item.amount, toxicity: 0 });
+      }
     }
   }
 

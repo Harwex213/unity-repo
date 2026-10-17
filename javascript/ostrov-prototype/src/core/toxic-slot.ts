@@ -1,5 +1,6 @@
 import { getBuilding } from "./buildings";
 import { ICONS } from "./icons";
+import { withPeopleLost, withSoldiersLost } from "./population";
 import { getResource } from "./resources";
 import { createRng, hashSeed, randomInt } from "./rng";
 import { DEAD_TOXICITY_PCT } from "./tax";
@@ -97,8 +98,9 @@ type TSlotEffect =
   | { readonly kind: "loss"; readonly resource: TResourceId; readonly percent: number; readonly min: number }
   /** Healthy people go mad. Never more than the population. */
   | { readonly kind: "madness"; readonly count: number }
-  /** People die. */
+  /** People die: the idle first, then the workers, then the soldiers. */
   | { readonly kind: "deaths"; readonly count: number }
+  /** Soldiers die. They leave the population too. */
   | { readonly kind: "army"; readonly count: number }
   /** Random built hexes take more toxicity, never past the dead mark. */
   | { readonly kind: "pollute"; readonly hexes: number; readonly pct: number }
@@ -458,7 +460,7 @@ const applyEffect = (state: TApplied, effect: TSlotEffect, rng: TRng): TApplied 
       return state;
     }
 
-    const next = withResource(withResource(player, "population", -moved), "mad", moved);
+    const next = withPeopleLost(withResource(player, "mad", moved), moved);
 
     return {
       player: next,
@@ -476,7 +478,7 @@ const applyEffect = (state: TApplied, effect: TSlotEffect, rng: TRng): TApplied 
     }
 
     return {
-      player: withResource(player, "population", -lost),
+      player: withPeopleLost(player, lost),
       lines: [...lines, { icon: ICONS.population, text: `−${lost} ${resourceLabel("population")}`, tone: "bad" }],
     };
   }
@@ -488,7 +490,7 @@ const applyEffect = (state: TApplied, effect: TSlotEffect, rng: TRng): TApplied 
     }
 
     return {
-      player: { ...player, army: player.army - lost },
+      player: withSoldiersLost(player, lost),
       lines: [...lines, { icon: ICONS.army, text: `−${lost} ${plural(lost, "боец", "бойца", "бойцов")}`, tone: "bad" }],
     };
   }

@@ -25,8 +25,12 @@ const demolishRefusal = (player: TPlayer, hex: THex): TDemolishRefusal | null =>
   return null;
 };
 
-/** The hex after a demolish: no building, and its toxicity is wiped. */
-const demolishedHex = (hex: THex): THex => ({ ...hex, building: null, toxicity: 0 });
+/** The hex after a demolish: no building, and its toxicity is wiped. The workers become idle. */
+const demolishedHex = (hex: THex): THex => {
+  const { workers: _workers, ...rest } = hex;
+
+  return { ...rest, building: null, toxicity: 0 };
+};
 
 export type { TDemolishRefusal, TDemolishRefusalCode };
 export { demolishedHex, demolishRefusal };

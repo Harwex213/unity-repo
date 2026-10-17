@@ -22,7 +22,11 @@ const ToolsPanel: FC<TToolsPanelProps> = ({ registry }) => {
   const locked = store.game.phase.value !== "build" || store.ui.busy.value || store.derived.isHumanReady.value;
 
   return (
-    <div className={`panel tools-panel ${locked ? "panel--locked" : ""}`}>
+    <div
+      className={`panel tools-panel ${locked ? "panel--stowed" : ""}`}
+      aria-hidden={locked}
+      inert={locked}
+    >
       <button
         type="button"
         className={`tool-icon has-hint ${demolishMode ? "tool-icon--active" : ""}`}
