@@ -21,14 +21,34 @@ namespace Hexwex.View
         private const float PoundSeconds = 1.5f;
         private const float PoundLift = 0.13f;
         private const float SmokeEvery = 0.55f;
-        private const int MaxPuffs = 14;
+        private const int MaxPuffs = 40;
 
-        private static readonly Color SmokeColor = new Color(0.6f, 0.6f, 0.64f);
+        private static readonly Color SmokeColor = new Color(0.86f, 0.86f, 0.88f);
         private static readonly Color DustColor = new Color(0.7f, 0.64f, 0.54f);
+        private static readonly Color AshColor = new Color(0.34f, 0.32f, 0.32f);
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static Material _smokeMaterial;
+        private static bool _smokeLooked;
+        private static readonly Color EmberColor = new Color(1f, 0.55f, 0.15f);
+        private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
         private readonly List<Mover> _movers = new List<Mover>();
         private readonly List<Transform> _smoke = new List<Transform>();
         private readonly List<Transform> _dust = new List<Transform>();
+        private readonly List<Transform> _ash = new List<Transform>();
+        private readonly List<Transform> _embers = new List<Transform>();
+        private readonly List<LavaGlow> _lava = new List<LavaGlow>();
+        private MaterialPropertyBlock _block;
+        private Material _lavaMaterial;
+        private float _nextAsh;
+        private float _nextEmbers;
+
+        private struct LavaGlow
+        {
+            public Renderer Renderer;
+            public int Index;
+            public Color Emission;
+        }
         private readonly List<Puff> _puffs = new List<Puff>();
 
         private Material _material;
@@ -70,6 +90,11 @@ namespace Hexwex.View
             public float Age;
             public float Life;
             public float Size;
+            /// <summary>An ember arcs out and falls back, and does not swell like smoke.</summary>
+            public bool IsEmber;
+            /// <summary>The colour it was given, whose alpha it fades from.</summary>
+            public Color Color;
+            public MeshRenderer Renderer;
         }
 
         /// <summary>Finds the moving parts of the building this stands on. <paramref name="material"/> is what smoke and dust are drawn with.</summary>
@@ -124,6 +149,14 @@ namespace Hexwex.View
                 {
                     _dust.Add(part);
                 }
+                else if (kind == "Ash")
+                {
+                    _ash.Add(part);
+                }
+                else if (kind == "Embers")
+                {
+                    _embers.Add(part);
+                }
                 else if (kind.StartsWith("Spin") && kind.Length == 5)
                 {
                     // The script names the axis as Blender has it: its x is x here, its y runs along z, its z is up.
@@ -136,7 +169,22 @@ namespace Hexwex.View
                 }
             }
 
-            enabled = _movers.Count > 0 || _smoke.Count > 0;
+            // Lava glows of itself: it is found by its material, wherever it lies on the model.
+            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+            {
+                Material[] materials = renderer.sharedMaterials;
+                for (int index = 0; index < materials.Length; index += 1)
+                {
+                    if (materials[index] != null && materials[index].name.StartsWith("M_Lava"))
+                    {
+                        _lava.Add(new LavaGlow { Renderer = renderer, Index = index, Emission = materials[index].GetColor(EmissionId) });
+                        _lavaMaterial = materials[index];
+                    }
+                }
+            }
+
+            _block = new MaterialPropertyBlock();
+            enabled = _movers.Count > 0 || _smoke.Count > 0 || _ash.Count > 0 || _embers.Count > 0 || _lava.Count > 0;
         }
 
         private void Add(Transform part, Kind kind, Vector3 axis, float number)
@@ -205,10 +253,11 @@ namespace Hexwex.View
                 Transform from = _smoke[Random.Range(0, _smoke.Count)];
                 if (from != null && from.gameObject.activeInHierarchy)
                 {
-                    Emit(from.position, new Vector3(Random.Range(0.02f, 0.08f), Random.Range(0.16f, 0.24f), Random.Range(-0.03f, 0.03f)), SmokeColor * Random.Range(0.85f, 1.05f), Random.Range(0.05f, 0.085f), Random.Range(1.3f, 1.9f));
+                    Emit(from.position, new Vector3(Random.Range(0.02f, 0.08f), Random.Range(0.16f, 0.24f), Random.Range(-0.03f, 0.03f)), SmokeColor * Random.Range(0.85f, 1.05f), Random.Range(0.07f, 0.1f), Random.Range(2.2f, 3f));
                 }
             }
 
+            StepVolcano(time);
             StepPuffs(deltaTime);
         }
 
@@ -254,7 +303,83 @@ namespace Hexwex.View
             mover.WasDown = isDown;
         }
 
+        /// <summary>
+        /// A volcano's life: the lava glows brighter and dimmer as if it breathed,
+        /// dark ash rolls up out of the crater, and now and then it spits a burst
+        /// of embers that arc out and fall back.
+        /// </summary>
+        private void StepVolcano(float time)
+        {
+            if (_lava.Count > 0)
+            {
+                float breath = 0.75f + 0.25f * Mathf.Sin(time * 1.3f + _phase) + 0.12f * Mathf.Sin(time * 4.7f + _phase * 2f);
+                foreach (LavaGlow glow in _lava)
+                {
+                    if (glow.Renderer == null)
+                    {
+                        continue;
+                    }
+
+                    glow.Renderer.GetPropertyBlock(_block, glow.Index);
+                    _block.SetColor(EmissionId, glow.Emission * breath);
+                    glow.Renderer.SetPropertyBlock(_block, glow.Index);
+                }
+            }
+
+            if (_ash.Count > 0 && time >= _nextAsh)
+            {
+                _nextAsh = time + Random.Range(0.35f, 0.6f);
+                foreach (Transform from in _ash)
+                {
+                    if (from != null && from.gameObject.activeInHierarchy)
+                    {
+                        Vector3 drift = new Vector3(Random.Range(-0.04f, 0.08f), Random.Range(0.22f, 0.32f), Random.Range(-0.04f, 0.04f));
+                        Emit(from.position + Random.insideUnitSphere * 0.04f, drift, AshColor * Random.Range(0.8f, 1.15f), Random.Range(0.12f, 0.17f), Random.Range(3f, 4.2f));
+                    }
+                }
+            }
+
+            if (_embers.Count > 0 && time >= _nextEmbers)
+            {
+                _nextEmbers = time + Random.Range(1.6f, 3.4f);
+                foreach (Transform from in _embers)
+                {
+                    if (from == null || !from.gameObject.activeInHierarchy)
+                    {
+                        continue;
+                    }
+
+                    for (int index = 0; index < 7; index += 1)
+                    {
+                        Vector2 out2 = Random.insideUnitCircle * 0.35f;
+                        Emit(from.position, new Vector3(out2.x, Random.Range(0.6f, 1.0f), out2.y), EmberColor, Random.Range(0.025f, 0.04f), Random.Range(1.0f, 1.4f), true);
+                    }
+                }
+            }
+        }
+
+        /// <summary>The soft see-through material of smoke, ash and dust, or <c>null</c> when its shader is missing.</summary>
+        private static Material SmokeMaterial
+        {
+            get
+            {
+                if (!_smokeLooked)
+                {
+                    _smokeLooked = true;
+                    Shader shader = Resources.Load<Shader>("Shaders/HexwexSmoke");
+                    _smokeMaterial = shader != null ? new Material(shader) { name = "M_Smoke" } : null;
+                }
+
+                return _smokeMaterial;
+            }
+        }
+
         private void Emit(Vector3 at, Vector3 velocity, Color color, float size, float life)
+        {
+            Emit(at, velocity, color, size, life, false);
+        }
+
+        private void Emit(Vector3 at, Vector3 velocity, Color color, float size, float life, bool isEmber)
         {
             if (_puffs.Count >= MaxPuffs || _material == null)
             {
@@ -262,11 +387,14 @@ namespace Hexwex.View
             }
 
             // A puff does not turn or grow with the part it came from: it hangs under the building itself.
-            Transform puff = Props.Part(transform, Props.Sphere, _material, transform.InverseTransformPoint(at), Vector3.zero, color);
-            puff.name = "Puff";
+            // An ember glows: it is drawn with the lava's own material.
+            // Smoke, ash and dust are soft and see-through; an ember glows with the lava's own material.
+            Material material = isEmber ? (_lavaMaterial != null ? _lavaMaterial : _material) : (SmokeMaterial != null ? SmokeMaterial : _material);
+            Transform puff = Props.Part(transform, Props.Sphere, material, transform.InverseTransformPoint(at), Vector3.zero, color);
+            puff.name = isEmber ? "Ember" : "Puff";
             MeshRenderer puffRenderer = puff.GetComponent<MeshRenderer>();
             puffRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _puffs.Add(new Puff { Transform = puff, Velocity = velocity, Life = life, Size = size });
+            _puffs.Add(new Puff { Transform = puff, Velocity = velocity, Life = life, Size = size, IsEmber = isEmber, Color = color, Renderer = puffRenderer });
         }
 
         private void StepPuffs(float deltaTime)
@@ -288,10 +416,30 @@ namespace Hexwex.View
                     continue;
                 }
 
-                // The material is opaque, so a puff swells and then thins away by shrinking.
-                float swell = t < 0.3f ? t / 0.3f : 1f - (t - 0.3f) / 0.7f * 0.85f;
+                if (puff.IsEmber)
+                {
+                    // An ember flies up and out, falls back under its weight, and dims by shrinking.
+                    puff.Velocity += Vector3.down * 1.6f * deltaTime;
+                    puff.Transform.localPosition += puff.Velocity * deltaTime;
+                    puff.Transform.localScale = Vector3.one * puff.Size * (1f - t * 0.7f);
+
+                    continue;
+                }
+
+                // A puff rises, slows, spreads wide and thins away: it grows the whole time and fades out at the end.
+                puff.Velocity *= Mathf.Exp(-0.5f * deltaTime);
                 puff.Transform.localPosition += puff.Velocity * deltaTime;
-                puff.Transform.localScale = Vector3.one * puff.Size * (0.6f + t) * swell;
+                float grow = Mathf.Lerp(0.5f, 2.4f, Mathf.Sqrt(t));
+                puff.Transform.localScale = new Vector3(grow, grow * 0.85f, grow) * puff.Size;
+                if (SmokeMaterial != null && puff.Renderer != null)
+                {
+                    float thick = Mathf.Clamp01(t / 0.12f) * (1f - Mathf.SmoothStep(0.35f, 1f, t));
+                    Color color = puff.Color;
+                    color.a = 0.75f * thick;
+                    puff.Renderer.GetPropertyBlock(_block);
+                    _block.SetColor(BaseColorId, color);
+                    puff.Renderer.SetPropertyBlock(_block);
+                }
             }
         }
     }

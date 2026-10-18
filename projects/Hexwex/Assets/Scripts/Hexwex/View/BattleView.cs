@@ -353,7 +353,7 @@ namespace Hexwex.View
                     top = Color.Lerp(top, TargetColor, 0.7f);
                 }
 
-                Props.Paint(visual.Tops[index], top, 0);
+                Props.PaintGround(visual.Tops[index], top, hex.Biome, 0);
                 Props.Paint(visual.Tops[index], side, 1);
             }
         }

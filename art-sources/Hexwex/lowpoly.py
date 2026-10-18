@@ -46,6 +46,28 @@ PALETTE = {
     "M_Leaf_Jungle": ((0.030, 0.280, 0.150), 0.85, 0.0),
     "M_Leaf_Dry": ((0.520, 0.480, 0.110), 0.90, 0.0),
     "M_Straw": ((0.720, 0.580, 0.180), 0.90, 0.0),
+    # A fir's young growth, lighter than its old needles; ripe grain; grass burnt gold.
+    "M_Leaf_Fir": ((0.070, 0.270, 0.150), 0.90, 0.0),
+    "M_Wheat": ((0.850, 0.640, 0.200), 0.85, 0.0),
+    "M_Grass_Dry": ((0.780, 0.600, 0.220), 0.92, 0.0),
+    # The poison lying in a crater's pool: it glows, but low, under the day.
+    "M_Toxic_Pool": ((0.300, 0.680, 0.120), 0.40, 0.45),
+    # Lichen on tundra stones; bog water, dark and still; a palm's fronds.
+    "M_Lichen": ((0.700, 0.420, 0.120), 0.95, 0.0),
+    "M_Bog": ((0.040, 0.070, 0.050), 0.15, 0.0),
+    "M_Frond": ((0.180, 0.450, 0.100), 0.85, 0.0),
+    # Autumn leaves in a leafy forest; the bright bloom of the jungle.
+    "M_Leaf_Autumn": ((0.700, 0.300, 0.060), 0.90, 0.0),
+    "M_Bloom": ((0.900, 0.200, 0.450), 0.80, 0.0),
+    # A crack in the ash, where the dark goes down.
+    "M_Crack": ((0.030, 0.030, 0.035), 0.95, 0.0),
+    # The kinds of the taiga: spruce needles near blue, the orange bark of a pine, a larch green and gold, a juniper's grey needles.
+    "M_Leaf_Spruce": ((0.012, 0.075, 0.075), 0.90, 0.0),
+    "M_Bark_Pine": ((0.520, 0.210, 0.080), 0.85, 0.0),
+    "M_Leaf_Larch": ((0.240, 0.450, 0.110), 0.90, 0.0),
+    "M_Larch_Gold": ((0.820, 0.560, 0.090), 0.90, 0.0),
+    "M_Leaf_Juniper": ((0.110, 0.230, 0.180), 0.90, 0.0),
+    "M_Berry_Blue": ((0.060, 0.070, 0.300), 0.50, 0.0),
     "M_Moss": ((0.300, 0.380, 0.260), 0.95, 0.0),
     "M_Mud": ((0.085, 0.100, 0.050), 0.60, 0.0),
     "M_Reed": ((0.380, 0.420, 0.150), 0.90, 0.0),

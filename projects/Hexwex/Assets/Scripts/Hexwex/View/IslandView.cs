@@ -273,7 +273,7 @@ namespace Hexwex.View
                     break;
             }
 
-            Props.Paint(visual.TopRenderer, top, 0);
+            Props.PaintGround(visual.TopRenderer, top, hex.Biome, 0);
             Props.Paint(visual.TopRenderer, side, 1);
         }
     }
