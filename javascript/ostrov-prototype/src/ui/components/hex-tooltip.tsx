@@ -2,27 +2,52 @@ import { useSignals } from "@preact/signals-react/runtime";
 import { getBiome } from "../../core/biomes";
 import { buildRefusal } from "../../core/build-check";
 import {
-  averageToxicityOn,
-  averageYieldOn,
   canBuildOn,
   effectiveCost,
   facesOn,
   getBuilding,
 } from "../../core/buildings";
 import { ICONS } from "../../core/icons";
-import { getResource } from "../../core/resources";
+import { isStaffed, workersNeeded, workersOn } from "../../core/population";
 import { hexDie } from "../../core/dice";
-import { canPlaceStronghold, isStrongholdHex, POWER_PER_TURN, STRONGHOLD_LABEL } from "../../core/stronghold";
-import { facePayout, isDead, isFoodBlocked } from "../../core/tax";
+import { canPlaceStronghold, isStrongholdHex, STRONGHOLD_LABEL } from "../../core/stronghold";
+import { isDead, isFoodBlocked } from "../../core/tax";
 import { findRoll } from "../../core/tax-plan";
 import { useStore } from "../../store/store";
-import { DieAverage, DieFaces } from "./die-faces";
-import { StructureHpLine } from "./hex-hp-bar";
+import { DieFaces } from "./die-faces";
 import { Icon } from "./icon";
+import { useLayoutEffect, useRef } from "react";
 import type { FC } from "react";
-import type { TPayoutEffects } from "../../core/tax";
-import type { TTaxRoll } from "../../core/tax-plan";
 import type { TBuilding, THex, TPlayer } from "../../core/types";
+
+/** The smallest gap between the popup and the window edge, in px. */
+const WINDOW_EDGE_PX = 8;
+
+/**
+ * Shifts the popup back inside the window when the popup crosses an edge.
+ * The CSS centers the popup above the hex. The shift runs after every render,
+ * because the size of the popup depends on its rows.
+ */
+const useKeepInWindow = () => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.translate = "";
+    const rect = element.getBoundingClientRect();
+    const dx =
+      Math.max(WINDOW_EDGE_PX - rect.left, 0) + Math.min(window.innerWidth - WINDOW_EDGE_PX - rect.right, 0);
+    const dy =
+      Math.max(WINDOW_EDGE_PX - rect.top, 0) + Math.min(window.innerHeight - WINDOW_EDGE_PX - rect.bottom, 0);
+    element.style.translate = `${dx}px ${dy}px`;
+  });
+
+  return ref;
+};
 
 type TBuildPreviewProps = {
   hex: THex;
@@ -51,9 +76,11 @@ const BuildPreview: FC<TBuildPreviewProps> = ({ hex, building, player, stoneDisc
       : null;
   const biomeFace = building.biomeFaces[hex.biome];
   const faces = facesOn(building, hex.biome);
+  const ref = useKeepInWindow();
 
   return (
     <div
+      ref={ref}
       className={`hex-tooltip hex-tooltip--build ${refusal ? "hex-tooltip--refused" : "hex-tooltip--allowed"}`}
       style={{ left: `${anchor.x}px`, top: `${anchor.y}px` }}
     >
@@ -73,18 +100,8 @@ const BuildPreview: FC<TBuildPreviewProps> = ({ hex, building, player, stoneDisc
           biomeFaceIndex={biomeFace === undefined ? -1 : faces.length - 1}
           biomeLabel={biome.label}
           hex={hex}
+          className="hex-tooltip__faces"
         />
-      ) : null}
-
-      {fits ? (
-        <div className="hex-tooltip__row">
-          {"В среднем: "}
-          <Icon src={getResource(building.yields).icon} label={getResource(building.yields).label} />
-          {averageYieldOn(building, hex.biome).toFixed(1)}
-          {" · "}
-          <Icon src={ICONS.toxicity} label="Токсичность" />
-          {averageToxicityOn(building, hex.biome).toFixed(1)}
-        </div>
       ) : null}
 
       <div className="hex-tooltip__row">
@@ -133,40 +150,12 @@ const BuildPreview: FC<TBuildPreviewProps> = ({ hex, building, player, stoneDisc
   );
 };
 
-type TRollLineProps = {
-  hex: THex;
-  roll: TTaxRoll;
-  effects: TPayoutEffects;
-};
-
-/** The tax phase line of the tooltip: the face this die will pay. */
-const RollLine: FC<TRollLineProps> = ({ hex, roll, effects }) => {
-  const face = roll.faces[roll.chosenIndex];
-  if (!face) {
-    return null;
-  }
-
-  const paid = facePayout(face, hex, effects);
-  const isPicked = roll.chosenIndex !== roll.rolledIndex;
-
-  return (
-    <div className="hex-tooltip__row hex-tooltip__roll">
-      {isPicked ? "Выбрано: " : "Выпало: "}
-      <Icon src={getResource(face.resource).icon} label={getResource(face.resource).label} />
-      {`+${paid.amount}`}
-      {" · "}
-      <Icon src={ICONS.toxicity} label="Токсичность" />
-      {`+${paid.toxicity}%`}
-      {isPicked ? <Icon src={ICONS.power} label="Выбрано за власть" /> : null}
-    </div>
-  );
-};
-
 /**
  * The hover popup of the spec: the name of what stands on the hex and the
  * resource combinations its die can roll. The stronghold has a die too. An
- * empty hex only names its biome. In the tax phase the popup also shows the
- * face the die will pay.
+ * empty hex only names its biome. In the tax phase the popup shows only the
+ * title and the faces, with the chosen face lit: the hex plates already show
+ * the workers and the payout. The hp of a structure lives on its hex plate.
  */
 const HexTooltip = () => {
   useSignals();
@@ -180,7 +169,10 @@ const HexTooltip = () => {
   const isReadonly = store.derived.isReadonly.value;
   const effects = store.derived.techEffects.value;
   const taxPlan = store.derived.humanTaxPlan.value;
-  const isTaxOpen = store.game.tax.value?.status === "rolled";
+  const isTaxPhase = isPlay && store.game.phase.value === "tax";
+  const ref = useKeepInWindow();
+  const isBuildPhase =
+    isPlay && store.game.phase.value === "build" && !store.ui.busy.value && !store.derived.isHumanReady.value;
 
   if (!hex || !anchor) {
     return null;
@@ -202,50 +194,44 @@ const HexTooltip = () => {
   const die = hexDie(player, hex);
   const isStronghold = isStrongholdHex(player, hex.id);
   const roll = isReadonly ? null : findRoll(taxPlan, hex.id);
-  const canPlace = isSetup && player !== null && canPlaceStronghold(player.island, hex.id);
+  // The hex that already holds the stronghold needs no "place" hint.
+  const canPlace = isSetup && player !== null && !isStronghold && canPlaceStronghold(player.island, hex.id);
 
   return (
-    <div className="hex-tooltip" style={{ left: `${anchor.x}px`, top: `${anchor.y}px` }}>
+    <div ref={ref} className="hex-tooltip" style={{ left: `${anchor.x}px`, top: `${anchor.y}px` }}>
       <div className="hex-tooltip__title">
         {die ? <Icon src={die.art} size="m" /> : null}
-        {die ? die.label : biome.label}
+        <span>{die ? die.label : biome.label}</span>
+        {die ? <span className="hex-tooltip__subtitle">{biome.label}</span> : null}
       </div>
 
       {die ? (
-        <div className="hex-tooltip__subtitle">
-          {biome.label}
-        </div>
+        <DieFaces
+          faces={die.faces}
+          biomeFaceIndex={die.biomeFaceIndex}
+          biomeLabel={biome.label}
+          alwaysYields={die.alwaysYields}
+          selectedIndex={roll ? roll.chosenIndex : -1}
+          className="hex-tooltip__faces"
+        />
       ) : null}
 
-      {die ? (
-        <DieFaces faces={die.faces} biomeFaceIndex={die.biomeFaceIndex} biomeLabel={biome.label} />
-      ) : (
-        <div className="hex-tooltip__empty">
-          {"Свободный гекс"}
-        </div>
-      )}
-
-      {die ? (
+      {hex.building && !isTaxPhase ? (
         <div className="hex-tooltip__row">
-          {"В среднем: "}
-          <DieAverage die={die} />
+          <Icon src={ICONS.population} label="Рабочие" />
+          {`Рабочие: ${workersOn(hex)}/${workersNeeded(hex)}`}
         </div>
       ) : null}
 
-      {isStronghold ? (
-        <div className="hex-tooltip__row">
-          <Icon src={ICONS.power} label="Власть" />
-          {`+${POWER_PER_TURN} власть за ход. Снести нельзя.`}
+      {hex.building && !isStaffed(hex) && !isTaxPhase ? (
+        <div className="hex-tooltip__warning">
+          {"Нет рабочих: здание стоит и ничего не производит"}
         </div>
       ) : null}
 
-      <StructureHpLine player={player} hex={hex} className="hex-tooltip__row" />
-
-      {roll ? <RollLine hex={hex} roll={roll} effects={effects} /> : null}
-
-      {roll && isTaxOpen ? (
+      {hex.building && !isStaffed(hex) && !isReadonly && isBuildPhase ? (
         <div className="hex-tooltip__action">
-          {"Клик — сменить грань за власть"}
+          {"Клик — открыть карточку и назначить рабочего"}
         </div>
       ) : null}
 

@@ -1,3 +1,4 @@
+import { withPeopleLost } from "../core/population";
 import { createRng, hashSeed } from "../core/rng";
 import { totalToxicity } from "../core/tax";
 import { rollTrailEvent } from "../core/trail-events";
@@ -174,24 +175,14 @@ const settleExplorationAction = (store: TStore) => {
   }
 
   if (event.id === "undead") {
-    replacePlayer(store, {
-      ...player,
-      resources: { ...player.resources, population: Math.max(0, player.resources.population - 2) },
-    });
+    replacePlayer(store, withPeopleLost(player, 2));
 
     return;
   }
 
   if (event.id === "madness") {
     const moved = Math.min(2, player.resources.population);
-    replacePlayer(store, {
-      ...player,
-      resources: {
-        ...player.resources,
-        population: player.resources.population - moved,
-        mad: player.resources.mad + moved,
-      },
-    });
+    replacePlayer(store, withPeopleLost({ ...player, resources: { ...player.resources, mad: player.resources.mad + moved } }, moved));
 
     return;
   }

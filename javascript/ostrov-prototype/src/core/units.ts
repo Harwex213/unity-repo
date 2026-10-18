@@ -1,6 +1,4 @@
 import { ICONS } from "./icons";
-import { pick } from "./rng";
-import type { TRng } from "./rng";
 
 /**
  * The rosters of the spec. Melee, ranged, cavalry and air are the player's;
@@ -139,29 +137,18 @@ const getEnemy = (id: TEnemyId) => {
   return enemy;
 };
 
+/** The one unit the stronghold recruits. */
+const ARMY_UNIT: TUnitId = "militia";
+
 /**
  * Who goes to the clearing phase. The spec never names a military building, so
- * the army is levied from the population: each unit costs people, and only
- * researched units can be fielded. The militia needs no research.
+ * the player sends people to the army (`player.army`, see `core/population.ts`).
+ * The stronghold recruits only militia: one person is one militiaman, so the
+ * whole army is always fielded.
  */
-const buildRoster = (population: number, unlocked: readonly TUnitId[], rng: TRng): readonly TUnitId[] => {
-  const pool = UNITS.filter((unit) => unlocked.includes(unit.id));
-  const roster: TUnitId[] = [];
-  let budget = population;
-
-  while (budget > 0) {
-    const affordable = pool.filter((unit) => unit.upkeep <= budget);
-    if (affordable.length === 0) {
-      break;
-    }
-
-    const unit = pick(rng, affordable);
-    roster.push(unit.id);
-    budget -= unit.upkeep;
-  }
-
-  return roster;
+const buildRoster = (armyPeople: number): readonly TUnitId[] => {
+  return Array.from({ length: Math.max(0, armyPeople) }, () => ARMY_UNIT);
 };
 
 export type { TCombatant, TEnemy, TEnemyId, TProjectile, TUnit, TUnitClass, TUnitId };
-export { buildRoster, ENEMIES, getEnemy, getUnit, UNITS };
+export { ARMY_UNIT, buildRoster, ENEMIES, getEnemy, getUnit, UNITS };

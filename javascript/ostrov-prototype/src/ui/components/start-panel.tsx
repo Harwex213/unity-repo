@@ -29,9 +29,15 @@ const StartPanel: FC<TStartPanelProps> = ({ registry }) => {
     <div className={`panel start-panel ${isLeaving ? "start-panel--leaving" : ""}`}>
       <div className="start-panel__hint">
         <Icon src={STRONGHOLD_ART} size="m" />
-        {isPlaced
-          ? "Твердыня стоит. Кликните другой гекс, чтобы перенести её."
-          : "Кликните свободный гекс, чтобы поставить твердыню."}
+        {/* Both texts share one grid cell, so the panel keeps the width of the longer one. */}
+        <span className="start-panel__texts">
+          <span className={isPlaced ? "start-panel__text--hidden" : ""} aria-hidden={isPlaced}>
+            {"Кликните свободный гекс, чтобы поставить твердыню."}
+          </span>
+          <span className={isPlaced ? "" : "start-panel__text--hidden"} aria-hidden={!isPlaced}>
+            {"Твердыня стоит. Кликните другой гекс, чтобы перенести её."}
+          </span>
+        </span>
       </div>
 
       <button

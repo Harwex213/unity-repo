@@ -101,11 +101,7 @@ const ToxicPanel: FC<TToxicPanelProps> = ({ registry }) => {
   return (
     <section className={panelClass} aria-label="Токсичность острова">
       <header className="toxic-panel__head">
-        <Icon src={ICONS.toxicity} className="toxic-panel__icon" />
-
-        <span className="toxic-panel__title">
-          {"Токсичность"}
-        </span>
+        <Icon src={ICONS.toxicity} label="Токсичность" className="toxic-panel__icon" />
       </header>
 
       <div className="toxic-meter__flask">

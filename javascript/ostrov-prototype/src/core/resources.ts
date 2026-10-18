@@ -19,16 +19,16 @@ type TResource = {
 };
 
 const RESOURCES: readonly TResource[] = [
-  { id: "food", icon: ICONS.food, label: "Еда", kind: "basic", feeds: "даёт население" },
-  { id: "stone", icon: ICONS.stone, label: "Камень", kind: "basic", feeds: "даёт здания" },
-  { id: "wood", icon: ICONS.wood, label: "Дерево", kind: "basic", feeds: "даёт здания" },
-  { id: "population", icon: ICONS.population, label: "Население", kind: "special", feeds: "даёт армию" },
-  { id: "hammers", icon: ICONS.hammers, label: "Молотки", kind: "special", feeds: "даёт здания" },
-  { id: "science", icon: ICONS.science, label: "Наука", kind: "special", feeds: "даёт технологии" },
-  { id: "scouting", icon: ICONS.scouting, label: "Разведка", kind: "special", feeds: "даёт разведку" },
-  { id: "mana", icon: ICONS.mana, label: "Мана", kind: "special", feeds: "даёт активные скиллы" },
-  { id: "power", icon: ICONS.power, label: "Власть", kind: "special", feeds: "меняет выпавшую грань здания" },
-  { id: "mad", icon: ICONS.mad, label: "Сумасшедшие", kind: "negative", feeds: "съедает население" },
+  { id: "food", icon: ICONS.food, label: "Еда", kind: "basic", feeds: "Кормит сумасшедших" },
+  { id: "stone", icon: ICONS.stone, label: "Камень", kind: "basic", feeds: "Даёт здания" },
+  { id: "wood", icon: ICONS.wood, label: "Дерево", kind: "basic", feeds: "Даёт здания" },
+  { id: "population", icon: ICONS.population, label: "Население", kind: "special", feeds: "Работают в зданиях и служат в армии" },
+  { id: "hammers", icon: ICONS.hammers, label: "Молотки", kind: "special", feeds: "Даёт здания" },
+  { id: "science", icon: ICONS.science, label: "Наука", kind: "special", feeds: "Даёт технологии" },
+  { id: "scouting", icon: ICONS.scouting, label: "Разведка", kind: "special", feeds: "Даёт разведку" },
+  { id: "mana", icon: ICONS.mana, label: "Мана", kind: "special", feeds: "Даёт активные скиллы" },
+  { id: "power", icon: ICONS.power, label: "Власть", kind: "special", feeds: "Меняет выпавшую грань здания" },
+  { id: "mad", icon: ICONS.mad, label: "Сумасшедшие", kind: "negative", feeds: "Не работают, съедают еду" },
 ];
 
 const RESOURCE_BY_ID = new Map(RESOURCES.map((resource) => [resource.id, resource]));

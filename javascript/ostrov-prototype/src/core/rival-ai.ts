@@ -1,4 +1,5 @@
 import { averageYieldOn, getBuilding } from "./buildings";
+import { withSoldiersLost } from "./population";
 import { distancesFrom, getCell } from "./world-gen";
 import type { TRng } from "./rng";
 import type { TPlayer } from "./types";
@@ -64,7 +65,7 @@ const fightBoss = (player: TPlayer, rng: TRng): TPlayer => {
     return { ...player, bossSlain: true, techs: player.techs + 1 };
   }
 
-  return { ...player, army: Math.max(0, player.army - BOSS_LOSS_ARMY) };
+  return withSoldiersLost(player, BOSS_LOSS_ARMY);
 };
 
 /**

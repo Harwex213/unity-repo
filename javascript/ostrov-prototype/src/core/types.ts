@@ -69,6 +69,15 @@ type TFace = {
   readonly toxicity: number;
 };
 
+/**
+ * A yield that comes every tax phase without a roll, on top of the die: the
+ * stronghold's power. It leaves no toxicity.
+ */
+type TAlwaysYield = {
+  readonly resource: Exclude<TResourceId, "mad">;
+  readonly amount: number;
+};
+
 /** What a building costs to place. Stone, wood and hammers "дают здания". */
 type TBuildCost = {
   readonly stone: number;
@@ -125,6 +134,11 @@ type THex = {
     readonly kind: TBuildingId | "stronghold";
     readonly hp: number;
   };
+  /**
+   * People who work in the building on the hex. They are part of the
+   * population. Missing means 0. See `core/population.ts`.
+   */
+  readonly workers?: number;
 };
 
 type TIsland = {
@@ -138,7 +152,9 @@ type TPlayer = {
   readonly color: string;
   readonly isHuman: boolean;
   readonly island: TIsland;
+  /** `resources.population` is every person: idle, in the army and in buildings. */
   readonly resources: TResourcePool;
+  /** People in the army. They are part of `resources.population`. */
   readonly army: number;
   readonly techs: number;
   /** The world cell the island is flying over. */
@@ -180,6 +196,7 @@ export type {
   TBiome,
   TBiomeId,
   TBuildCost,
+  TAlwaysYield,
   TBuilding,
   TBuildingId,
   TFace,

@@ -1,6 +1,7 @@
 import { buildRefusal } from "../core/build-check";
 import { canAfford, effectiveCost, getBuilding, isBuildingUnlocked } from "../core/buildings";
 import { demolishedHex, demolishRefusal } from "../core/demolish";
+import { populationOf, WORKERS_PER_BUILDING } from "../core/population";
 import { updateHex } from "./player-updates";
 import { showNotice } from "./ui-actions";
 import type { TStore } from "../store/store";
@@ -103,7 +104,14 @@ const buildOnHexAction = (store: TStore, hexId: string) => {
     },
   };
 
-  updateHex(store, paid, hexId, (target) => ({ ...target, building: building.id }));
+  // A new building takes its workers from the idle people, if there are enough.
+  const idle = populationOf(paid).idle;
+  const workers = idle >= WORKERS_PER_BUILDING ? WORKERS_PER_BUILDING : 0;
+  updateHex(store, paid, hexId, (target) => ({ ...target, building: building.id, workers }));
+
+  if (workers === 0) {
+    showNotice(store, `«${building.label}» не работает: нет свободных жителей`);
+  }
 
   // The card stays armed for the next hex, unless the player just spent the
   // last of what it costs.

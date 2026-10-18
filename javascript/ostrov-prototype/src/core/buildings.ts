@@ -60,7 +60,7 @@ const BUILDINGS: readonly TBuilding[] = [
     art: ICONS.farm,
     hexArt: HEX_ART.farm,
     cost: { stone: 1, wood: 3, hammers: 1 },
-    baseFaces: [face("food", 1, 0), face("food", 5, 0), face("food", 3, 0), face("food", 3, 0)],
+    baseFaces: [face("food", 1, 5), face("food", 5, 3), face("food", 3, 0), face("food", 3, 3)],
     biomeFaces: {
       grassland: face("food", 4, 1),
       plains: face("food", 2, 0),
@@ -196,11 +196,7 @@ const facesOn = (building: TBuilding, biomeId: TBiomeId): readonly TFace[] => {
   return [...building.baseFaces, biomeFace];
 };
 
-/**
- * The mean amount a die pays per roll, before the hex's toxicity. Every
- * average in the UI comes from here: the hex modal, the build tooltip and the
- * plate on a built hex, the stronghold's mixed die included.
- */
+/** The mean amount a die pays per roll, before the hex's toxicity. */
 const averageAmount = (faces: readonly TFace[]) => {
   if (faces.length === 0) {
     return 0;
@@ -209,22 +205,9 @@ const averageAmount = (faces: readonly TFace[]) => {
   return faces.reduce((sum, item) => sum + item.amount, 0) / faces.length;
 };
 
-/** The mean toxicity a die leaves per roll, in face points. */
-const averageToxicity = (faces: readonly TFace[]) => {
-  if (faces.length === 0) {
-    return 0;
-  }
-
-  return faces.reduce((sum, item) => sum + item.toxicity, 0) / faces.length;
-};
-
-/** Average yield of the die, which is what the hex modal ranks buildings by. */
+/** Average yield of the die. The hex panel and the bots rank buildings by it. */
 const averageYieldOn = (building: TBuilding, biomeId: TBiomeId) => {
   return averageAmount(facesOn(building, biomeId));
-};
-
-const averageToxicityOn = (building: TBuilding, biomeId: TBiomeId) => {
-  return averageToxicity(facesOn(building, biomeId));
 };
 
 /** What the hex modal suggests: the allowed building with the richest die. */
@@ -253,9 +236,6 @@ const canAfford = (pool: TResourcePool, building: TBuilding, stoneDiscount = 0) 
 };
 
 export {
-  averageAmount,
-  averageToxicity,
-  averageToxicityOn,
   averageYieldOn,
   bestBuildingForBiome,
   BUILDINGS,

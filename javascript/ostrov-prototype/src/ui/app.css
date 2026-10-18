@@ -186,6 +186,49 @@ body {
 
 .island-page__actions > .panel {
   pointer-events: auto;
+  transition:
+    transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1),
+    opacity 0.32s ease-out,
+    visibility 0s linear 0s;
+}
+
+/* The tools and the buildings work only while the human builds. At any other
+   time the two panels slide down off the screen and fade out. The panels keep
+   their place in the layout, so nothing else moves. The visibility switch
+   waits for the end of the slide; after it, a hidden panel takes no clicks and
+   no hover. The buildings follow the tools a little later on the way out, and
+   the tools follow the buildings on the way back. */
+.island-page__actions > .panel--stowed {
+  opacity: 0;
+  transform: translateY(calc(100% + 24 * var(--u)));
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.5, 0, 0.75, 0),
+    opacity 0.28s ease-in,
+    visibility 0s linear 0.28s;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .island-page__actions > .tools-panel:not(.panel--stowed) {
+    transition-delay: 0.06s, 0.06s, 0s;
+  }
+
+  .island-page__actions > .buildings-panel.panel--stowed {
+    transition-delay: 0.06s, 0.06s, 0.34s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .island-page__actions > .panel,
+  .island-page__actions > .panel--stowed {
+    transform: none;
+    transition: opacity 0.15s linear, visibility 0s linear 0s;
+  }
+
+  .island-page__actions > .panel--stowed {
+    transition: opacity 0.15s linear, visibility 0s linear 0.15s;
+  }
 }
 
 /* Below this width the three panels no longer fit in one row. The tall
@@ -287,8 +330,25 @@ body {
   gap: calc(6 * var(--u));
   align-items: center;
   color: var(--text-dim);
-  font-size: max(calc(13 * var(--u)), 11px);
+  font-size: max(calc(16 * var(--u)), 13px);
   white-space: nowrap;
+}
+
+.start-panel__texts {
+  display: grid;
+}
+
+.start-panel__texts > span {
+  grid-area: 1 / 1;
+}
+
+.start-panel__text--hidden {
+  visibility: hidden;
+}
+
+.start-panel__hint .icon {
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
 }
 
 .start-panel__button {
@@ -441,33 +501,6 @@ body {
   stroke-width: 1;
 }
 
-.island-canvas__svg--grid-off .hex__face {
-  stroke: transparent;
-}
-
-.island-canvas__grid-toggle {
-  position: absolute;
-  top: calc(16 * var(--u));
-  right: calc(16 * var(--u));
-  padding: calc(6 * var(--u)) calc(12 * var(--u));
-  border: 1px solid var(--panel-edge-dim);
-  border-radius: calc(8 * var(--u));
-  background: var(--panel);
-  color: var(--text-dim);
-  font: inherit;
-  font-size: max(calc(12 * var(--u)), 11px);
-  cursor: pointer;
-}
-
-.island-canvas__grid-toggle:hover {
-  color: var(--text-primary);
-}
-
-.island-canvas__grid-toggle--on {
-  border-color: var(--panel-edge);
-  color: var(--accent);
-}
-
 .hex-outline {
   fill: none;
   stroke: transparent;
@@ -488,9 +521,93 @@ body {
   animation: hex-pulse 1.4s ease-in-out infinite;
 }
 
-.hex-outline.hex--selected {
+/* The selected hex: a gold ring with a breathing glow and a bright glint
+   that runs along the ring. The ring pops in when the selection appears. */
+.hex-selection {
+  pointer-events: none;
+}
+
+.hex-selection polygon {
+  fill: none;
+}
+
+.hex-selection__pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hex-selection-pop 0.22s ease-out both;
+}
+
+.hex-selection__glow {
   stroke: var(--accent);
-  animation: none;
+  stroke-width: 10;
+  stroke-linejoin: round;
+  filter: blur(4px);
+  animation: hex-selection-breathe 1.8s ease-in-out infinite;
+}
+
+.hex-selection__ring {
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+.hex-selection__sweep {
+  stroke: #fff4cf;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 12 88;
+  opacity: 0.9;
+  animation: hex-selection-sweep 2.6s linear infinite;
+}
+
+@keyframes hex-selection-pop {
+  from {
+    transform: scale(0.94);
+    opacity: 0.4;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes hex-selection-breathe {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes hex-selection-sweep {
+  from {
+    stroke-dashoffset: 100;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Reduced motion: a static ring with a soft fixed glow, no glint, no pop. */
+@media (prefers-reduced-motion: reduce) {
+  .hex-selection__pop,
+  .hex-selection__glow {
+    animation: none;
+  }
+
+  .hex-selection__glow {
+    opacity: 0.45;
+  }
+
+  .hex-selection__sweep {
+    display: none;
+  }
 }
 
 /* A stronghold candidate: a gold ring, lit by the shared shimmer gradient.
@@ -600,10 +717,6 @@ body {
   }
 }
 
-.hex-modal__soil {
-  margin: calc(12 * var(--u)) 0 calc(4 * var(--u));
-}
-
 .soil-button {
   display: flex;
   gap: calc(8 * var(--u));
@@ -631,13 +744,6 @@ body {
   color: var(--text-dim);
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-.hex-modal__soil-note {
-  margin: calc(6 * var(--u)) 0 0;
-  color: var(--text-dim);
-  font-size: max(calc(12 * var(--u)), 11px);
-  line-height: 1.35;
 }
 
 /* Under the turn panel, above the notice toast. */
@@ -846,6 +952,13 @@ body {
   color: var(--toxic);
 }
 
+/* A cell in the first column stands at the left edge of the screen. Its hint
+   opens to the right, not past the left edge. */
+.resource--left-edge .hint {
+  left: 0;
+  transform: none;
+}
+
 /* --- buildings panel --- */
 
 .buildings-panel {
@@ -855,18 +968,16 @@ body {
   padding: calc(9 * var(--u));
 }
 
-/* A card is as wide as its name, within these bounds. A long name wraps to a
-   second line. */
+/* A card shows only the art; the name is in the hover hint. All cards have
+   the same width and take the full height of the panel. */
 .building-card {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: calc(3 * var(--u));
+  flex: none;
   align-items: center;
-  justify-content: flex-start;
-  min-width: calc(87 * var(--u));
-  max-width: calc(114 * var(--u));
-  padding: calc(6 * var(--u)) calc(4 * var(--u));
+  justify-content: center;
+  width: calc(96 * var(--u));
+  padding: 0;
   border: 1px solid var(--panel-edge-dim);
   border-radius: calc(12 * var(--u));
   background: #0e151f;
@@ -884,20 +995,16 @@ body {
   box-shadow: 0 0 0 2px rgba(143, 209, 79, 0.35);
 }
 
-.building-card--poor {
+/* An unaffordable or a locked card fades only its art. The hover hint inside
+   the card stays fully opaque. */
+.building-card--poor > .building-card__art {
   opacity: 0.5;
 }
 
 .building-card__art {
-  width: calc(60 * var(--u));
-  height: calc(60 * var(--u));
+  width: calc(72 * var(--u));
+  height: calc(72 * var(--u));
   object-fit: contain;
-}
-
-.building-card__label {
-  font-size: max(calc(15 * var(--u)), 11px);
-  line-height: 1.1;
-  text-align: center;
 }
 
 .cost--short {
@@ -913,6 +1020,16 @@ body {
   justify-content: center;
   height: var(--hud-row-height);
   padding: calc(8 * var(--u));
+}
+
+/* The hint of a tool button opens above the whole panel, not above the
+   button. So the hint of the lower button does not cover the upper button. */
+.tools-panel {
+  position: relative;
+}
+
+.tools-panel > .tool-icon.has-hint {
+  position: static;
 }
 
 /* Two buttons of this size, stacked, fill the common row height. */
@@ -1088,82 +1205,102 @@ body {
   stroke: #f0d488;
 }
 
+/* --- hover hint family --- */
+
+/* Every hover hint (.hint) and the hex popup (.hex-tooltip) share one size
+   and one look. Both are drawn at --hint-scale times the HUD scale. The box
+   redefines the HUD unit for itself and its children, so every
+   `calc(N * var(--u))` size inside grows together. The fonts are fixed px
+   sizes times the same scale: 16px for a title, 11px for the body text.
+   This rule stands before both components, so a modifier such as
+   .hex-tooltip--allowed can still change the border colour. */
+.hint,
+.hex-tooltip {
+  --hint-scale: 1.35;
+  --u: calc(var(--hint-scale) * clamp(0.78px, min(100vw / 1920, 100vh / 1080), 1px));
+  --hint-title-size: calc(16px * var(--hint-scale));
+  --hint-text-size: calc(11px * var(--hint-scale));
+  padding: calc(8 * var(--u)) calc(10 * var(--u));
+  border: 1px solid var(--panel-edge-dim);
+  border-radius: calc(8 * var(--u));
+  background: rgba(10, 16, 24, 0.96);
+  box-shadow: 0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, 0.55);
+  font-size: var(--hint-text-size);
+}
+
 /* --- hover popup --- */
 
+/* The size, the paddings, the border and the fonts come from the hover hint
+   family above. A row that sets no font size inherits the body text. The
+   component shifts the popup back inside the window when it would cross an
+   edge. */
 .hex-tooltip {
   position: absolute;
   z-index: 5;
+  /* Near the right edge, an absolute box shrinks to the space left of it.
+     The fixed content width keeps the rows unwrapped; the component then
+     shifts the whole popup back inside the window. */
+  width: max-content;
   min-width: calc(170 * var(--u));
-  padding: calc(8 * var(--u)) calc(10 * var(--u));
+  max-width: calc(100vw - 16px);
   transform: translate(-50%, -100%);
-  border: 1px solid var(--panel-edge-dim);
-  border-radius: calc(8 * var(--u));
-  background: rgba(10, 16, 24, 0.95);
   pointer-events: none;
 }
 
+/* One centered line: icon, name, biome. The name and the biome share a
+   baseline. A long line wraps the biome onto a second centered line. */
 .hex-tooltip__title {
   display: flex;
-  gap: calc(6 * var(--u));
-  align-items: center;
+  flex-wrap: wrap;
+  column-gap: calc(6 * var(--u));
+  justify-content: center;
+  align-items: baseline;
   color: var(--accent);
+  font-size: var(--hint-title-size);
   font-weight: 700;
 }
 
+.hex-tooltip__title > .icon {
+  align-self: center;
+}
+
+/* The biome inside the title keeps the popup's body text: 11 of the
+   title's 16 units, regular weight, dim color. */
 .hex-tooltip__subtitle {
+  margin-left: calc(4 * var(--u));
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: calc(1em * 11 / 16);
+  font-weight: 400;
+  text-align: center;
 }
 
 .hex-tooltip__biome {
   color: var(--accent);
-  font-size: max(calc(15 * var(--u)), 11px);
+  font-size: max(calc(15 * var(--u)), 1em);
   font-weight: 700;
   text-align: center;
 }
 
 .hex-tooltip__standing {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 1em;
   text-align: center;
 }
 
 .hex-tooltip__action {
   margin-top: calc(4 * var(--u));
   color: var(--buildable);
-  font-size: 11px;
-}
-
-.hex-tooltip__empty {
-  color: var(--text-dim);
-  font-size: max(calc(12 * var(--u)), 11px);
+  font-size: 1em;
 }
 
 .hex-tooltip__faces {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(4 * var(--u));
   margin-top: calc(6 * var(--u));
-}
-
-.face {
-  display: flex;
-  gap: calc(6 * var(--u));
-  align-items: center;
-  padding: 2px calc(5 * var(--u));
-  border: 1px solid var(--panel-edge-dim);
-  border-radius: calc(5 * var(--u));
-  font-size: 11px;
-}
-
-.face__toxicity {
-  color: var(--toxic);
 }
 
 .hex-tooltip__toxicity {
   margin-top: calc(6 * var(--u));
   color: var(--toxic);
-  font-size: 11px;
+  font-size: 1em;
 }
 
 .hex-tooltip--allowed {
@@ -1180,61 +1317,158 @@ body {
   gap: calc(4 * var(--u));
   align-items: center;
   margin-top: calc(6 * var(--u));
-  font-size: 11px;
+  font-size: 1em;
 }
 
 .hex-tooltip__row > span {
   display: inline-flex;
-  gap: 2px;
+  gap: calc(2 * var(--u));
   align-items: center;
 }
 
+/* --- die faces: one chip per face, the same in every place that shows a die ---
+
+   The chips stand two per row. An odd last chip takes the middle of its row
+   and keeps the width of one column. The chip sizes follow the --u of the
+   place, and the font follows the font of the place. */
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(5 * var(--u));
+}
+
+.face-grid > .face:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: calc((100% - 5 * var(--u)) / 2);
+}
+
+.face {
+  position: relative;
+  display: flex;
+  gap: calc(6 * var(--u));
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(3 * var(--u)) calc(6 * var(--u));
+  border: 1px solid var(--panel-edge-dim);
+  border-radius: calc(5 * var(--u));
+  font-size: 1em;
+  white-space: nowrap;
+}
+
+.face__yield,
+.face__toxicity {
+  display: inline-flex;
+  gap: calc(3 * var(--u));
+  align-items: center;
+}
+
+.face__toxicity {
+  color: var(--toxic);
+}
+
+/* The face that the biome adds: a dashed teal rim. */
 .face--biome {
+  border-style: dashed;
+  border-color: var(--buildable);
+  background: rgba(91, 227, 255, 0.08);
+  color: #bdeffa;
+}
+
+/* A yield that comes every turn without a roll: a solid gold rim, a warm
+   glow and a ∞ badge in the corner. */
+.face--always {
   border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(216, 180, 92, 0.28), rgba(216, 180, 92, 0.08));
+  box-shadow: 0 0 calc(6 * var(--u)) rgba(216, 180, 92, 0.45);
+  color: #f6e3a8;
+  font-weight: 700;
+}
+
+.face__badge {
+  position: absolute;
+  top: calc(-7 * var(--u));
+  right: calc(-7 * var(--u));
+  display: grid;
+  place-items: center;
+  width: calc(15 * var(--u));
+  height: calc(15 * var(--u));
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1a1406;
+  font-size: calc(11 * var(--u));
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* The rolled or the chosen face, on top of any kind. */
+.face--selected {
+  outline: max(2px, calc(2 * var(--u))) solid var(--text-primary);
+  outline-offset: 1px;
+  background-color: rgba(232, 241, 242, 0.12);
 }
 
 /* --- hex modal --- */
 
-/* The modal sits on the left, above the resources of the bottom bar. Its
-   bottom offset follows the bar layout. Its height stops below the players
-   panel, and the content scrolls when it does not fit. Without the bar (the
-   start phase, a read-only island) the modal sits on the bottom edge. */
+/* The modal slides out of the right edge. It covers the toxicity column
+   under the top edge and stops above the end-turn panel. Without the bottom
+   bar (the start phase, a read-only island) it stops at the bottom edge. Its
+   height follows the content, and the sections scroll when they do not fit.
+
+   The modal is drawn at 1.28 times the HUD scale. It redefines the HUD unit
+   for itself and its children, so every `calc(N * var(--u))` size inside
+   grows together: the fonts, the icons, the chips and the buttons. The unit
+   shrinks when the modal would take more than 42% of the window width. */
 .hex-modal {
+  --hex-modal-scale: 1.28;
   --hex-modal-bottom: var(--hud-edge);
+  --u: min(
+    var(--hex-modal-scale) * clamp(0.78px, min(100vw / 1920, 100vh / 1080), 1px),
+    42vw / 320,
+    (100vw - 32px) / 320
+  );
   position: absolute;
-  bottom: var(--hex-modal-bottom);
-  left: var(--hud-edge);
+  top: var(--hud-edge);
+  right: var(--hud-edge);
   z-index: 6;
+  display: flex;
+  flex-direction: column;
   width: calc(320 * var(--u));
-  max-height: calc(100% - var(--hex-modal-bottom) - var(--hud-edge) - var(--players-panel-height) - var(--gap));
-  padding: calc(16 * var(--u));
-  overflow-y: auto;
-  animation: hex-modal-slide-in 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  max-height: calc(100% - var(--hex-modal-bottom) - var(--hud-edge));
+  padding: calc(18 * var(--u));
+  overflow: hidden;
+  border-radius: calc(10 * var(--u));
+  font-size: calc(12 * var(--u));
+  animation: hex-modal-slide-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
-/* One row: the resources stand on the bottom edge of the bar. */
+/* With the bottom bar the modal stops above the end-turn panel. The page
+   variables below keep the page unit: :root resolves them before the modal
+   redefines --u. */
 .island-page__bottom ~ .hex-modal {
-  --hex-modal-bottom: calc(var(--hud-edge) + var(--hud-row-height) + var(--gap));
+  --hex-modal-bottom: calc(var(--hud-edge) + var(--end-turn-height) + var(--gap));
 }
 
-/* Two rows: the resources stand on top of the tools and buildings row. */
-@media (max-width: 1469px) {
-  .island-page__bottom ~ .hex-modal {
-    --hex-modal-bottom: calc(var(--hud-edge) + 2 * var(--hud-row-height) + 2 * var(--gap));
-  }
+/* Closed: the modal slides back out to the right. The component unmounts it
+   when this animation ends. A closing modal takes no clicks. */
+.hex-modal--closing {
+  pointer-events: none;
+  animation: hex-modal-slide-out 0.22s cubic-bezier(0.5, 0, 0.75, 0) both;
 }
 
-/* Wrapped: the tools and buildings row spans the full width above the
-   end-turn panel, so the modal stacks on top of that row. */
-@media (max-width: 973px) {
-  .island-page__bottom ~ .hex-modal {
-    --hex-modal-bottom: calc(var(--hud-edge) + var(--end-turn-height) + var(--hud-row-height) + 2 * var(--gap));
-  }
+/* Another hex selected while the modal is open: the modal stays in place and
+   only the content fades in. */
+.hex-modal__content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: hex-modal-content-in 0.16s ease-out both;
 }
 
 @keyframes hex-modal-slide-in {
   from {
-    transform: translateX(-120%);
+    transform: translateX(calc(100% + 24px));
     opacity: 0;
   }
 
@@ -1244,16 +1478,74 @@ body {
   }
 }
 
+@keyframes hex-modal-slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(calc(100% + 24px));
+    opacity: 0;
+  }
+}
+
+@keyframes hex-modal-content-in {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hex-modal-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hex-modal-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: no slide, only a short fade. The closing modal still needs
+   an animation, so its end event unmounts it. The fade-out has its own name:
+   the same name with "reverse" would not restart, and no end event would
+   come. */
 @media (prefers-reduced-motion: reduce) {
   .hex-modal {
+    animation: hex-modal-fade 0.12s linear both;
+  }
+
+  .hex-modal--closing {
+    animation: hex-modal-fade-out 0.12s linear both;
+  }
+
+  .hex-modal__content {
     animation: none;
   }
 }
 
+/* The content after the button fades in with an opacity animation, which
+   puts it in its own layer above the button. The z-index keeps the button on
+   top, so the header does not swallow its clicks. */
 .hex-modal__close {
   position: absolute;
-  top: calc(8 * var(--u));
-  right: calc(10 * var(--u));
+  top: calc(10 * var(--u));
+  right: calc(12 * var(--u));
+  z-index: 2;
   border: none;
   background: none;
   display: flex;
@@ -1269,37 +1561,6 @@ body {
 .hex-modal__close .icon {
   width: calc(20 * var(--u));
   height: calc(20 * var(--u));
-}
-
-.hex-modal__emblem {
-  display: block;
-  width: calc(96 * var(--u));
-  height: calc(96 * var(--u));
-  margin: 0 auto;
-}
-
-.hex-modal__title {
-  margin: calc(4 * var(--u)) 0 0;
-  color: var(--accent);
-  font-size: max(calc(20 * var(--u)), 11px);
-  text-align: center;
-}
-
-.hex-modal__description {
-  margin: calc(8 * var(--u)) 0;
-  color: var(--text-dim);
-  font-size: max(calc(13 * var(--u)), 11px);
-  line-height: 1.45;
-}
-
-.hex-modal__standing {
-  margin: calc(8 * var(--u)) 0;
-  font-size: max(calc(13 * var(--u)), 11px);
-}
-
-.hex-modal__subtitle {
-  margin: calc(12 * var(--u)) 0 calc(6 * var(--u));
-  font-size: max(calc(13 * var(--u)), 11px);
 }
 
 .hex-modal__list {
@@ -1343,9 +1604,334 @@ body {
   font-size: max(calc(13 * var(--u)), 11px);
 }
 
-.hex-modal__option-numbers {
+.hex-modal__option-button--best {
+  border-color: var(--panel-edge-dim);
+  background: rgba(216, 180, 92, 0.07);
+}
+
+/* The sections of the hex panel. The header stays put; the sections under it
+   scroll inside the panel when they do not fit. */
+.hex-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+  min-height: 0;
+  margin-top: calc(16 * var(--u));
+  overflow-y: auto;
+  scrollbar-color: var(--panel-edge-dim) transparent;
+  scrollbar-width: thin;
+}
+
+.hex-section {
+  flex: none;
+  padding: calc(14 * var(--u)) calc(16 * var(--u));
+  border: 1px solid rgba(93, 76, 39, 0.55);
+  border-radius: calc(8 * var(--u));
+  background: rgba(8, 12, 18, 0.35);
+}
+
+.hex-section--header {
+  padding: 0 calc(26 * var(--u)) 0 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.hex-section__title {
+  display: flex;
+  gap: calc(6 * var(--u));
+  align-items: center;
+  margin: 0 0 calc(12 * var(--u));
+  color: var(--accent);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: max(calc(11 * var(--u)), 10px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* A thin gold rule after the label, like an engraved plate. */
+.hex-section__title::after {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--panel-edge-dim), transparent);
+  content: "";
+}
+
+.hex-section__note {
+  margin: calc(12 * var(--u)) 0 0;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: max(calc(12 * var(--u)), 11px);
+  line-height: 1.3;
+}
+
+.hex-section__note strong {
+  color: var(--text-primary);
+}
+
+.hex-section--suitable .hex-section__note {
+  margin: 0 0 calc(10 * var(--u));
+}
+
+/* A status on the left, the small buttons on the right, in one row. */
+.hex-section__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(12 * var(--u));
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hex-section__status {
+  display: inline-flex;
+  gap: calc(5 * var(--u));
+  align-items: center;
+  color: var(--text-primary);
+  font-size: max(calc(17 * var(--u)), 12px);
+  white-space: nowrap;
+}
+
+.hex-section__status strong {
+  color: var(--good);
+}
+
+.hex-section--short .hex-section__status strong {
+  color: var(--danger);
+}
+
+.hex-section__dim {
+  color: var(--text-dim);
+}
+
+/* The status icon keeps its size; only the text grows. */
+.hex-section__status > .icon {
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+  margin: 0;
+}
+
+.hex-section__buttons {
+  display: flex;
+  gap: calc(10 * var(--u));
+}
+
+.hex-section__button {
+  padding: calc(6 * var(--u)) calc(12 * var(--u));
+  font-size: max(calc(12 * var(--u)), 11px);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hex-section__button:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hex-section__wide {
+  padding-block: calc(8 * var(--u));
+}
+
+/* A button with a hover hint in the shared .hint style. The hint opens above
+   the controls row and takes its width, so it stays inside the scrolling
+   body. A disabled button gets no mouse events; the wrapper takes the hover
+   instead. */
+.hex-section__control {
+  position: relative;
+}
+
+.hex-hint {
+  display: inline-flex;
+}
+
+.hex-hint > button:disabled {
+  pointer-events: none;
+}
+
+.hex-hint > .hex-hint__box {
+  right: 0;
+  left: 0;
+  width: auto;
+  max-width: none;
+  transform: none;
+}
+
+.hex-hint:hover > .hex-hint__box,
+.hex-hint:focus-within > .hex-hint__box {
+  opacity: 1;
+}
+
+/* The wide soil button: the wrapper is the anchor and takes the full width. */
+.hex-hint--block {
+  position: relative;
+  display: flex;
+}
+
+.hex-hint--block > button {
+  flex: 1;
+}
+
+/* The demolish button in the header: the hint opens below it, aligned right,
+   because the header has no room above it. */
+.hex-hint--end {
+  position: relative;
+  flex: none;
+  align-self: flex-end;
+}
+
+.hex-hint--end > .hex-hint__box {
+  top: calc(100% + 6 * var(--u));
+  bottom: auto;
+  left: auto;
+  width: max-content;
+  max-width: calc(220 * var(--u));
+}
+
+/* The dice chips: more air between the rows, and numbers about 1.35 times
+   the old 12-unit text. The icons keep their old size, so only the numbers
+   grow. */
+.hex-section--dice .face-grid {
+  gap: calc(10 * var(--u));
+  font-size: max(calc(16 * var(--u)), 12px);
+}
+
+.hex-section--dice .face-grid > .face:last-child:nth-child(odd) {
+  width: calc((100% - 10 * var(--u)) / 2);
+}
+
+.hex-section--dice .face {
+  padding: calc(6 * var(--u)) calc(8 * var(--u));
+}
+
+.hex-section--dice .face .icon {
+  width: calc(19 * var(--u));
+  height: calc(19 * var(--u));
+  margin: 0;
+}
+
+/* --- hex panel header --- */
+
+.hex-head {
+  display: flex;
+  gap: calc(10 * var(--u));
+  align-items: center;
+}
+
+.hex-head__pic {
+  position: relative;
+  flex: none;
+  width: calc(76 * var(--u));
+  height: calc(76 * var(--u));
+  cursor: help;
+}
+
+.hex-head__emblem {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hex-head__art {
+  position: absolute;
+  inset: 8%;
+  width: 84%;
+  height: 84%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6));
+}
+
+.hex-head__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+  min-width: 0;
+}
+
+/* One line: the name and the biome share a baseline, like the hover
+   tooltip. A long line wraps the biome onto a second line. The right
+   padding of .hex-section--header keeps the line clear of the close
+   button. */
+.hex-head__title {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: calc(8 * var(--u));
+  row-gap: calc(2 * var(--u));
+  align-items: baseline;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.hex-head__name {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--accent);
+  font-size: max(calc(20 * var(--u)), 14px);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hex-head__biome {
+  color: var(--text-dim);
+  font-size: max(calc(12 * var(--u)), 11px);
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.hex-head__hp {
+  display: inline-flex;
+  gap: calc(6 * var(--u));
+  align-items: center;
+  color: var(--text-primary);
+  font-size: max(calc(11 * var(--u)), 10px);
+}
+
+.hex-head__hp-bar {
+  overflow: hidden;
+  width: calc(70 * var(--u));
+  height: calc(5 * var(--u));
+  border: 1px solid var(--panel-edge-dim);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.hex-head__hp-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(180deg, #9be06a, #5e9c34);
+}
+
+.hex-head__hp--damaged {
+  color: #e0a070;
+}
+
+.hex-head__hp--damaged .hex-head__hp-fill {
+  background: linear-gradient(180deg, #f0b070, #c06a30);
+}
+
+.hex-head__demolish {
+  display: flex;
+  padding: calc(4 * var(--u));
+  border: 1px solid var(--panel-edge-dim);
+  border-radius: calc(6 * var(--u));
+  background: var(--panel-raised);
+  cursor: pointer;
+}
+
+.hex-head__demolish .icon {
+  width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+}
+
+.hex-head__demolish:hover:enabled {
+  border-color: var(--danger);
+}
+
+.hex-head__demolish:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 /* --- modals --- */
@@ -1441,6 +2027,14 @@ body {
   fill: var(--danger);
 }
 
+.hex-plate__staff--short .hex-plate__text--staff {
+  fill: var(--danger);
+}
+
+.hex-plate__staff--short image {
+  opacity: 0.55;
+}
+
 .hex-plate__meter {
   fill: rgba(255, 255, 255, 0.14);
 }
@@ -1455,6 +2049,104 @@ body {
 
 .hex-plate__meter-fill--dead {
   fill: var(--danger);
+}
+
+/* The toxicity the tax phase is about to add: a breathing segment after the fill
+   and a "+N%" label that bobs. Orange or red when the hex will cross a threshold. */
+.hex-plate__meter-pending {
+  animation: hex-plate-pending 1.1s ease-in-out infinite alternate;
+}
+
+.hex-plate__meter-pending--clean,
+.hex-plate__meter-pending--some {
+  fill: #b6ff6a;
+}
+
+.hex-plate__meter-pending--high {
+  fill: #ffb24a;
+}
+
+.hex-plate__meter-pending--dead {
+  fill: #ff6a5e;
+}
+
+.hex-plate__gain {
+  animation: hex-plate-gain 1.1s ease-in-out infinite alternate;
+}
+
+.hex-plate__gain--clean,
+.hex-plate__gain--some {
+  fill: #b6ff6a;
+}
+
+.hex-plate__gain--high {
+  fill: #ffb24a;
+}
+
+.hex-plate__gain--dead {
+  fill: #ff6a5e;
+}
+
+@keyframes hex-plate-pending {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* A tspan takes no transform, so the label breathes with its fill opacity. */
+@keyframes hex-plate-gain {
+  from {
+    fill-opacity: 0.45;
+  }
+
+  to {
+    fill-opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-plate__meter-pending,
+  .hex-plate__gain {
+    animation: none;
+  }
+
+  .hex-plate__meter-pending {
+    opacity: 0.75;
+  }
+}
+
+/* The hp bar along the bottom of the plate, in the colours of the hex-panel header bar. */
+.hex-plate__hp-track {
+  fill: rgba(255, 255, 255, 0.12);
+}
+
+.hex-plate__hp--ok .hex-plate__hp-fill {
+  fill: #7cc24a;
+}
+
+.hex-plate__hp--hurt .hex-plate__hp-fill {
+  fill: #e0903c;
+}
+
+.hex-plate__hp--critical .hex-plate__hp-fill {
+  fill: var(--danger);
+}
+
+/* Ruins: a red frame and an empty red bar. */
+.hex-plate--ruined .hex-plate__back {
+  stroke: var(--danger);
+  stroke-width: 1;
+}
+
+.hex-plate__hp--ruined .hex-plate__hp-track {
+  fill: var(--danger);
+  stroke: #3a0d0b;
+  stroke-width: 0.6;
+  stroke-dasharray: 2 1.5;
 }
 
 /* --- the rolled payout above a building in the tax phase ---
@@ -1613,33 +2305,6 @@ body {
   }
 }
 
-/* --- dice in the tooltip and the hex modal --- */
-
-.die-average {
-  display: inline-flex;
-  gap: 2px;
-  align-items: center;
-}
-
-.hex-tooltip__roll {
-  color: var(--buildable);
-  font-weight: 700;
-}
-
-.hex-modal__die {
-  margin: calc(8 * var(--u)) 0;
-}
-
-.hex-modal__die-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(4 * var(--u));
-  align-items: center;
-  margin: calc(6 * var(--u)) 0 0;
-  color: var(--text-dim);
-  font-size: max(calc(12 * var(--u)), 11px);
-}
-
 /* Power chosen in the tax phase, not yet taken from the pool. */
 .resource__pending {
   position: absolute;
@@ -1657,9 +2322,27 @@ body {
 
 /* --- tax phase: the face popup of one die --- */
 
+/* The popup is drawn at twice the HUD scale. It redefines the HUD unit for
+   itself and its children, so every size below, the modal frame, the buttons
+   and the icons grow together. The unit shrinks if the doubled popup does not
+   fit the window, so the popup stays whole on a small screen. */
 .tax-pick {
+  --u: min(
+    2 * clamp(0.78px, min(100vw / 1920, 100vh / 1080), 1px),
+    (100vw - 32px) / 460,
+    (100vh - 32px) / 520
+  );
+  position: relative;
   width: calc(460 * var(--u));
   max-width: calc(100vw - calc(32 * var(--u)));
+  border-width: max(1px, calc(1 * var(--u)));
+}
+
+/* The close X takes the look of the hex panel's X. The header leaves room
+   for it on the right, so the power badge does not slide under it. */
+.tax-pick__close {
+  top: calc(8 * var(--u));
+  right: calc(8 * var(--u));
 }
 
 .tax-pick__head {
@@ -1667,6 +2350,7 @@ body {
   gap: calc(12 * var(--u));
   align-items: center;
   margin-bottom: calc(8 * var(--u));
+  padding-right: calc(24 * var(--u));
 }
 
 .tax-pick__art {
@@ -1685,7 +2369,7 @@ body {
 }
 
 .tax-pick__subtitle {
-  margin: 2px 0 0;
+  margin: calc(2 * var(--u)) 0 0;
   color: var(--text-dim);
   font-size: max(calc(12 * var(--u)), 11px);
 }
@@ -1695,7 +2379,7 @@ body {
   gap: calc(4 * var(--u));
   align-items: center;
   padding: calc(4 * var(--u)) calc(10 * var(--u));
-  border: 1px solid var(--panel-edge-dim);
+  border: max(1px, calc(1 * var(--u))) solid var(--panel-edge-dim);
   border-radius: 999px;
   color: var(--accent);
   font-size: max(calc(16 * var(--u)), 11px);
@@ -1714,12 +2398,12 @@ body {
 
 .tax-pick__face {
   display: grid;
-  grid-template-columns: calc(84 * var(--u)) calc(64 * var(--u)) 1fr auto;
+  grid-template-columns: calc(150 * var(--u)) 1fr auto;
   gap: calc(8 * var(--u));
   align-items: center;
   width: 100%;
   padding: calc(6 * var(--u)) calc(10 * var(--u));
-  border: 1px solid var(--panel-edge-dim);
+  border: max(1px, calc(1 * var(--u))) solid var(--panel-edge-dim);
   border-radius: calc(8 * var(--u));
   background: rgba(10, 16, 24, 0.6);
   color: inherit;
@@ -1729,8 +2413,7 @@ body {
   cursor: pointer;
 }
 
-.tax-pick__face:hover,
-.tax-pick__face--focused {
+.tax-pick__face:hover {
   border-color: var(--panel-edge);
 }
 
@@ -1739,8 +2422,8 @@ body {
 }
 
 .tax-pick__face:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: calc(2 * var(--u)) solid var(--accent);
+  outline-offset: calc(1 * var(--u));
 }
 
 .tax-pick__face--rolled {
@@ -1749,26 +2432,39 @@ body {
 
 .tax-pick__face--chosen {
   border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  box-shadow: inset 0 0 0 max(1px, calc(1 * var(--u))) var(--accent);
 }
 
+/* A face the player cannot take. The row content is dimmed, but the hint
+   with the reason is not, so the dimming skips it. */
 .tax-pick__face--refused {
   cursor: not-allowed;
+}
+
+.tax-pick__face--refused:hover {
+  border-color: var(--panel-edge-dim);
+}
+
+.tax-pick__face--refused > :not(.hint) {
   opacity: 0.5;
 }
 
-.tax-pick__face-yield {
-  display: inline-flex;
-  gap: calc(4 * var(--u));
-  align-items: center;
-  font-weight: 800;
+.tax-pick__face--refused:focus-visible > .tax-pick__refusal {
+  opacity: 1;
 }
 
-.tax-pick__face-toxicity {
-  display: inline-flex;
-  gap: 2px;
+.tax-pick__face .face {
+  justify-self: start;
+}
+
+/* The stronghold's yield that comes every turn, under the faces. */
+.tax-pick__always {
+  display: flex;
+  gap: calc(6 * var(--u));
   align-items: center;
-  color: var(--toxic);
+  margin-top: calc(8 * var(--u));
+  color: var(--text-dim);
+  font-size: max(calc(12 * var(--u)), 11px);
 }
 
 .tax-pick__tags {
@@ -1778,9 +2474,9 @@ body {
 }
 
 .tax-pick__tag {
-  padding: 1px calc(6 * var(--u));
+  padding: calc(1 * var(--u)) calc(6 * var(--u));
   border-radius: 999px;
-  font-size: 10px;
+  font-size: max(calc(10 * var(--u)), 10px);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1791,11 +2487,6 @@ body {
   color: var(--buildable);
 }
 
-.tax-pick__tag--biome {
-  background: rgba(216, 180, 92, 0.16);
-  color: var(--accent);
-}
-
 .tax-pick__tag--chosen {
   background: var(--accent);
   color: #1a1406;
@@ -1803,42 +2494,29 @@ body {
 
 .tax-pick__cost {
   display: inline-flex;
-  gap: 2px;
+  gap: calc(2 * var(--u));
   align-items: center;
   color: var(--accent);
   font-size: max(calc(12 * var(--u)), 11px);
   font-weight: 700;
 }
 
-.tax-pick__preview {
+/* The chosen face of the die: what it pays, the toxicity and the power. */
+.tax-pick__summary {
   display: flex;
   flex-direction: column;
   gap: calc(4 * var(--u));
-  min-height: calc(72 * var(--u));
-  margin: calc(10 * var(--u)) 0 calc(14 * var(--u));
+  margin: calc(10 * var(--u)) 0 0;
   padding: calc(8 * var(--u)) calc(10 * var(--u));
-  border: 1px dashed var(--panel-edge-dim);
+  border: max(1px, calc(1 * var(--u))) dashed var(--panel-edge-dim);
   border-radius: calc(8 * var(--u));
   font-size: max(calc(12 * var(--u)), 11px);
 }
 
-.tax-pick__preview--refused {
-  border-color: var(--danger);
-}
-
-.tax-pick__preview-row {
+.tax-pick__summary-row {
   display: flex;
   gap: calc(4 * var(--u));
   align-items: center;
-}
-
-.tax-pick__reason {
-  color: var(--danger);
-}
-
-.tax-pick .button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
 }
 
 /* --- notice --- */
@@ -1882,12 +2560,7 @@ body {
   gap: calc(3 * var(--u));
   width: max-content;
   max-width: calc(260 * var(--u));
-  padding: calc(8 * var(--u)) calc(10 * var(--u));
   transform: translateX(-50%);
-  border: 1px solid var(--panel-edge-dim);
-  border-radius: calc(8 * var(--u));
-  background: rgba(10, 16, 24, 0.97);
-  box-shadow: 0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, 0.55);
   opacity: 0;
   text-align: left;
   pointer-events: none;
@@ -1900,27 +2573,75 @@ body {
 
 .hint__title {
   color: var(--accent);
-  font-size: max(calc(13 * var(--u)), 11px);
+  font-size: var(--hint-title-size);
   font-weight: 700;
 }
 
 .hint__row {
   color: var(--text-dim);
-  font-size: max(calc(12 * var(--u)), 11px);
+  font-size: 1em;
   line-height: 1.35;
-}
-
-.hint__faces {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(4 * var(--u));
-  margin-top: 2px;
 }
 
 .hint__note {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: calc(10em / 11);
   font-style: italic;
+}
+
+/* The building card hint has its own layout. The size, the paddings, the
+   border and the fonts come from the hover hint family. */
+.hint--building {
+  gap: calc(8 * var(--u));
+  min-width: calc(190 * var(--u));
+  max-width: calc(300 * var(--u));
+}
+
+/* The name and the icon of the resource the building gives. The gold line
+   under them divides the head from the faces. */
+.hint--building .hint__head {
+  display: flex;
+  gap: calc(8 * var(--u));
+  align-items: center;
+  justify-content: center;
+  padding-bottom: calc(7 * var(--u));
+  border-bottom: 1px solid var(--panel-edge-dim);
+}
+
+.hint--building .hint__title {
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.hint--building .hint__yield {
+  width: calc(30 * var(--u));
+  height: calc(30 * var(--u));
+}
+
+.hint--building .hint__note {
+  text-align: center;
+}
+
+.hint--building .hint__price {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  align-items: center;
+  padding-top: calc(7 * var(--u));
+  border-top: 1px solid var(--panel-edge-dim);
+}
+
+.hint--building .hint__price-label {
+  color: var(--text-dim);
+  font-size: 1em;
+}
+
+.hint--building .hint__price-items {
+  display: flex;
+  gap: calc(12 * var(--u));
+  align-items: center;
+  font-size: max(calc(13 * var(--u)), 1.1em);
 }
 
 /* A mouse click must not leave a focus ring on a card that is no longer armed. */
@@ -2026,7 +2747,7 @@ body {
 .hex-tooltip__warning {
   margin-top: calc(4 * var(--u));
   color: var(--danger);
-  font-size: 11px;
+  font-size: 1em;
 }
 
 .end-turn-wheel--busy .wheel__rim {
@@ -2802,45 +3523,15 @@ body {
   border-color: rgba(143, 46, 26, 0.5);
 }
 
-/* --- building hp on the island page --- */
-
-.hex-hp {
-  pointer-events: none;
-}
-
-.hex-hp__frame {
-  fill: #2a1f14;
-}
-
-.hex-hp__track {
-  fill: #d9c9a0;
-}
-
-.hex-hp__fill {
-  fill: #b08a3a;
-}
-
-.hex-hp__fill--low {
-  fill: #a8432c;
-}
-
-.hex-hp__label {
-  fill: #f1e4c4;
-  stroke: #2a1f14;
-  stroke-width: 3px;
-  paint-order: stroke;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 11px;
-  font-style: italic;
-  text-anchor: middle;
-}
+/* --- building art states on the island page --- */
 
 .hex__art--ruined {
   filter: grayscale(1) sepia(0.35) brightness(0.45);
 }
 
-.hex-hp-line--damaged {
-  color: #e0a070;
+/* A building without its workers stands still: it is drawn faded and grey. */
+.hex__art--idle {
+  filter: grayscale(0.85) brightness(0.7);
 }
 
 .cleanup-summary__note {
@@ -3694,26 +4385,17 @@ body {
   transition: border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
-/* The icon sits above the title, so the panel can stay narrow. */
+/* The icon heads the panel; its alt and title name the panel. */
 .toxic-panel__head {
   display: flex;
   flex: none;
-  flex-direction: column;
-  gap: 2px;
-  align-items: center;
+  justify-content: center;
 }
 
 .toxic-panel .toxic-panel__icon {
   width: calc(48 * var(--u));
   height: calc(48 * var(--u));
   margin: 0;
-}
-
-.toxic-panel__title {
-  color: var(--accent);
-  font-size: max(calc(16 * var(--u)), 11px);
-  font-weight: 700;
-  letter-spacing: 0.5px;
 }
 
 /* A slim, tall flask: 480px when the screen has room, never under 160px. */
@@ -4234,13 +4916,17 @@ body {
   color: #f0a39e;
 }
 
-.building-card--locked {
+.building-card--locked > .building-card__art {
   opacity: 0.45;
   filter: grayscale(0.7);
 }
 
 .building-card--trophy .building-card__art {
   filter: drop-shadow(0 0 calc(6 * var(--u)) rgba(91, 227, 255, 0.55));
+}
+
+.building-card--locked.building-card--trophy > .building-card__art {
+  filter: grayscale(0.7) drop-shadow(0 0 calc(6 * var(--u)) rgba(91, 227, 255, 0.55));
 }
 
 .player-row--out {

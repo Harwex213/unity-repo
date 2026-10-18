@@ -31,6 +31,8 @@ type TCancelDemolishAction = () => void;
 type TToggleSoilCleanseAction = () => void;
 type TPickSoilHexAction = (hexId: string) => void;
 type TCancelSoilCleanseAction = () => void;
+type TSetHexWorkersAction = (hexId: string, count: number) => void;
+type TChangeArmyAction = (delta: number) => void;
 
 type THoverHexAction = (hexId: string | null, anchor: TPointerAnchor | null) => void;
 type TSelectHexAction = (hexId: string) => void;
@@ -91,6 +93,8 @@ type TAppRegistry = {
   toggleSoilCleanseAction: TToggleSoilCleanseAction;
   pickSoilHexAction: TPickSoilHexAction;
   cancelSoilCleanseAction: TCancelSoilCleanseAction;
+  setHexWorkersAction: TSetHexWorkersAction;
+  changeArmyAction: TChangeArmyAction;
   hoverHexAction: THoverHexAction;
   selectHexAction: TSelectHexAction;
   closeHexModalAction: TCloseHexModalAction;
@@ -148,6 +152,8 @@ export type {
   TBuildOnHexAction,
   TCancelDemolishAction,
   TCancelSoilCleanseAction,
+  TChangeArmyAction,
+  TSetHexWorkersAction,
   TCloseFactionsModalAction,
   TCloseHexModalAction,
   TCloseMenuCreditsAction,

@@ -2,9 +2,11 @@ import { useSignals } from "@preact/signals-react/runtime";
 import { hexDie } from "../../core/dice";
 import { HEX_SIZE, hexToPixel } from "../../core/hex";
 import { ICONS } from "../../core/icons";
+import { isStaffed, workersNeeded, workersOn } from "../../core/population";
 import { revealTiming } from "../../core/production-reveal";
 import { getResource } from "../../core/resources";
 import { POWER_PER_TURN } from "../../core/stronghold";
+import { structureHp } from "../../core/structure-hp";
 import { facePayout, isDead, isFoodBlocked } from "../../core/tax";
 import { findRoll } from "../../core/tax-plan";
 import { useStore } from "../../store/store";
@@ -13,7 +15,7 @@ import type { THexDie } from "../../core/dice";
 import type { TRevealTiming } from "../../core/production-reveal";
 import type { TPayoutEffects } from "../../core/tax";
 import type { TTaxRoll } from "../../core/tax-plan";
-import type { THex } from "../../core/types";
+import type { THex, TPlayer } from "../../core/types";
 import type { TProductionReveal } from "../../store/ui-state";
 
 /**
@@ -22,7 +24,9 @@ import type { TProductionReveal } from "../../store/ui-state";
  * the plates are hidden.
  *
  * - Under every die: the hex's toxicity meter. It sits on the lower edge of the
- *   hex, over the scorched base of the 256px sprite.
+ *   hex, over the scorched base of the 256px sprite. A building's workers or
+ *   the stronghold's army lead the plate. A thin hp bar runs along the bottom
+ *   of the plate under a building or the stronghold.
  * - Above every building in the tax phase: the rolled payout, one small plate
  *   per resource. The plates pop up after the building's production pulse
  *   (see `core/production-reveal.ts`) and fade out as the payout flies away.
@@ -40,6 +44,15 @@ const METER_HEIGHT = 12;
 const METER_WIDTH = 28;
 const METER_BAR = 3.5;
 const METER_ICON = ICON * 0.8;
+/** The space between the workers and the toxicity meter on one plate. */
+const STAFF_GAP = 4;
+/** The hp bar at the bottom of the plate, and the strip it adds to the plate. */
+const HP_BAR = 1.6;
+const HP_ROW = 2.5;
+/** At or below this share of max hp the bar turns red. */
+const HP_CRITICAL_SHARE = 0.35;
+/** The space between the toxicity percent and the coming "+N%". */
+const GAIN_GAP = 2.5;
 
 /** The production plates: the lowest one sits on the roof line of the sprite. */
 const PROD_BOTTOM = -HEX_SIZE * 0.58;
@@ -173,25 +186,140 @@ const ProdStack: FC<TProdStackProps> = ({ hex, plates, reveal, timing }) => {
   );
 };
 
-type TToxicityPlateProps = {
-  hex: THex;
+/** The people block at the start of a plate: an icon and a count. */
+type TStaffBlock = {
+  readonly icon: string;
+  readonly text: string;
+  /** Red text and a dim icon: the building lacks workers. */
+  readonly isShort: boolean;
 };
 
-/** The toxicity meter under a die: the flask, the bar and the percent. */
-const ToxicityPlate: FC<TToxicityPlateProps> = ({ hex }) => {
+/**
+ * The people block of the hex. A building shows its workers: the person icon
+ * and "1/1". The stronghold shows its army: the militia icon and the soldier
+ * count. The army has no cap, so the count stands alone.
+ */
+const staffBlock = (hex: THex, die: THexDie, army: number): TStaffBlock | null => {
+  if (die.source === "stronghold") {
+    return { icon: ICONS.militia, text: `${army}`, isShort: false };
+  }
+
+  if (hex.building) {
+    return { icon: ICONS.population, text: `${workersOn(hex)}/${workersNeeded(hex)}`, isShort: !isStaffed(hex) };
+  }
+
+  return null;
+};
+
+type THpLevel = "ok" | "hurt" | "critical" | "ruined";
+
+/** The hp of the structure on the hex as a bar share and a colour level. */
+const hpBar = (player: TPlayer, hex: THex): { share: number; level: THpLevel } | null => {
+  const state = structureHp(player, hex);
+  if (!state) {
+    return null;
+  }
+
+  const share = Math.max(0, Math.min(1, state.hp / state.max));
+  let level: THpLevel = "ok";
+  if (state.hp <= 0) {
+    level = "ruined";
+  } else if (share <= HP_CRITICAL_SHARE) {
+    level = "critical";
+  } else if (share < 1) {
+    level = "hurt";
+  }
+
+  return { share, level };
+};
+
+type TToxicityLevel = "clean" | "some" | "high" | "dead";
+
+/** The colour of a toxicity value: red on a dead hex, orange where food stops. */
+const toxicityLevel = (hex: THex): TToxicityLevel => {
+  if (isDead(hex)) {
+    return "dead";
+  }
+
+  if (isFoodBlocked(hex)) {
+    return "high";
+  }
+
+  return Math.round(hex.toxicity) > 0 ? "some" : "clean";
+};
+
+/**
+ * The toxicity the chosen face will leave on the hex, in percent. It counts
+ * only while the dice lie unpaid: the collection then adds it for real.
+ */
+const pendingToxicity = (hex: THex, roll: TTaxRoll | null, effects: TPayoutEffects) => {
+  const face = roll ? roll.faces[roll.chosenIndex] : undefined;
+
+  return face ? facePayout(face, hex, effects).toxicity : 0;
+};
+
+type TToxicityPlateProps = {
+  hex: THex;
+  staff: TStaffBlock | null;
+  hp: { share: number; level: THpLevel } | null;
+  /** The toxicity the tax phase is about to add, in percent. 0 shows nothing. */
+  gain: number;
+};
+
+/**
+ * The plate under a die. It starts with the people block (see `staffBlock`).
+ * Then comes the toxicity meter: the flask, the bar and the percent. A
+ * structure adds its hp bar along the bottom edge: green at full hp, orange
+ * when damaged, red when critical. Ruins get an empty red bar and a red frame.
+ * In the tax phase a pulsing segment on the bar and a "+N%" label show the
+ * toxicity the chosen face will add. The segment turns orange or red when
+ * the hex will cross a threshold.
+ */
+const ToxicityPlate: FC<TToxicityPlateProps> = ({ hex, staff, hp, gain }) => {
   const center = hexToPixel(hex.q, hex.r, HEX_SIZE);
   const toxicity = Math.round(hex.toxicity);
   const meterText = `${toxicity}%`;
-  const meterWidth = METER_ICON + GAP + METER_WIDTH + GAP + meterText.length * CHAR_WIDTH;
+  const staffText = staff?.text ?? null;
+  const staffWidth = staffText === null ? 0 : METER_ICON + GAP + staffText.length * CHAR_WIDTH + STAFF_GAP;
+  const gainText = gain > 0 ? `+${gain}%` : null;
+  const gainWidth = gainText === null ? 0 : GAIN_GAP + gainText.length * CHAR_WIDTH;
+  const meterWidth =
+    staffWidth + METER_ICON + GAP + METER_WIDTH + GAP + meterText.length * CHAR_WIDTH + gainWidth;
   const width = meterWidth + PAD_X * 2;
-  const meterY = ROW_TOP + METER_HEIGHT / 2;
-  const meterLeft = -meterWidth / 2;
+  const plateHeight = hp === null ? METER_HEIGHT : METER_HEIGHT + HP_ROW;
+  // The hp strip pushes the meter row up a little, so both fit the plate.
+  const meterY = ROW_TOP + (hp === null ? METER_HEIGHT / 2 : METER_HEIGHT / 2 - 0.5);
+  const hpY = ROW_TOP + plateHeight - HP_BAR - 1.6;
+  const staffLeft = -meterWidth / 2;
+  const meterLeft = staffLeft + staffWidth;
   const barLeft = meterLeft + METER_ICON + GAP;
-  const level = isDead(hex) ? "dead" : isFoodBlocked(hex) ? "high" : toxicity > 0 ? "some" : "clean";
+  const level = toxicityLevel(hex);
+  const filled = (METER_WIDTH * Math.min(100, toxicity)) / 100;
+  const pendingWidth = (METER_WIDTH * Math.min(100, toxicity + gain)) / 100 - filled;
+  const pendingLevel = toxicityLevel({ ...hex, toxicity: hex.toxicity + gain });
 
   return (
-    <g className="hex-plate" transform={`translate(${center.x} ${center.y})`}>
-      <rect className="hex-plate__back" x={-width / 2} y={ROW_TOP} width={width} height={METER_HEIGHT} rx={4} />
+    <g
+      className={`hex-plate ${hp?.level === "ruined" ? "hex-plate--ruined" : ""}`}
+      transform={`translate(${center.x} ${center.y})`}
+    >
+      <rect className="hex-plate__back" x={-width / 2} y={ROW_TOP} width={width} height={plateHeight} rx={4} />
+
+      {staff === null ? null : (
+        <g className={`hex-plate__staff ${staff.isShort ? "hex-plate__staff--short" : ""}`}>
+          <image href={staff.icon} x={staffLeft} y={meterY - METER_ICON / 2} width={METER_ICON} height={METER_ICON} />
+
+          <text
+            className="hex-plate__text hex-plate__text--staff"
+            x={staffLeft + METER_ICON + GAP}
+            y={meterY}
+            fontSize={FONT * 0.85}
+            dominantBaseline="central"
+          >
+            {staffText}
+          </text>
+        </g>
+      )}
 
       <image href={ICONS.toxicity} x={meterLeft} y={meterY - METER_ICON / 2} width={METER_ICON} height={METER_ICON} />
 
@@ -209,7 +337,18 @@ const ToxicityPlate: FC<TToxicityPlateProps> = ({ hex }) => {
           className={`hex-plate__meter-fill hex-plate__meter-fill--${level}`}
           x={barLeft}
           y={meterY - METER_BAR / 2}
-          width={(METER_WIDTH * Math.min(100, toxicity)) / 100}
+          width={filled}
+          height={METER_BAR}
+          rx={METER_BAR / 2}
+        />
+      ) : null}
+
+      {gainText !== null && pendingWidth > 0 ? (
+        <rect
+          className={`hex-plate__meter-pending hex-plate__meter-pending--${pendingLevel}`}
+          x={barLeft + filled}
+          y={meterY - METER_BAR / 2}
+          width={pendingWidth}
           height={METER_BAR}
           rx={METER_BAR / 2}
         />
@@ -223,7 +362,38 @@ const ToxicityPlate: FC<TToxicityPlateProps> = ({ hex }) => {
         dominantBaseline="central"
       >
         {meterText}
+
+        {/* A tspan follows the real width of the percent, so the two never overlap. */}
+        {gainText === null ? null : (
+          <tspan className={`hex-plate__gain hex-plate__gain--${pendingLevel}`} dx={GAIN_GAP}>
+            {gainText}
+          </tspan>
+        )}
       </text>
+
+      {hp === null ? null : (
+        <g className={`hex-plate__hp hex-plate__hp--${hp.level}`}>
+          <rect
+            className="hex-plate__hp-track"
+            x={-meterWidth / 2}
+            y={hpY}
+            width={meterWidth}
+            height={HP_BAR}
+            rx={HP_BAR / 2}
+          />
+
+          {hp.share > 0 ? (
+            <rect
+              className="hex-plate__hp-fill"
+              x={-meterWidth / 2}
+              y={hpY}
+              width={meterWidth * hp.share}
+              height={HP_BAR}
+              rx={HP_BAR / 2}
+            />
+          ) : null}
+        </g>
+      )}
     </g>
   );
 };
@@ -255,17 +425,31 @@ const HexPlates: FC<THexPlatesProps> = ({ scale }) => {
   const timing = revealTiming();
   // The payout plates stand while the dice lie unpaid and while they fly away.
   const showsProduction = !isReadonly && (taxStatus === "rolled" || taxStatus === "collecting");
+  // The coming toxicity stands until the collection starts to add it to the hexes.
+  const showsPending = !isReadonly && taxStatus === "rolled";
   const dice = player.island.hexes.flatMap((hex) => {
     const die = hexDie(player, hex);
 
     return die ? [{ hex, die }] : [];
   });
+  // Every structure gets a plate. Ruins of the stronghold roll no die, but keep the plate with the empty hp bar.
+  const plated = player.island.hexes.filter((hex) => structureHp(player, hex) !== null);
 
   return (
     <g className="hex-plates">
-      {dice.map(({ hex }) => (
-        <ToxicityPlate key={hex.id} hex={hex} />
-      ))}
+      {plated.map((hex) => {
+        const die = hexDie(player, hex);
+
+        return (
+          <ToxicityPlate
+            key={hex.id}
+            hex={hex}
+            staff={die ? staffBlock(hex, die, player.army) : null}
+            hp={hpBar(player, hex)}
+            gain={showsPending && die ? pendingToxicity(hex, findRoll(taxPlan, hex.id), effects) : 0}
+          />
+        );
+      })}
 
       {showsProduction
         ? dice.map(({ hex, die }) => {

@@ -64,7 +64,7 @@ const CleanupArmyPanel: FC = () => {
 
       {roster.length === 0 ? (
         <div className="cleanup-panel__empty">
-          {"Некого выставить: армию набирают из населения."}
+          {"Некого выставить: отправьте жителей в армию в фазе строительства."}
         </div>
       ) : null}
 

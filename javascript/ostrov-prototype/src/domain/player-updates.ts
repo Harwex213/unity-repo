@@ -1,3 +1,4 @@
+import { settlePopulation } from "../core/population";
 import type { TStore } from "../store/store";
 import type { THex, TPlayer } from "../core/types";
 
@@ -6,10 +7,16 @@ import type { THex, TPlayer } from "../core/types";
  * these instead of reaching into `store.game.players` by hand.
  */
 
+/**
+ * Every write of a player goes through here, so the population rule holds
+ * after any change: the army and the workers never outnumber the population.
+ */
 const replacePlayer = (store: TStore, next: TPlayer) => {
+  const settled = settlePopulation(next);
+
   store.game.players.value = store.game.players
     .peek()
-    .map((player) => (player.id === next.id ? next : player));
+    .map((player) => (player.id === settled.id ? settled : player));
 };
 
 /** The player with a new set of hexes. Toxicity lives on the hexes themselves. */
