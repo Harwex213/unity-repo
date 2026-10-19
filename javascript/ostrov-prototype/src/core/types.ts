@@ -100,6 +100,11 @@ type TBuilding = {
    * is left out of the hex modal's suggestions and of the rivals' starting islands.
    */
   readonly trophy?: boolean;
+  /**
+   * The die does not roll by itself in the tax phase. The owner launches it
+   * by hand, once per phase (see `launchRefusal` in `core/tax-plan.ts`).
+   */
+  readonly manualLaunch?: boolean;
   /** Faces every copy of this building has, whatever it stands on. */
   readonly baseFaces: readonly TFace[];
   /** The extra face a biome adds. A biome missing here cannot host the building. */
@@ -179,6 +184,11 @@ type TPlayer = {
   readonly hasHadBuildings: boolean;
   /** A defeated rival is out of the game: it no longer plays its phases. */
   readonly eliminated: boolean;
+  /**
+   * The food the last tax phase lacked to feed everyone. Absent when everyone
+   * ate. Written by `withFeeding`, read through `isStarving` (`core/tax.ts`).
+   */
+  readonly starvingShortfall?: number;
 };
 
 /** The four phases of the core loop. Only `build` is implemented so far. */

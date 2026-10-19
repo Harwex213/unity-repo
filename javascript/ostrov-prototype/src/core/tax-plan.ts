@@ -1,10 +1,11 @@
-import { hasConverter } from "./buildings";
+import { getBuilding, hasConverter } from "./buildings";
 import { hexDie } from "./dice";
 import { createRng, hashSeed, randomInt } from "./rng";
 import { isStaffed } from "./population";
 import { STRONGHOLD_ALWAYS_YIELDS } from "./stronghold";
-import { DEAD_TOXICITY_PCT, facePayout, isDead, isFoodBlocked, withMadness } from "./tax";
+import { DEAD_TOXICITY_PCT, facePayout, isDead, isFoodBlocked, withFeeding } from "./tax";
 import { withMeterGain } from "./toxic-slot";
+import type { TRng } from "./rng";
 import type { TPayoutEffects } from "./tax";
 import type { TTechEffects } from "./techs";
 import type { TBuildingId, TFace, THex, TPlayer, TResourceId } from "./types";
@@ -14,8 +15,14 @@ import type { TBuildingId, TFace, THex, TPlayer, TResourceId } from "./types";
  * is rolled once, and the rolls are kept in a plan. While the phase lasts the
  * player may spend power (власть) to swap a rolled face for another face of the
  * same die. Nothing is paid until the phase ends: then the plan is collected in
- * one go, the power is spent, the toxicity fills the island's meter, and the
- * mad eat.
+ * one go, the power is spent, the toxicity fills the island's meter, and then
+ * everyone eats: the mad and the population (see `withFeeding` in `core/tax.ts`).
+ *
+ * Manual launch. A building with `manualLaunch` (the village) does not roll at
+ * the start of the phase. Its owner launches it by hand, once per phase: the
+ * launch rolls its die and adds the roll to the plan. Until then the building
+ * has no roll, so it pays nothing and leaves no toxicity. After the launch its
+ * roll is like any other: power can change the face.
  *
  * Costs. Swapping to a base face costs 1 power, swapping to the biome face
  * costs 2: the biome face is the one the hex is built for. Going back to the
@@ -66,6 +73,13 @@ type TPickRefusal = {
   readonly message: string;
 };
 
+type TLaunchRefusalCode = "no-launch" | "no-plan" | "unstaffed" | "launched";
+
+type TLaunchRefusal = {
+  readonly code: TLaunchRefusalCode;
+  readonly message: string;
+};
+
 const findHex = (player: TPlayer, hexId: string): THex | null => {
   return player.island.hexes.find((hex) => hex.id === hexId) ?? null;
 };
@@ -78,8 +92,35 @@ const dieKeyOf = (player: TPlayer, hex: THex): TBuildingId | "stronghold" | null
   return hex.building;
 };
 
+/** The building on the hex waits for its owner to launch it instead of rolling. */
+const needsLaunch = (hex: THex) => {
+  return hex.building !== null && getBuilding(hex.building).manualLaunch === true;
+};
+
+/** One roll of the hex's die, or `null` when the hex has no working die. */
+const rollHex = (player: TPlayer, hex: THex, rng: TRng): TTaxRoll | null => {
+  const die = hexDie(player, hex);
+  const dieKey = dieKeyOf(player, hex);
+  // A building without its workers stands still: no roll, no yield, no toxicity.
+  if (!die || !dieKey || die.faces.length === 0 || !isStaffed(hex)) {
+    return null;
+  }
+
+  const rolledIndex = randomInt(rng, 0, die.faces.length - 1);
+
+  return {
+    hexId: hex.id,
+    dieKey,
+    faces: die.faces,
+    biomeFaceIndex: die.biomeFaceIndex,
+    rolledIndex,
+    chosenIndex: rolledIndex,
+  };
+};
+
 /**
- * Rolls every working die on the island once. The rolls are seeded by the world seed,
+ * Rolls every working die on the island once. A building that needs a launch
+ * is skipped: its owner rolls it later (see `withLaunch`). The rolls are seeded by the world seed,
  * the turn and the player, so a turn always rolls the same, and opening the
  * phase twice cannot re-roll it.
  */
@@ -88,23 +129,10 @@ const rollTaxPlan = (player: TPlayer, turn: number, seed: string): TTaxPlan => {
   const rolls: TTaxRoll[] = [];
 
   for (const hex of player.island.hexes) {
-    const die = hexDie(player, hex);
-    const dieKey = dieKeyOf(player, hex);
-    // A building without its workers stands still: no roll, no yield, no toxicity.
-    if (!die || !dieKey || die.faces.length === 0 || !isStaffed(hex)) {
-      continue;
+    const roll = needsLaunch(hex) ? null : rollHex(player, hex, rng);
+    if (roll) {
+      rolls.push(roll);
     }
-
-    const rolledIndex = randomInt(rng, 0, die.faces.length - 1);
-
-    rolls.push({
-      hexId: hex.id,
-      dieKey,
-      faces: die.faces,
-      biomeFaceIndex: die.biomeFaceIndex,
-      rolledIndex,
-      chosenIndex: rolledIndex,
-    });
   }
 
   return { playerId: player.id, turn, rolls };
@@ -116,6 +144,53 @@ const findRoll = (plan: TTaxPlan | null, hexId: string): TTaxRoll | null => {
   }
 
   return plan.rolls.find((roll) => roll.hexId === hexId) ?? null;
+};
+
+/**
+ * Why the building on `hexId` cannot be launched now, or `null` when it can.
+ * A launch is free, needs the building's workers, and happens once per phase.
+ */
+const launchRefusal = (player: TPlayer, plan: TTaxPlan | null, hexId: string): TLaunchRefusal | null => {
+  const hex = findHex(player, hexId);
+  if (!hex || !needsLaunch(hex)) {
+    return { code: "no-launch", message: "Это здание не запускают вручную" };
+  }
+
+  if (!plan) {
+    return { code: "no-plan", message: "Запустить можно только в фазе сбора ресурсов" };
+  }
+
+  if (findRoll(plan, hexId)) {
+    return { code: "launched", message: "Уже запущена в этой фазе" };
+  }
+
+  if (!isStaffed(hex)) {
+    return { code: "unstaffed", message: "Нет рабочего: назначьте его в фазе строительства" };
+  }
+
+  return null;
+};
+
+/**
+ * The building waits for its launch: it could be launched right now. The
+ * plates and the tooltip mark it.
+ */
+const awaitsLaunch = (player: TPlayer, plan: TTaxPlan | null, hex: THex) => {
+  return plan !== null && needsLaunch(hex) && launchRefusal(player, plan, hex.id) === null;
+};
+
+/**
+ * The plan with the building on `hexId` launched: its die rolls once and the
+ * roll joins the plan. The roll is seeded by the world seed, the turn, the
+ * player and the hex, so a launch always rolls the same. The caller checks
+ * `launchRefusal` first.
+ */
+const withLaunch = (player: TPlayer, plan: TTaxPlan, hexId: string, seed: string): TTaxPlan => {
+  const hex = findHex(player, hexId);
+  const rng = createRng(hashSeed(`${seed}:launch:${plan.turn}:${player.id}:${hexId}`));
+  const roll = hex ? rollHex(player, hex, rng) : null;
+
+  return roll ? { ...plan, rolls: [...plan.rolls, roll] } : plan;
 };
 
 /** The power a face costs against the roll. The rolled face is always free. */
@@ -256,13 +331,25 @@ const withPayout = (player: TPlayer, payout: TTaxPayout): TPlayer => {
 
 /**
  * The whole end of the tax phase in one pure step: power spent, every payout,
- * then the mad eat. The bots collect through this; the player's animation runs
- * the same three steps one mote at a time.
+ * then everyone eats. The food paid this phase is in the pool before the
+ * eating. The bots collect through this; the player's animation runs the same
+ * three steps one mote at a time.
  */
 const collectTaxPlan = (player: TPlayer, plan: TTaxPlan, effects: TTechEffects): TPlayer => {
   const paid = planPayouts(player, plan, effects).reduce(withPayout, withPowerSpent(player, plan));
 
-  return withMadness(paid, 0, effects.madCuredPerTurn);
+  return withFeeding(paid, effects.madCuredPerTurn);
+};
+
+/** The food the plan pays this phase, before anyone eats. */
+const planFoodIncome = (player: TPlayer, plan: TTaxPlan | null, effects: TPayoutEffects) => {
+  if (!plan) {
+    return 0;
+  }
+
+  return planPayouts(player, plan, effects)
+    .filter((payout) => payout.resource === "food")
+    .reduce((sum, payout) => sum + payout.amount, 0);
 };
 
 /**
@@ -313,12 +400,25 @@ const withBotPicks = (player: TPlayer, plan: TTaxPlan, effects: TPayoutEffects):
   }, plan);
 };
 
-export type { TPayoutResourceId, TPickRefusal, TPickRefusalCode, TTaxPayout, TTaxPlan, TTaxRoll };
+export type {
+  TLaunchRefusal,
+  TLaunchRefusalCode,
+  TPayoutResourceId,
+  TPickRefusal,
+  TPickRefusalCode,
+  TTaxPayout,
+  TTaxPlan,
+  TTaxRoll,
+};
 export {
+  awaitsLaunch,
   collectTaxPlan,
   findRoll,
+  launchRefusal,
+  needsLaunch,
   pickCost,
   pickRefusal,
+  planFoodIncome,
   planPayouts,
   planPowerSpent,
   POWER_BIOME_FACE_COST,
@@ -327,6 +427,7 @@ export {
   rollTaxPlan,
   withBotPicks,
   withHexToxicity,
+  withLaunch,
   withPayout,
   withPick,
   withPowerSpent,

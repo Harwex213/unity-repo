@@ -1,5 +1,7 @@
 import { canAfford, effectiveCost, getBuilding, hasConverter } from "../core/buildings";
+import { resolveRiot } from "../core/riot";
 import { createRng, hashSeed } from "../core/rng";
+import { isStarving } from "../core/tax";
 import { fightBoss, HUNT_START_TURN, pickConverterHex, stepToward } from "../core/rival-ai";
 import { findBossCell, getCell } from "../core/world-gen";
 import { replacePlayer } from "./player-updates";
@@ -113,4 +115,24 @@ const playRivalClear = (store: TStore, rivalId: string) => {
   }
 };
 
-export { playRivalBuild, playRivalClear, playRivalScout };
+/**
+ * The start of the clearing phase: a starving rival riots by the same rules as
+ * the player (see `core/riot.ts`), and a notice tells the player.
+ */
+const playRivalRiot = (store: TStore, rivalId: string) => {
+  const rival = findRival(store, rivalId);
+  if (!rival || !isStarving(rival)) {
+    return;
+  }
+
+  const rng = createRng(hashSeed(`${store.game.nickname.peek()}:riot:${store.game.turn.peek()}:${rival.id}`));
+  const { player, report } = resolveRiot(rival, rng);
+  replacePlayer(store, player);
+
+  if (report.rioters.total > 0) {
+    const razed = report.hits.filter((hit) => hit.razed).length;
+    showNotice(store, `${rival.nickname}: голодный бунт, разрушено ${razed}`);
+  }
+};
+
+export { playRivalBuild, playRivalClear, playRivalRiot, playRivalScout };

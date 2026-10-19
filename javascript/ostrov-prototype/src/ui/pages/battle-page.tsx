@@ -6,6 +6,7 @@ import { CleanupSummary } from "../components/cleanup/cleanup-summary";
 import { EndTurnPanel } from "../components/end-turn-panel";
 import { NoticeToast } from "../components/notice-toast";
 import { PlayersPanel } from "../components/players-panel";
+import { RiotModal } from "../components/riot-modal";
 import { TurnPanel } from "../components/turn-panel";
 import { WaitingOverlay } from "../components/waiting-overlay";
 import { useStore } from "../../store/store";
@@ -73,6 +74,8 @@ const BattlePage: FC<TBattlePageProps> = ({ registry }) => {
 
       {/* The results stay hidden while the player waits; taking "Готов" back brings them again. */}
       {isWaiting ? null : <CleanupSummary registry={registry} />}
+
+      <RiotModal registry={registry} />
 
       <WaitingOverlay />
 

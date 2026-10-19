@@ -7,6 +7,7 @@ import { IslandMinimap } from "../components/island-minimap";
 import { NoticeToast } from "../components/notice-toast";
 import { PlayersPanel } from "../components/players-panel";
 import { ResourcesPanel } from "../components/resources-panel";
+import { RiotModal } from "../components/riot-modal";
 import { ToxicPanel } from "../components/toxic-panel";
 import { TrailEventModal } from "../components/trail-event-modal";
 import { TurnPanel } from "../components/turn-panel";
@@ -69,6 +70,8 @@ const WorldPage: FC<TWorldPageProps> = ({ registry }) => {
       <NoticeToast />
 
       <TrailEventModal registry={registry} />
+
+      <RiotModal registry={registry} />
 
       <FactionsModal registry={registry} />
     </div>

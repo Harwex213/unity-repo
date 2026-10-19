@@ -647,6 +647,7 @@ export {
   meterGain,
   meterLevel,
   OUTCOME_LABELS,
+  plural,
   rollSlot,
   SLOT_EVENTS,
   SLOT_SYMBOLS,

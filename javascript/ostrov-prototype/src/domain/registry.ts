@@ -44,6 +44,7 @@ type TSkipTaxAnimationAction = () => void;
 type TOpenTaxPickAction = (hexId: string) => void;
 type TCloseTaxPickAction = () => void;
 type TPickTaxFaceAction = (hexId: string, faceIndex: number) => void;
+type TLaunchBuildingAction = (hexId: string) => void;
 type TCloseSlotModalAction = () => void;
 
 type TResearchTechAction = (techId: TTechId) => void;
@@ -51,6 +52,7 @@ type TSelectWorldCellAction = (cellId: string) => void;
 type TScoutAction = (cellId: string) => void;
 type TMoveIslandAction = (cellId: string) => void;
 type TCloseTrailEventAction = () => void;
+type TCloseRiotAction = () => void;
 type TSetCleanupInputAction = (x: number, y: number) => void;
 type TStepCleanupAction = (ticks: number) => void;
 type TSetCleanupSpeedAction = (speed: TCleanupSpeed) => void;
@@ -106,12 +108,14 @@ type TAppRegistry = {
   openTaxPickAction: TOpenTaxPickAction;
   closeTaxPickAction: TCloseTaxPickAction;
   pickTaxFaceAction: TPickTaxFaceAction;
+  launchBuildingAction: TLaunchBuildingAction;
   closeSlotModalAction: TCloseSlotModalAction;
   researchTechAction: TResearchTechAction;
   selectWorldCellAction: TSelectWorldCellAction;
   scoutAction: TScoutAction;
   moveIslandAction: TMoveIslandAction;
   closeTrailEventAction: TCloseTrailEventAction;
+  closeRiotAction: TCloseRiotAction;
   setCleanupInputAction: TSetCleanupInputAction;
   stepCleanupAction: TStepCleanupAction;
   setCleanupSpeedAction: TSetCleanupSpeedAction;
@@ -137,6 +141,7 @@ type TAppRegistry = {
 export type {
   TAppRegistry,
   TCloseTrailEventAction,
+  TCloseRiotAction,
   TMoveIslandAction,
   TResearchTechAction,
   TScoutAction,
@@ -178,6 +183,7 @@ export type {
   TOpenTechModalAction,
   TPickSoilHexAction,
   TPickTaxFaceAction,
+  TLaunchBuildingAction,
   TPlaceStrongholdAction,
   TPrevGuideStepAction,
   TReachGuideStepAction,

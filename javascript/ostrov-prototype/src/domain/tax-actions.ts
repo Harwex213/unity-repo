@@ -3,19 +3,22 @@ import { ICONS } from "../core/icons";
 import { revealDelays, revealDurationMs } from "../core/production-reveal";
 import { withAutoStaff } from "../core/population";
 import { getResource } from "../core/resources";
+import { withRivalLaunches, withRivalRations } from "../core/rival-ai";
 import {
   collectTaxPlan,
   findRoll,
+  launchRefusal,
   pickRefusal,
   planPayouts,
   rollTaxPlan,
   withBotPicks,
+  withLaunch,
   withPick,
   withPowerSpent,
   withToxicityPaid,
   withYield,
 } from "../core/tax-plan";
-import { withMadness } from "../core/tax";
+import { withFeeding } from "../core/tax";
 import { techEffects } from "../core/techs";
 import { withSlotSpin } from "../core/toxic-slot";
 import { replacePlayer } from "./player-updates";
@@ -33,7 +36,9 @@ import type { TCamera, TFlight, THudAnchorId, TPointerAnchor } from "../store/ui
  * player reads the rolls on the hexes and may spend power to change them. The
  * payouts wait until the player ends the phase: then the yield flies to the
  * resources panel and the toxicity to the meter, along a bezier, each mote
- * paying its part as it lands. After the spec's 350 ms pause the mad eat. The
+ * paying its part as it lands. After the spec's 350 ms pause everyone eats:
+ * the mad and the population (see `withFeeding` in `core/tax.ts`). A village
+ * does not roll at the start: the player launches it from the hex panel. The
  * player's toxicity slot spins when the phase ends (see `slot-actions.ts`).
  * The bots roll and pick
  * at the same moment. Each bot is paid, and spins its slot, without an
@@ -139,7 +144,7 @@ const startTaxPhaseAction = (store: TStore) => {
   const plans = store.game.players.peek().map((player) => {
     const plan = rollTaxPlan(player, turn, seed);
 
-    return player.isHuman ? plan : withBotPicks(player, plan, BOT_EFFECTS);
+    return player.isHuman ? plan : withBotPicks(player, withRivalLaunches(player, plan, seed), BOT_EFFECTS);
   });
 
   store.game.tax.value = { turn, status: "rolled", plans, paidRivalIds: [] };
@@ -246,6 +251,37 @@ const pickTaxFaceAction = (store: TStore, hexId: string, faceIndex: number) => {
   replacePlan(store, withPick(plan, hexId, faceIndex));
 };
 
+/**
+ * Launches a village: its die rolls now and the roll joins the plan, to be
+ * paid at the end of the phase like any other. The building plays the same
+ * production pulse as at the start of the phase, and its plates pop up.
+ */
+const launchBuildingAction = (store: TStore, hexId: string) => {
+  if (!isTaxOpen(store)) {
+    return;
+  }
+
+  const player = store.derived.humanPlayer.peek();
+  const plan = store.derived.humanTaxPlan.peek();
+  if (!player || !plan) {
+    return;
+  }
+
+  const refusal = launchRefusal(player, plan, hexId);
+  if (refusal) {
+    showNotice(store, refusal.message);
+
+    return;
+  }
+
+  replacePlan(store, withLaunch(player, plan, hexId, store.game.nickname.peek()));
+
+  const delays = { [hexId]: 0 };
+  store.ui.productionReveal.value = { delays, done: false, leaving: null };
+  store.ui.busy.value = true;
+  later(() => finishProductionReveal(store), revealDurationMs(delays));
+};
+
 const dropFlight = (store: TStore, id: string) => {
   store.ui.flights.value = store.ui.flights.peek().filter((flight) => flight.id !== id);
 };
@@ -294,13 +330,19 @@ const finishCollection = (store: TStore) => {
 };
 
 /**
- * The madness step. Mad people do not work and still eat, which is the part
- * the spec leaves to us. Nobody goes mad here: the toxicity slot does that.
+ * The eating step. Mad people do not work and still eat, and the population
+ * eats its upkeep. Nobody goes mad here: the toxicity slot does that. A
+ * shortage leaves the player starving, and a notice says so.
  */
 const applyMadness = (store: TStore) => {
   const player = store.derived.humanPlayer.peek();
   if (player) {
-    replacePlayer(store, withMadness(player, 0, store.derived.techEffects.peek().madCuredPerTurn));
+    const fed = withFeeding(player, store.derived.techEffects.peek().madCuredPerTurn);
+    replacePlayer(store, fed);
+
+    if (fed.starvingShortfall) {
+      showNotice(store, `Голод: не хватило ${fed.starvingShortfall} еды — в фазе битвы начнётся бунт`);
+    }
   }
 
   finishCollection(store);
@@ -465,7 +507,9 @@ const collectRivalTaxAction = (store: TStore, playerId: string) => {
 
   // The list is written first, so nothing re-entrant can pay the rival twice.
   store.game.tax.value = { ...tax, paidRivalIds: [...tax.paidRivalIds, playerId] };
-  replacePlayer(store, withSlotSpin(collectTaxPlan(player, plan, BOT_EFFECTS), tax.turn, store.game.nickname.peek()));
+  // A rival that cannot feed everyone sends soldiers, then workers, home before it eats.
+  const rationed = withRivalRations(player, plan, BOT_EFFECTS);
+  replacePlayer(store, withSlotSpin(collectTaxPlan(rationed.player, rationed.plan, BOT_EFFECTS), tax.turn, store.game.nickname.peek()));
 };
 
 /** Leaves the tax phase behind: the next phase opens with no tax state. */
@@ -498,6 +542,7 @@ export {
   closeTaxPickAction,
   collectRivalTaxAction,
   collectTaxAction,
+  launchBuildingAction,
   openTaxPickAction,
   pickTaxFaceAction,
   setCameraAction,

@@ -19,7 +19,7 @@ type TResource = {
 };
 
 const RESOURCES: readonly TResource[] = [
-  { id: "food", icon: ICONS.food, label: "Еда", kind: "basic", feeds: "Кормит сумасшедших" },
+  { id: "food", icon: ICONS.food, label: "Еда", kind: "basic", feeds: "Кормит население и сумасшедших" },
   { id: "stone", icon: ICONS.stone, label: "Камень", kind: "basic", feeds: "Даёт здания" },
   { id: "wood", icon: ICONS.wood, label: "Дерево", kind: "basic", feeds: "Даёт здания" },
   { id: "population", icon: ICONS.population, label: "Население", kind: "special", feeds: "Работают в зданиях и служат в армии" },
