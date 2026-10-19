@@ -17,6 +17,7 @@ import { buildRoster, getUnit } from "../core/units";
 import { BOSS_TECH_ID } from "../core/techs";
 import { getCell } from "../core/world-gen";
 import { replacePlayer, withIslandHexes } from "./player-updates";
+import { clearRiotState } from "./riot-actions";
 import { showNotice } from "./ui-actions";
 import type { TCleanupResult, TSkillTarget } from "../core/cleanup-sim";
 import type { TSkillId } from "../core/skills";
@@ -178,7 +179,8 @@ const setCleanupSpeedAction = (store: TStore, speed: TCleanupSpeed) => {
 };
 
 const toggleCleanupPauseAction = (store: TStore) => {
-  if (store.derived.isHumanReady.peek()) {
+  // The riot modal holds the battle paused until it is closed.
+  if (store.derived.isHumanReady.peek() || store.battle.riot.peek()) {
     return;
   }
 
@@ -312,6 +314,7 @@ const finishClearingAction = (store: TStore) => {
   store.battle.hud.value = null;
   store.battle.result.value = null;
   store.battle.targeting.value = null;
+  clearRiotState(store);
 };
 
 export {

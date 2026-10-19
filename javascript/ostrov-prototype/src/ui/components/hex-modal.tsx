@@ -12,6 +12,9 @@ import { hexDie } from "../../core/dice";
 import { soilCleanseRefusal } from "../../core/soil-cleanse";
 import { isStrongholdHex, STRONGHOLD_ART, STRONGHOLD_LABEL } from "../../core/stronghold";
 import { structureHp } from "../../core/structure-hp";
+import { facePayout } from "../../core/tax";
+import { findRoll, launchRefusal, needsLaunch } from "../../core/tax-plan";
+import { getResource } from "../../core/resources";
 import { useStore } from "../../store/store";
 import { DieFaces } from "./die-faces";
 import { Icon } from "./icon";
@@ -19,11 +22,15 @@ import { useState } from "react";
 import type { AnimationEvent, FC, ReactNode } from "react";
 import type { TBiome, THex, TPlayer } from "../../core/types";
 import type { THexDie } from "../../core/dice";
+import type { TPayoutEffects } from "../../core/tax";
+import type { TTaxPlan } from "../../core/tax-plan";
 import type { TSoilCleanseMode } from "../../store/ui-state";
 import type {
   TArmBuildingAction,
   TChangeArmyAction,
   TCloseHexModalAction,
+  TLaunchBuildingAction,
+  TOpenTaxPickAction,
   TRequestDemolishAction,
   TSetHexWorkersAction,
   TToggleSoilCleanseAction,
@@ -37,6 +44,8 @@ type THexModalRegistrySlice = {
   armBuildingAction: TArmBuildingAction;
   changeArmyAction: TChangeArmyAction;
   closeHexModalAction: TCloseHexModalAction;
+  launchBuildingAction: TLaunchBuildingAction;
+  openTaxPickAction: TOpenTaxPickAction;
   requestDemolishAction: TRequestDemolishAction;
   setHexWorkersAction: TSetHexWorkersAction;
   toggleSoilCleanseAction: TToggleSoilCleanseAction;
@@ -56,6 +65,10 @@ type TPanelContext = {
   player: TPlayer | null;
   isReadonly: boolean;
   isBuildPhase: boolean;
+  /** The tax phase's dice lie unpaid and the player may act on them. */
+  isTaxOpen: boolean;
+  taxPlan: TTaxPlan | null;
+  effects: TPayoutEffects;
   isStronghold: boolean;
   die: THexDie | null;
   registry: THexModalRegistrySlice;
@@ -378,6 +391,72 @@ const ArmySection: FC<{ ctx: TPanelContext }> = ({ ctx }) => {
   );
 };
 
+/**
+ * The village does not roll by itself. In the tax phase the player launches
+ * it here: the die rolls, and the face pays at the end of the phase. Once
+ * launched, its face changes for power like any other, in the face popup.
+ */
+const VillageSection: FC<{ ctx: TPanelContext }> = ({ ctx }) => {
+  const { hex, player, isReadonly, isTaxOpen, taxPlan, effects, registry } = ctx;
+  if (!player || isReadonly || !needsLaunch(hex)) {
+    return null;
+  }
+
+  const roll = findRoll(taxPlan, hex.id);
+  const face = roll ? roll.faces[roll.chosenIndex] : undefined;
+
+  if (roll && face) {
+    const paid = facePayout(face, hex, effects);
+    const resource = getResource(face.resource);
+
+    return (
+      <PanelSection title="Деревня" className="hex-section--village">
+        <div className="hex-section__control">
+          <span className="hex-section__status">
+            <Icon src={resource.icon} label={resource.label} />
+            {"Запущена: "}
+            <strong>{`+${paid.amount}`}</strong>
+            {paid.toxicity > 0 ? <span className="hex-section__dim">{`· +${paid.toxicity}%`}</span> : null}
+          </span>
+
+          <ButtonHint hint={isTaxOpen ? "Сменить грань за власть" : "Сейчас грань не сменить"}>
+            <button
+              type="button"
+              className="button hex-section__button"
+              disabled={!isTaxOpen}
+              onClick={() => registry.openTaxPickAction(hex.id)}
+            >
+              {"Грань"}
+            </button>
+          </ButtonHint>
+        </div>
+      </PanelSection>
+    );
+  }
+
+  const refusal = isTaxOpen ? launchRefusal(player, taxPlan, hex.id) : { message: "Запустить можно только в фазе сбора ресурсов" };
+  const isWaiting = isTaxOpen && refusal === null;
+
+  return (
+    <PanelSection title="Деревня" className={`hex-section--village ${isWaiting ? "hex-section--waiting" : ""}`}>
+      <ButtonHint variant="block" hint={refusal ? refusal.message : "Бросить кубик деревни. Бесплатно, раз в фазу"}>
+        <button
+          type="button"
+          className="button hex-section__wide village-launch"
+          disabled={refusal !== null}
+          onClick={() => registry.launchBuildingAction(hex.id)}
+        >
+          {"▶ Запустить"}
+        </button>
+      </ButtonHint>
+
+      <SectionNote>
+        Сама кубик не бросает. Без запуска не даёт жителей
+      </SectionNote>
+    </PanelSection>
+  );
+};
+
 /** The stronghold's soil cleansing: sacrifice one hex to purify another. */
 const SoilSection: FC<{ ctx: TPanelContext }> = ({ ctx }) => {
   const { player, isStronghold, isReadonly, isBuildPhase, soilMode, isSoilUsed, registry } = ctx;
@@ -412,6 +491,7 @@ const SoilSection: FC<{ ctx: TPanelContext }> = ({ ctx }) => {
 /** The sections in their fixed order. Each one returns null when it does not apply. */
 const SECTIONS: readonly FC<{ ctx: TPanelContext }>[] = [
   DiceSection,
+  VillageSection,
   SuitableSection,
   WorkersSection,
   ArmySection,
@@ -443,6 +523,14 @@ const HexModal: FC<THexModalProps> = ({ registry }) => {
     !store.ui.busy.value &&
     !store.derived.isHumanReady.value;
   const isSoilUsed = store.game.soilCleansedTurn.value === store.game.turn.value;
+  const isTaxOpen =
+    store.game.stage.value === "play" &&
+    store.game.phase.value === "tax" &&
+    store.game.tax.value?.status === "rolled" &&
+    !store.ui.busy.value &&
+    !store.derived.isHumanReady.value;
+  const taxPlan = store.derived.humanTaxPlan.value;
+  const effects = store.derived.techEffects.value;
 
   // The last selected hex stays on screen while the panel slides out.
   const [lastHex, setLastHex] = useState<THex | null>(hex);
@@ -468,6 +556,9 @@ const HexModal: FC<THexModalProps> = ({ registry }) => {
     player,
     isReadonly,
     isBuildPhase,
+    isTaxOpen,
+    taxPlan,
+    effects,
     isStronghold: isStrongholdHex(player, shownHex.id),
     die: hexDie(player, shownHex),
     registry,

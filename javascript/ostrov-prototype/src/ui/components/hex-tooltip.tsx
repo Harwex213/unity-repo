@@ -12,7 +12,7 @@ import { isStaffed, workersNeeded, workersOn } from "../../core/population";
 import { hexDie } from "../../core/dice";
 import { canPlaceStronghold, isStrongholdHex, STRONGHOLD_LABEL } from "../../core/stronghold";
 import { isDead, isFoodBlocked } from "../../core/tax";
-import { findRoll } from "../../core/tax-plan";
+import { awaitsLaunch, findRoll } from "../../core/tax-plan";
 import { useStore } from "../../store/store";
 import { DieFaces } from "./die-faces";
 import { Icon } from "./icon";
@@ -232,6 +232,12 @@ const HexTooltip = () => {
       {hex.building && !isStaffed(hex) && !isReadonly && isBuildPhase ? (
         <div className="hex-tooltip__action">
           {"Клик — открыть карточку и назначить рабочего"}
+        </div>
+      ) : null}
+
+      {!isReadonly && player && isTaxPhase && awaitsLaunch(player, taxPlan, hex) ? (
+        <div className="hex-tooltip__action">
+          {"Ждёт запуска. Клик — открыть карточку и запустить"}
         </div>
       ) : null}
 

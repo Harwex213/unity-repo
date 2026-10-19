@@ -2305,6 +2305,45 @@ body {
   }
 }
 
+/* A village waiting for its launch in the tax phase. */
+.launch-badge {
+  pointer-events: none;
+}
+
+.launch-badge__pulse {
+  animation: launch-badge-pulse 1.1s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.launch-badge__back {
+  fill: rgba(20, 16, 10, 0.88);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.launch-badge__text {
+  fill: var(--accent);
+  font-weight: 800;
+}
+
+@keyframes launch-badge-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-badge__pulse {
+    animation: none;
+  }
+}
+
+/* The village section's launch button stands out while the village waits. */
+.hex-section--waiting .village-launch:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Power chosen in the tax phase, not yet taken from the pool. */
 .resource__pending {
   position: absolute;
@@ -2318,6 +2357,19 @@ body {
   font-size: 11px;
   font-weight: 800;
   line-height: calc(16 * var(--u));
+}
+
+/* The food will not cover the eating, or did not last phase. */
+.resource__pending--short {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.resource--short .resource__amount,
+.resource__hint-short {
+  color: var(--danger);
+  /* The riot warning is one line: the hint widens for it. */
+  white-space: nowrap;
 }
 
 /* --- tax phase: the face popup of one die --- */
@@ -5623,4 +5675,111 @@ body {
   .main-menu-bg__canvas {
     transition: none;
   }
+}
+
+/* --- the starvation riot modal: a dark panel with a gold rim and a red edge --- */
+
+.riot-modal {
+  width: min(calc(460 * var(--u)), 92vw);
+  border-color: var(--panel-edge);
+  box-shadow:
+    0 0 0 1px rgba(217, 83, 79, 0.35) inset,
+    0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, 0.55);
+}
+
+.riot-modal__title {
+  display: flex;
+  gap: calc(10 * var(--u));
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+}
+
+.riot-modal__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(8 * var(--u));
+  margin-bottom: calc(12 * var(--u));
+}
+
+.riot-modal__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: calc(8 * var(--u));
+  border: 1px solid var(--panel-edge-dim);
+  border-radius: calc(8 * var(--u));
+  background: #0e151f;
+  color: var(--text-dim);
+  font-size: max(calc(12 * var(--u)), 11px);
+}
+
+.riot-modal__stat strong {
+  color: var(--accent);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: max(calc(20 * var(--u)), 12px);
+}
+
+.riot-modal__section {
+  margin-bottom: calc(12 * var(--u));
+}
+
+.riot-modal__label {
+  display: flex;
+  gap: calc(10 * var(--u));
+  align-items: center;
+  margin-bottom: calc(6 * var(--u));
+  color: var(--danger);
+  font-size: max(calc(13 * var(--u)), 11px);
+  font-weight: 700;
+}
+
+.riot-modal__dim {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.riot-modal__hits {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  margin: 0 0 calc(8 * var(--u));
+  padding: 0;
+  list-style: none;
+}
+
+.riot-modal__hit {
+  display: flex;
+  gap: calc(8 * var(--u));
+  align-items: center;
+  padding: calc(4 * var(--u)) calc(8 * var(--u));
+  border: 1px solid var(--panel-edge-dim);
+  border-radius: calc(6 * var(--u));
+  background: #0e151f;
+  font-size: max(calc(13 * var(--u)), 11px);
+}
+
+.riot-modal__hit--razed {
+  border-color: rgba(217, 83, 79, 0.55);
+}
+
+.riot-modal__hit-name {
+  flex: 1;
+}
+
+.riot-modal__hit-hp {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.riot-modal__hit--razed .riot-modal__hit-hp {
+  color: var(--danger);
+}
+
+.riot-modal__note {
+  margin: 0 0 calc(10 * var(--u));
+  color: var(--text-dim);
+  font-size: max(calc(12 * var(--u)), 11px);
+  line-height: 1.4;
 }

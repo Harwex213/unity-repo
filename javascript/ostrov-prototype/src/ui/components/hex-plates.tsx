@@ -8,7 +8,7 @@ import { getResource } from "../../core/resources";
 import { POWER_PER_TURN } from "../../core/stronghold";
 import { structureHp } from "../../core/structure-hp";
 import { facePayout, isDead, isFoodBlocked } from "../../core/tax";
-import { findRoll } from "../../core/tax-plan";
+import { awaitsLaunch, findRoll } from "../../core/tax-plan";
 import { useStore } from "../../store/store";
 import type { CSSProperties, FC } from "react";
 import type { THexDie } from "../../core/dice";
@@ -28,7 +28,8 @@ import type { TProductionReveal } from "../../store/ui-state";
  *   the stronghold's army lead the plate. A thin hp bar runs along the bottom
  *   of the plate under a building or the stronghold.
  * - Above every building in the tax phase: the rolled payout, one small plate
- *   per resource. The plates pop up after the building's production pulse
+ *   per resource. A village that waits for its launch shows a pulsing
+ *   "▶ Запустить" badge there instead. The plates pop up after the building's production pulse
  *   (see `core/production-reveal.ts`) and fade out as the payout flies away.
  */
 
@@ -182,6 +183,37 @@ const ProdStack: FC<TProdStackProps> = ({ hex, plates, reveal, timing }) => {
           popDelayMs={start === undefined ? null : start + timing.plateAtMs + index * timing.plateStepMs}
         />
       ))}
+    </g>
+  );
+};
+
+const LAUNCH_TEXT = "▶ Запустить";
+
+/**
+ * The badge over a village that waits for its launch in the tax phase. It
+ * stands where the payout plates will pop up after the launch, and pulses.
+ */
+const LaunchBadge: FC<{ hex: THex }> = ({ hex }) => {
+  const center = hexToPixel(hex.q, hex.r, HEX_SIZE);
+  const width = PROD_PAD_X * 2 + LAUNCH_TEXT.length * PROD_FONT * 0.6;
+  const top = PROD_BOTTOM - PROD_HEIGHT;
+
+  return (
+    <g className="launch-badge" transform={`translate(${center.x} ${center.y})`}>
+      <g className="launch-badge__pulse">
+        <rect className="launch-badge__back" x={-width / 2} y={top} width={width} height={PROD_HEIGHT} rx={3.5} />
+
+        <text
+          className="launch-badge__text"
+          x={0}
+          y={top + PROD_HEIGHT / 2}
+          fontSize={PROD_FONT}
+          textAnchor="middle"
+          dominantBaseline="central"
+        >
+          {LAUNCH_TEXT}
+        </text>
+      </g>
     </g>
   );
 };
@@ -455,7 +487,7 @@ const HexPlates: FC<THexPlatesProps> = ({ scale }) => {
         ? dice.map(({ hex, die }) => {
             const roll = findRoll(taxPlan, hex.id);
             if (!roll) {
-              return null;
+              return showsPending && awaitsLaunch(player, taxPlan, hex) ? <LaunchBadge key={`launch-${hex.id}`} hex={hex} /> : null;
             }
 
             return (

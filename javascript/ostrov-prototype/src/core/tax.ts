@@ -1,3 +1,4 @@
+import { populationOf } from "./population";
 import type { TTechEffects } from "./techs";
 import type { TFace, THex, TPlayer } from "./types";
 
@@ -64,12 +65,21 @@ const facePayout = (face: TFace, hex: THex, effects: TPayoutEffects) => {
   return { amount, toxicity };
 };
 
+/** Food one worker in a building eats every tax phase. */
+const FOOD_PER_WORKER = 1;
+/** Food one soldier eats every tax phase. */
+const FOOD_PER_SOLDIER = 2;
+/** Food one idle person eats every tax phase. */
+const FOOD_PER_IDLE = 0;
+/** Food one mad person eats every tax phase. */
+const FOOD_PER_MAD = 1;
+
 /**
  * The madness step of the tax phase. `converted` people go mad, asylums send
  * up to `curedPerTurn` of the mad back to work, and every mad person left eats
- * one food without working. Food never drops below zero. The tax phase itself
- * drives nobody mad any more: people go mad only through the toxicity slot
- * (`core/toxic-slot.ts`), so it passes 0.
+ * `FOOD_PER_MAD` food without working. Food never drops below zero. The tax
+ * phase itself drives nobody mad any more: people go mad only through the
+ * toxicity slot (`core/toxic-slot.ts`), so it passes 0.
  */
 const withMadness = (player: TPlayer, converted: number, curedPerTurn: number): TPlayer => {
   const cured = Math.min(player.resources.mad, curedPerTurn);
@@ -81,9 +91,52 @@ const withMadness = (player: TPlayer, converted: number, curedPerTurn: number): 
       ...player.resources,
       population: player.resources.population - converted + cured,
       mad,
-      food: Math.max(0, player.resources.food - mad),
+      food: Math.max(0, player.resources.food - mad * FOOD_PER_MAD),
     },
   };
+};
+
+/** The food the population eats in one tax phase: the workers, the army and the idle. */
+const foodUpkeep = (player: TPlayer) => {
+  const people = populationOf(player);
+
+  return people.workers * FOOD_PER_WORKER + people.army * FOOD_PER_SOLDIER + people.idle * FOOD_PER_IDLE;
+};
+
+/** The population eats its upkeep. Food never drops below zero, and nothing else happens. */
+const withFoodUpkeep = (player: TPlayer): TPlayer => ({
+  ...player,
+  resources: { ...player.resources, food: Math.max(0, player.resources.food - foodUpkeep(player)) },
+});
+
+/**
+ * All the food the eating step of this tax phase takes: the population's
+ * upkeep and the mad left after the asylums cure some of them.
+ */
+const foodDemand = (player: TPlayer, curedPerTurn: number) => {
+  const mad = player.resources.mad - Math.min(player.resources.mad, curedPerTurn);
+
+  return foodUpkeep(player) + mad * FOOD_PER_MAD;
+};
+
+/**
+ * The eating step, the last step of the tax phase, after every payout. The
+ * mad eat first (see `withMadness`), then the population eats its upkeep.
+ * The cured mad come back as idle people, so the order changes nothing while
+ * the idle eat 0. Food never drops below zero. When the food runs short, the
+ * player keeps the missing amount in `starvingShortfall` until a phase where
+ * everyone eats again; nothing else happens here.
+ */
+const withFeeding = (player: TPlayer, curedPerTurn: number): TPlayer => {
+  const shortfall = Math.max(0, foodDemand(player, curedPerTurn) - player.resources.food);
+  const { starvingShortfall: _previous, ...fed } = withFoodUpkeep(withMadness(player, 0, curedPerTurn));
+
+  return shortfall > 0 ? { ...fed, starvingShortfall: shortfall } : fed;
+};
+
+/** The last tax phase could not feed everyone. The hook for the starvation riot. */
+const isStarving = (player: TPlayer) => {
+  return (player.starvingShortfall ?? 0) > 0;
 };
 
 const isDead = (hex: THex) => hex.toxicity >= DEAD_TOXICITY_PCT;
@@ -96,9 +149,18 @@ export {
   effectiveYield,
   facePayout,
   FOOD_BLOCKED_TOXICITY_PCT,
+  FOOD_PER_IDLE,
+  FOOD_PER_MAD,
+  FOOD_PER_SOLDIER,
+  FOOD_PER_WORKER,
+  foodDemand,
+  foodUpkeep,
   isDead,
   isFoodBlocked,
+  isStarving,
   totalToxicity,
   toxicityGain,
+  withFeeding,
+  withFoodUpkeep,
   withMadness,
 };

@@ -19,6 +19,7 @@ import {
 } from "./menu-actions";
 import { changeArmyAction, setHexWorkersAction } from "./population-actions";
 import { navigateToIslandAction, navigateToWorldAction } from "./route-actions";
+import { closeRiotAction } from "./riot-actions";
 import { placeStrongholdAction } from "./setup-actions";
 import { closeSlotModalAction } from "./slot-actions";
 import {
@@ -34,6 +35,7 @@ import { cancelSoilCleanseAction, pickSoilHexAction, toggleSoilCleanseAction } f
 import { researchTechAction } from "./tech-actions";
 import {
   closeTaxPickAction,
+  launchBuildingAction,
   openTaxPickAction,
   pickTaxFaceAction,
   setCameraAction,
@@ -89,12 +91,14 @@ const createRegistry = (store: TStore) => {
     openTaxPickAction,
     closeTaxPickAction,
     pickTaxFaceAction,
+    launchBuildingAction,
     closeSlotModalAction,
     researchTechAction,
     selectWorldCellAction,
     scoutAction,
     moveIslandAction,
     closeTrailEventAction,
+    closeRiotAction,
     setCleanupInputAction,
     stepCleanupAction,
     setCleanupSpeedAction,
