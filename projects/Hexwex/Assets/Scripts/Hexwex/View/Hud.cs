@@ -123,6 +123,31 @@ namespace Hexwex.View
             _noticeUntil = Time.unscaledTime + NoticeSeconds;
         }
 
+        /// <summary>
+        /// Whether the hex panel is under the pointer. The panel floats over the hex it
+        /// is about, and near the top of the screen it can cover that hex: a hover that
+        /// moved onto it keeps its hex, or the panel would hide and come back every frame.
+        /// </summary>
+        public bool IsPointerOverHexPanel(Vector2 screenPosition)
+        {
+            IPanel panel = _root != null ? _root.panel : null;
+            if (panel == null || _hexPanel == null || _hexPanel.style.display == DisplayStyle.None)
+            {
+                return false;
+            }
+
+            Vector2 flipped = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+            for (VisualElement picked = panel.Pick(RuntimePanelUtils.ScreenToPanel(panel, flipped)); picked != null; picked = picked.parent)
+            {
+                if (picked == _hexPanel)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>Whether a HUD panel is under the pointer, so the click must not reach the island.</summary>
         public bool IsPointerOverUi(Vector2 screenPosition)
         {
@@ -330,6 +355,103 @@ namespace Hexwex.View
             {
                 AddSuggestions(hex);
             }
+
+            if (die != null)
+            {
+                foreach (AlwaysYield item in die.AlwaysYields)
+                {
+                    VisualElement always = El("row always", _hexPanel);
+                    Icon(ResourceTable.Get(item.Resource).Icon, "face-icon", always);
+                    Text("+" + item.Amount + " " + ResourceTable.Get(item.Resource).Label + " каждый ход, без броска", "panel-text", always);
+                }
+            }
+
+            if (Session.Stage != GameStage.Play)
+            {
+                return;
+            }
+
+            if (hex.Id == player.StrongholdHexId)
+            {
+                AddArmySection(player);
+            }
+            else if (hex.Building.HasValue)
+            {
+                AddWorkersSection(player, hex);
+            }
+        }
+
+        private const string PhaseRefusal = "Менять можно только в фазе строительства";
+
+        /// <summary>
+        /// The workers of a production building. A building works only with all its
+        /// workers in place; the button moves one idle person in, or sends one back.
+        /// </summary>
+        private void AddWorkersSection(Player player, HexTile hex)
+        {
+            int needed = Population.WorkersNeeded(hex);
+            int workers = Population.WorkersOn(hex);
+            int idle = Population.Of(player).Idle;
+            bool isStaffed = workers >= needed;
+            bool isBuildPhase = Session.IsBuildingAllowed;
+
+            VisualElement section = El(isStaffed ? "staff-section" : "staff-section short", _hexPanel);
+            Text("Рабочие", "staff-title", section);
+            VisualElement row = El("row staff-row", section);
+            Icon("population", "face-icon", row);
+            Text(workers + "/" + needed + " — " + (isStaffed ? "работает" : "стоит"), "staff-status", row);
+
+            if (!_game.IsReadonly)
+            {
+                Button button = Btn(isStaffed ? "Снять" : "Назначить", "small-button staff-button", () => Session.SetHexWorkers(hex.Id, isStaffed ? workers - 1 : workers + 1), row);
+                button.SetEnabled(isBuildPhase && (isStaffed || idle > 0));
+                string hint = isStaffed ? "Снятый рабочий станет свободным. Здание перестанет работать." : "Свободных жителей: " + idle;
+                if (!isBuildPhase)
+                {
+                    hint = PhaseRefusal;
+                }
+                else if (!isStaffed && idle <= 0)
+                {
+                    hint = "Нет свободных жителей";
+                }
+
+                Text(hint, "staff-note", section);
+            }
+
+            if (!isStaffed)
+            {
+                Text("Без рабочих здание не бросает кубик: ничего не платит и не загрязняет гекс.", "panel-text toxic", section);
+            }
+        }
+
+        /// <summary>
+        /// The army lives in the stronghold. The buttons move one idle person into the
+        /// army, or one soldier back to idle. The whole army goes to the clear phase.
+        /// </summary>
+        private void AddArmySection(Player player)
+        {
+            if (_game.IsReadonly)
+            {
+                return;
+            }
+
+            int army = player.Army;
+            int idle = Population.Of(player).Idle;
+            bool isBuildPhase = Session.IsBuildingAllowed;
+
+            VisualElement section = El("staff-section army", _hexPanel);
+            Text("Армия", "staff-title", section);
+            VisualElement row = El("row staff-row", section);
+            Icon("militia", "face-icon", row);
+            Text(army.ToString(), "staff-status strong", row);
+            Text("· свободны: " + idle, "staff-dim", row);
+
+            VisualElement buttons = El("row staff-buttons", section);
+            Btn("− Распустить", "small-button staff-button", () => Session.ChangeArmy(-1), buttons).SetEnabled(isBuildPhase && army > 0);
+            Btn("+ Призвать", "small-button staff-button", () => Session.ChangeArmy(1), buttons).SetEnabled(isBuildPhase && idle > 0);
+
+            string note = !isBuildPhase ? PhaseRefusal : idle <= 0 ? "Нет свободных жителей, чтобы призвать" : "Вся армия идёт в бой в фазе зачистки";
+            Text(note, "staff-note", section);
         }
 
         private void AddFaces(Player player, HexTile hex, Face[] faces, TaxRoll roll)
@@ -886,6 +1008,13 @@ namespace Hexwex.View
             _plates.Clear();
             _plateByHex.Clear();
 
+            if (Session.IsBuildingAllowed && !_game.ShowWorld && !_game.ShowBattle)
+            {
+                AddStaffPlates(_game.ViewedPlayer);
+
+                return;
+            }
+
             TaxPlan plan = Session.HumanTaxPlan;
             if (plan == null || !Session.IsTaxOpen || _game.ShowWorld || _game.IsReadonly || _game.Collecting)
             {
@@ -915,6 +1044,31 @@ namespace Hexwex.View
                 }
 
                 _plateByHex.Add(new KeyValuePair<string, VisualElement>(roll.HexId, plate));
+            }
+        }
+
+        /// <summary>
+        /// In the build phase every building shows its people over its hex: the
+        /// person icon and "1/1", red when it lacks workers. The stronghold shows
+        /// its army: the militia icon and the soldier count.
+        /// </summary>
+        private void AddStaffPlates(Player player)
+        {
+            foreach (HexTile hex in player.Hexes)
+            {
+                bool isStronghold = hex.Id == player.StrongholdHexId;
+                if (!isStronghold && !hex.Building.HasValue)
+                {
+                    continue;
+                }
+
+                bool isShort = !isStronghold && !Population.IsStaffed(hex);
+                VisualElement plate = El(isShort ? "plate staff short" : "plate staff", _plates);
+                plate.pickingMode = PickingMode.Ignore;
+                Icon(isStronghold ? "militia" : "population", "plate-icon", plate).pickingMode = PickingMode.Ignore;
+                string text = isStronghold ? player.Army.ToString() : Population.WorkersOn(hex) + "/" + Population.WorkersNeeded(hex);
+                Text(text, "plate-amount", plate).pickingMode = PickingMode.Ignore;
+                _plateByHex.Add(new KeyValuePair<string, VisualElement>(hex.Id, plate));
             }
         }
 

@@ -133,36 +133,22 @@ namespace Hexwex.Core
             throw new ArgumentException("Unknown enemy: " + key);
         }
 
+        /// <summary>The one unit the stronghold recruits.</summary>
+        public const string ArmyUnit = "militia";
+
         /// <summary>
         /// Who goes to the clearing phase. The spec never names a military building,
-        /// so the army is levied from the population: each unit costs people, and
-        /// only researched units can be fielded. The militia needs no research.
+        /// so the player sends people to the army (<see cref="Player.Army"/>, see
+        /// <see cref="Population"/>). The stronghold recruits only militia: one
+        /// person is one militiaman, so the whole army is always fielded.
         /// </summary>
-        public static List<Unit> BuildRoster(int population, ICollection<string> unlocked, Rng rng)
+        public static List<Unit> BuildRoster(int armyPeople)
         {
-            List<Unit> pool = new List<Unit>();
-            foreach (Unit unit in All)
-            {
-                if (unlocked.Contains(unit.Key))
-                {
-                    pool.Add(unit);
-                }
-            }
-
+            Unit militia = Get(ArmyUnit);
             List<Unit> roster = new List<Unit>();
-            int budget = population;
-
-            while (budget > 0)
+            for (int index = 0; index < armyPeople; index += 1)
             {
-                List<Unit> affordable = pool.FindAll(unit => unit.Upkeep <= budget);
-                if (affordable.Count == 0)
-                {
-                    break;
-                }
-
-                Unit picked = rng.Pick(affordable);
-                roster.Add(picked);
-                budget -= picked.Upkeep;
+                roster.Add(militia);
             }
 
             return roster;

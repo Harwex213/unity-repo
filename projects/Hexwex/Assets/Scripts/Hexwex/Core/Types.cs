@@ -133,6 +133,22 @@ namespace Hexwex.Core
         }
     }
 
+    /// <summary>
+    /// A yield that comes every tax phase without a roll, on top of the die: the
+    /// stronghold's power. It leaves no toxicity.
+    /// </summary>
+    public readonly struct AlwaysYield
+    {
+        public readonly ResourceId Resource;
+        public readonly int Amount;
+
+        public AlwaysYield(ResourceId resource, int amount)
+        {
+            Resource = resource;
+            Amount = amount;
+        }
+    }
+
     public sealed class HexTile
     {
         /// <summary><c>q,r</c> as a string.</summary>
@@ -149,6 +165,8 @@ namespace Hexwex.Core
         /// </summary>
         public StructureKind? DamagedKind;
         public int DamagedHp;
+        /// <summary>People who work in the building on the hex. They are part of the population. See <see cref="Population"/>.</summary>
+        public int Workers;
 
         public Axial Axial
         {
@@ -165,6 +183,7 @@ namespace Hexwex.Core
         public bool IsHuman;
         public List<HexTile> Hexes = new List<HexTile>();
         public ResourcePool Resources = new ResourcePool();
+        /// <summary>People in the army. They are part of the population resource, which counts everyone: idle, in the army and in buildings.</summary>
         public int Army;
         public int Techs;
         /// <summary>The world cell the island is flying over.</summary>

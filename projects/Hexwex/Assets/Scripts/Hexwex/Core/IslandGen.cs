@@ -23,6 +23,8 @@ namespace Hexwex.Core
         private const double NeighborBias = 2.6;
         private const string HumanColor = "#8fd14f";
         private const double RivalFillChance = 0.55;
+        /// <summary>Part of the starting population is already in the army; the rest is idle.</summary>
+        public const int HumanStartingArmy = 3;
 
         /// <summary>How common each biome is before neighbours are taken into account, by <see cref="BiomeId"/>.</summary>
         private static readonly int[] BiomeWeights = { 10, 9, 8, 5, 4, 6, 5, 4, 2, 4, 3, 2, 1, 7, 5, 4 };
@@ -117,6 +119,7 @@ namespace Hexwex.Core
                 IsHuman = true,
                 Hexes = CreateIsland(humanRng),
                 Resources = ResourceTable.CreateStartingPool(),
+                Army = HumanStartingArmy,
             };
 
             List<Player> players = new List<Player> { human };
@@ -173,6 +176,7 @@ namespace Hexwex.Core
 
                 hex.Building = rng.Pick(allowed).Id;
                 hex.Toxicity = rng.RandomInt(0, 40);
+                hex.Workers = Population.WorkersPerBuilding;
             }
         }
 
@@ -183,10 +187,13 @@ namespace Hexwex.Core
             PopulateIsland(hexes, rng, RivalFillChance);
             int built = hexes.Count(hex => hex.Building.HasValue);
 
-            // The draws below keep the prototype's order: food, mad, army, techs.
+            // The draws below keep the prototype's order: army, food, mad, techs.
+            int army = built + rng.RandomInt(0, 8);
             ResourcePool resources = ResourceTable.CreateStartingPool();
             resources[ResourceId.Food] += rng.RandomInt(0, 40);
             resources[ResourceId.Mad] += rng.RandomInt(0, 4);
+            // The starting people stay idle; the workers and the army come on top.
+            resources[ResourceId.Population] += built * Population.WorkersPerBuilding + army;
 
             return new Player
             {
@@ -196,7 +203,7 @@ namespace Hexwex.Core
                 IsHuman = false,
                 Hexes = hexes,
                 Resources = resources,
-                Army = built + rng.RandomInt(0, 8),
+                Army = army,
                 Techs = rng.RandomInt(0, 6),
                 HasHadBuildings = built > 0,
             };

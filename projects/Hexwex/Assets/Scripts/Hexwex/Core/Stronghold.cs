@@ -19,16 +19,20 @@ namespace Hexwex.Core
         public const string ArtName = "stronghold";
 
         /// <summary>
-        /// The stronghold's die: 3 wood, 3 stone, 3 food or 2 hammers. No face
-        /// leaves toxicity, and the die is the same on every biome.
+        /// The stronghold's die: 3 wood, 3 stone, 3 food or 2 hammers. Each face
+        /// leaves as many toxicity points as it pays: 3 stone leave 3 points, 2
+        /// hammers leave 2. The die is the same on every biome, so it has no biome face.
         /// </summary>
         public static readonly Face[] Faces =
         {
-            new Face(ResourceId.Wood, 3, 0),
-            new Face(ResourceId.Stone, 3, 0),
-            new Face(ResourceId.Food, 3, 0),
-            new Face(ResourceId.Hammers, 2, 0),
+            new Face(ResourceId.Wood, 3, 3),
+            new Face(ResourceId.Stone, 3, 3),
+            new Face(ResourceId.Food, 3, 3),
+            new Face(ResourceId.Hammers, 2, 2),
         };
+
+        /// <summary>What the stronghold pays every tax phase without a roll. It leaves no toxicity.</summary>
+        public static readonly AlwaysYield[] AlwaysYields = { new AlwaysYield(ResourceId.Power, PowerPerTurn) };
 
         /// <summary>A stronghold goes on a hex of the player's own island that has no building.</summary>
         public static bool CanPlace(Player player, string hexId)

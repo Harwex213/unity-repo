@@ -206,6 +206,12 @@ namespace Hexwex.View
             });
         }
 
+        /// <summary>
+        /// A building without its workers stands still: its machinery stops where it
+        /// was and its chimney goes cold. The wind still moves its flags.
+        /// </summary>
+        public bool IsWorking { get; set; } = true;
+
         private void Update()
         {
             float time = Time.time;
@@ -214,6 +220,11 @@ namespace Hexwex.View
             foreach (Mover mover in _movers)
             {
                 if (mover.Transform == null || !mover.Transform.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                if (!IsWorking && mover.Kind != Kind.Flag)
                 {
                     continue;
                 }
@@ -247,7 +258,7 @@ namespace Hexwex.View
                 }
             }
 
-            if (_smoke.Count > 0 && time >= _nextSmoke)
+            if (IsWorking && _smoke.Count > 0 && time >= _nextSmoke)
             {
                 _nextSmoke = time + SmokeEvery * Random.Range(0.8f, 1.3f);
                 Transform from = _smoke[Random.Range(0, _smoke.Count)];

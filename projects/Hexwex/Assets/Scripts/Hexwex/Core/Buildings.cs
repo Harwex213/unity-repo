@@ -230,7 +230,7 @@ namespace Hexwex.Core
                     Label = "Ферма",
                     Yields = ResourceId.Food,
                     Cost = new BuildCost(1, 3, 1),
-                    BaseFaces = new[] { new Face(ResourceId.Food, 1, 0), new Face(ResourceId.Food, 5, 0), new Face(ResourceId.Food, 3, 0), new Face(ResourceId.Food, 3, 0) },
+                    BaseFaces = new[] { new Face(ResourceId.Food, 1, 5), new Face(ResourceId.Food, 5, 3), new Face(ResourceId.Food, 3, 0), new Face(ResourceId.Food, 3, 3) },
                     BiomeFaces = new Dictionary<BiomeId, Face>
                     {
                         { BiomeId.Grassland, new Face(ResourceId.Food, 4, 1) },

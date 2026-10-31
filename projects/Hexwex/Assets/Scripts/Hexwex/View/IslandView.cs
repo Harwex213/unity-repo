@@ -207,6 +207,8 @@ namespace Hexwex.View
             string key = kind.HasValue ? kind.Value + (isRuined ? ":ruined" : "") : "scenery:" + hex.Biome;
             if (visual.ContentKey == key)
             {
+                MarkWorking(hex, visual);
+
                 return;
             }
 
@@ -243,6 +245,18 @@ namespace Hexwex.View
             if (isJustBuilt)
             {
                 _builds.Add(new BuildAnimation(visual.Content.transform, surfaceMaterial));
+            }
+
+            MarkWorking(hex, visual);
+        }
+
+        /// <summary>A building without its workers stands still. The stronghold needs none.</summary>
+        private static void MarkWorking(HexTile hex, HexVisual visual)
+        {
+            BuildingLife life = visual.Content != null ? visual.Content.GetComponent<BuildingLife>() : null;
+            if (life != null)
+            {
+                life.IsWorking = Population.IsStaffed(hex);
             }
         }
 
