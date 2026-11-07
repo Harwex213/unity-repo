@@ -1,4 +1,5 @@
 import { rspack } from "@rspack/core";
+import { storeSnapshotMiddleware } from "./dev-middleware/store-snapshot-middleware.mjs";
 
 export default {
   entry: {
@@ -59,5 +60,10 @@ export default {
     // Free port picked by the OS, as everywhere else in the repo: a fixed port
     // lets a forgotten server from an earlier run answer with a stale bundle.
     port: 0,
+    setupMiddlewares: (middlewares) => {
+      middlewares.unshift(storeSnapshotMiddleware);
+
+      return middlewares;
+    },
   },
 };

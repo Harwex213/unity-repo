@@ -18,14 +18,14 @@ const STARTING_MS = 650;
 /** The build phase HUD slides in. */
 const ENTERING_MS = 650;
 
-let rivalTimeoutIds: ReturnType<typeof setTimeout>[] = [];
+let setupTimeoutIds: ReturnType<typeof setTimeout>[] = [];
 
-const clearRivalTimers = () => {
-  for (const timeoutId of rivalTimeoutIds) {
+const clearSetupTimers = () => {
+  for (const timeoutId of setupTimeoutIds) {
     clearTimeout(timeoutId);
   }
 
-  rivalTimeoutIds = [];
+  setupTimeoutIds = [];
 };
 
 /** Places one rival's stronghold, unless it already has one. */
@@ -46,7 +46,7 @@ const placeRivalStronghold = (store: TStore, playerId: string) => {
 
 /** Called once per session: the rivals place their strongholds one by one. */
 const scheduleRivalStrongholds = (store: TStore) => {
-  clearRivalTimers();
+  clearSetupTimers();
 
   const rivals = store.game.players.peek().filter((player) => !player.isHuman);
 
@@ -56,7 +56,7 @@ const scheduleRivalStrongholds = (store: TStore) => {
       placeRivalStronghold(store, rival.id);
     }, delayMs);
 
-    rivalTimeoutIds.push(timeoutId);
+    setupTimeoutIds.push(timeoutId);
   });
 };
 
@@ -100,7 +100,7 @@ const startGameAction = (store: TStore) => {
     return;
   }
 
-  clearRivalTimers();
+  clearSetupTimers();
 
   for (const rival of store.game.players.peek()) {
     placeRivalStronghold(store, rival.id);
@@ -111,13 +111,17 @@ const startGameAction = (store: TStore) => {
   store.ui.selectedHexId.value = null;
   store.game.stage.value = "starting";
 
-  setTimeout(() => {
-    store.game.stage.value = "entering";
-
+  setupTimeoutIds.push(
     setTimeout(() => {
-      store.game.stage.value = "play";
-    }, ENTERING_MS);
-  }, STARTING_MS);
+      store.game.stage.value = "entering";
+
+      setupTimeoutIds.push(
+        setTimeout(() => {
+          store.game.stage.value = "play";
+        }, ENTERING_MS),
+      );
+    }, STARTING_MS),
+  );
 };
 
-export { placeStrongholdAction, scheduleRivalStrongholds, startGameAction };
+export { clearSetupTimers, placeStrongholdAction, scheduleRivalStrongholds, startGameAction };

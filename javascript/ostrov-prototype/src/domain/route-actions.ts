@@ -108,4 +108,17 @@ const syncRouteFromHash = (store: TStore) => {
   store.route.islandPlayerId.value = rest === "" ? null : rest;
 };
 
-export { navigateToIslandAction, navigateToWorldAction, syncRouteFromHash };
+/**
+ * Writes the route of the store to the address bar. `replaceState` fires no
+ * `hashchange`, so the store stays as it is.
+ */
+const writeRouteToAddress = (store: TStore) => {
+  const page = store.route.page.peek();
+  const playerId = store.route.islandPlayerId.peek();
+  const islandHash = playerId ? `${ISLAND_PREFIX}/${playerId}` : ISLAND_PREFIX;
+  const hash = page === "island" ? islandHash : `#/${page}`;
+
+  window.history.replaceState(null, "", hash);
+};
+
+export { navigateToIslandAction, navigateToWorldAction, syncRouteFromHash, writeRouteToAddress };

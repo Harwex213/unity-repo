@@ -78,6 +78,9 @@ type TSetDifficultyAction = (difficulty: TDifficulty) => void;
 type TOpenMenuCreditsAction = () => void;
 type TCloseMenuCreditsAction = () => void;
 
+type TSaveStoreSnapshotAction = () => Promise<void>;
+type TLoadStoreSnapshotAction = () => Promise<void>;
+
 type TAppRegistry = {
   placeStrongholdAction: TPlaceStrongholdAction;
   startGameAction: TStartGameAction;
@@ -136,6 +139,8 @@ type TAppRegistry = {
   setDifficultyAction: TSetDifficultyAction;
   openMenuCreditsAction: TOpenMenuCreditsAction;
   closeMenuCreditsAction: TCloseMenuCreditsAction;
+  saveStoreSnapshotAction: TSaveStoreSnapshotAction;
+  loadStoreSnapshotAction: TLoadStoreSnapshotAction;
 };
 
 export type {

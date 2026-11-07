@@ -4989,7 +4989,7 @@ body {
   text-decoration: line-through;
 }
 
-/* --- learn guide (`?guide`): one card per phase, over every page --- */
+/* --- learn guide: one card per phase, over every page --- */
 
 /* Above the slot modal, below the end screen. The layer catches every click,
    so the game waits while a card is open. */
@@ -5189,7 +5189,7 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   The main menu (`?menu`), after the campaign screen of Warcraft III Reforged:
+   The main menu, after the campaign screen of Warcraft III Reforged:
    a hero picture through a stone arch, the title block on the left, the list
    of entries on the right pillar and an ornate exit button in the lower left.
    The menu has its own unit `--mu`. It follows the tighter side of the window

@@ -264,6 +264,22 @@ const beginRivalPhase = (store: TStore) => {
   scheduleRivalReadiness(store, (rivalId) => finishRivalPhase(store, rivalId));
 };
 
+/**
+ * A loaded store snapshot has no running timers. This starts the timers of the
+ * rivals that have not finished yet.
+ */
+const resumeRivals = (store: TStore) => {
+  const stage = store.game.stage.peek();
+
+  if (stage === "setup") {
+    scheduleRivalStrongholds(store);
+  }
+
+  if (stage === "play" && !store.game.outcome.peek()) {
+    beginRivalPhase(store);
+  }
+};
+
 /** The player is done with the phase. The phase moves on if the rivals are done too. */
 const markHumanReady = (store: TStore) => {
   setPlayerReady(store, store.game.humanPlayerId.peek(), true);
@@ -351,4 +367,4 @@ const newGameAction = (store: TStore) => {
   createSession(store);
 };
 
-export { createSession, endPhaseAction, newGameAction, startGameAction };
+export { createSession, endPhaseAction, newGameAction, resumeRivals, startGameAction };

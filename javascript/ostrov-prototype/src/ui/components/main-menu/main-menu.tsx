@@ -97,7 +97,7 @@ const MainMenu: FC<TMainMenuProps> = ({ registry }) => {
   const isGuideOn = store.guide.enabled.value;
 
   const [entries] = useState(() => createEntries(registry));
-  // The guide flag points the keyboard at the prologue, otherwise at a new game.
+  // An enabled guide points the keyboard at the prologue, otherwise at a new game.
   const [activeIndex, setActiveIndex] = useState(() => (isGuideOn ? 0 : 1));
   const entryRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const activeIndexRef = useRef(activeIndex);

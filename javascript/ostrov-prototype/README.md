@@ -15,6 +15,20 @@ yarn workspace @hw/ostrov-prototype-v6 build      # bundle into dist/
 yarn workspace @hw/ostrov-prototype-v6 typecheck  # tsc --noEmit
 ```
 
+## Store snapshots
+
+The dev server keeps one snapshot of the whole store in `store-snapshot.json`, next to
+`package.json`. Run these commands in the browser console:
+
+```js
+await prototype.saveStoreSnapshot(); // writes the store to the file
+await prototype.loadStoreSnapshot(); // reads the file back into the running game
+```
+
+A save is refused while an animation owns the turn or the riot modal is open. These
+moments depend on timers and callbacks that a JSON file cannot hold. The commands
+work only on the dev server.
+
 ## Layers
 
 | path | role |

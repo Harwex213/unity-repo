@@ -48,7 +48,7 @@ yarn workspace @hw/ostrov-prototype-v6 typecheck  # tsc --noEmit
 3) добавить в `rawRegistry` в `src/domain/registry-creator.ts`.
 
 Точка входа `src/main.tsx`: создаёт store, registry, вызывает `createSession`,
-включает guide по `?guide`, меню по `?menu`, маршрутизация по `location.hash`
+открывает меню, guide включён с самого начала, маршрутизация по `location.hash`
 (`#/island`, `#/world`, `#/battle`).
 
 Store (`src/store/store.ts`) состоит из слайсов: `route`, `game`, `ui`, `world`,
