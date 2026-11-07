@@ -76,7 +76,7 @@ namespace Hexwex.Core
                 return;
             }
 
-            player.Army = Math.Max(0, player.Army - BossLossArmy);
+            Population.LoseSoldiers(player, BossLossArmy);
         }
 
         /// <summary>

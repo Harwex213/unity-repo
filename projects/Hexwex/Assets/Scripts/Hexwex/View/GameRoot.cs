@@ -930,12 +930,14 @@ namespace Hexwex.View
                 return;
             }
 
-            string hovered = null;
+            string underPointer = null;
             if (!overUi && Physics.Raycast(worldCamera.ScreenPointToRay(pointer), out RaycastHit hit, 500f))
             {
                 HexHandle handle = hit.collider.GetComponent<HexHandle>();
-                hovered = handle != null ? handle.HexId : null;
+                underPointer = handle != null ? handle.HexId : null;
             }
+
+            string hovered = HoverAfter(HoveredHexId, overUi, overUi && hud.IsPointerOverHexPanel(pointer), underPointer);
 
             if (hovered != HoveredHexId)
             {
@@ -955,6 +957,23 @@ namespace Hexwex.View
                 ClearModes();
                 Redraw();
             }
+        }
+
+        /// <summary>
+        /// Which hex is hovered after this frame. Over the HUD nothing is, except over
+        /// the hex panel: it floats over the hex it is about and near the top of the
+        /// screen can cover that hex, so a hover that moved onto it keeps its hex.
+        /// Dropping it there hid the panel, which uncovered the hex, which showed the
+        /// panel again: the panel blinked every frame.
+        /// </summary>
+        public static string HoverAfter(string current, bool overUi, bool overHexPanel, string underPointer)
+        {
+            if (overUi)
+            {
+                return overHexPanel ? current : null;
+            }
+
+            return underPointer;
         }
 
         private void OnHexClicked(string hexId)

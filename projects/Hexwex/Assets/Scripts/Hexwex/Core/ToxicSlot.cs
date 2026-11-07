@@ -471,8 +471,9 @@ namespace Hexwex.Core
                         return;
                     }
 
-                    AddResource(player, ResourceId.Population, -moved);
+                    // The mad leave the population: the idle first, then the workers, then the soldiers.
                     AddResource(player, ResourceId.Mad, moved);
+                    Population.LosePeople(player, moved);
                     lines.Add(new SlotEffectLine("mad", moved + " " + Plural(moved, "житель сошёл", "жителя сошли", "жителей сошли") + " с ума", false));
 
                     return;
@@ -486,7 +487,8 @@ namespace Hexwex.Core
                         return;
                     }
 
-                    AddResource(player, ResourceId.Population, -lost);
+                    // The idle die first, then the workers, then the soldiers.
+                    Population.LosePeople(player, lost);
                     lines.Add(new SlotEffectLine("population", "−" + lost + " " + ResourceTable.Get(ResourceId.Population).Label, false));
 
                     return;
@@ -500,7 +502,8 @@ namespace Hexwex.Core
                         return;
                     }
 
-                    player.Army -= lost;
+                    // Soldiers leave the population too.
+                    Population.LoseSoldiers(player, lost);
                     lines.Add(new SlotEffectLine("army", "−" + lost + " " + Plural(lost, "боец", "бойца", "бойцов"), false));
 
                     return;

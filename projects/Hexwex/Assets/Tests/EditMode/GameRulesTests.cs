@@ -8,7 +8,8 @@ namespace Hexwex.Core.Tests
     {
         private static HexTile Tile(BiomeId biome, int toxicity = 0, BuildingId? building = null, int q = 0, int r = 0)
         {
-            return new HexTile { Id = HexMath.HexId(q, r), Q = q, R = r, Biome = biome, Toxicity = toxicity, Building = building };
+            // A building in these tests has its worker, so it rolls.
+            return new HexTile { Id = HexMath.HexId(q, r), Q = q, R = r, Biome = biome, Toxicity = toxicity, Building = building, Workers = building.HasValue ? Population.WorkersPerBuilding : 0 };
         }
 
         private static string Describe(Player player)

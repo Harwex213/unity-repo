@@ -3,6 +3,7 @@
     "rootNamespace": "Hexwex.Core.Tests",
     "references": [
         "Hexwex.Core",
+        "Hexwex.View",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

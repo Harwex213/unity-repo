@@ -23,6 +23,8 @@ namespace Hexwex.Core
         public Face[] Faces;
         /// <summary>Index of the face the biome adds, or -1 when the die has none.</summary>
         public int BiomeFaceIndex;
+        /// <summary>What the hex pays every tax phase on top of the roll. Empty for a building.</summary>
+        public AlwaysYield[] AlwaysYields = new AlwaysYield[0];
 
         public static HexDie On(Player player, HexTile hex)
         {
@@ -41,6 +43,7 @@ namespace Hexwex.Core
                     ArtName = Stronghold.ArtName,
                     Faces = Stronghold.Faces,
                     BiomeFaceIndex = -1,
+                    AlwaysYields = Stronghold.AlwaysYields,
                 };
             }
 
@@ -212,7 +215,8 @@ namespace Hexwex.Core
                 HexTile hex = player.Hexes[index];
                 HexDie die = HexDie.On(player, hex);
                 StructureKind? dieKey = StructureHp.KindOn(player, hex);
-                if (die == null || !dieKey.HasValue || die.Faces.Length == 0)
+                // A building without its workers stands still: no roll, no yield, no toxicity.
+                if (die == null || !dieKey.HasValue || die.Faces.Length == 0 || !Population.IsStaffed(hex))
                 {
                     continue;
                 }
@@ -335,7 +339,10 @@ namespace Hexwex.Core
 
                 if (roll.DieKey == StructureKind.Stronghold)
                 {
-                    payouts.Add(new TaxPayout(hex.Id, ResourceId.Power, Stronghold.PowerPerTurn, 0));
+                    foreach (AlwaysYield item in Stronghold.AlwaysYields)
+                    {
+                        payouts.Add(new TaxPayout(hex.Id, item.Resource, item.Amount, 0));
+                    }
                 }
             }
 

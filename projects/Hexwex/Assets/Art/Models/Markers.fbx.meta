@@ -12,8 +12,28 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Bark_Pine
+    second: {fileID: 2100000, guid: 573b51d3850cedb4984453f350ca3e44, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Basalt
     second: {fileID: 2100000, guid: 980779e9c5ec1b746a0dc97a2eca2455, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Berry_Blue
+    second: {fileID: 2100000, guid: d77ec7b5748102343af11538242f7cf9, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Bloom
+    second: {fileID: 2100000, guid: 7171edffdaf49c647ae52f8859b9e4fd, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Bog
+    second: {fileID: 2100000, guid: f2119f4c6d5448b41952159e7237e430, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -29,6 +49,11 @@ ModelImporter:
       assembly: UnityEngine.CoreModule
       name: M_Cloth
     second: {fileID: 2100000, guid: ad1270cfee74f1b4e80fcf034efa2078, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Crack
+    second: {fileID: 2100000, guid: 764f2b3bcae3fdd4aa2a7b71d63048e8, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -57,6 +82,11 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Frond
+    second: {fileID: 2100000, guid: 9aa7fe34e6a04a8419521cac7d673b1f, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Fur
     second: {fileID: 2100000, guid: 0abf6d8bd2c9fca4db81adc88e07cf44, type: 2}
   - first:
@@ -74,6 +104,11 @@ ModelImporter:
       assembly: UnityEngine.CoreModule
       name: M_Grass
     second: {fileID: 2100000, guid: 2ae9a59241679114fa284f114ade81fa, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Grass_Dry
+    second: {fileID: 2100000, guid: a75aa0ee6fe5b2649853c210f7fc1a43, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -97,6 +132,11 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Larch_Gold
+    second: {fileID: 2100000, guid: fa665692c05670d47bf1be2ca5e507c4, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Lava
     second: {fileID: 2100000, guid: ddf697f5ec9bff643b1c8e6666c69f76, type: 2}
   - first:
@@ -107,13 +147,33 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Leaf_Autumn
+    second: {fileID: 2100000, guid: 9ea9876724dfe174aa014dee373976b3, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Leaf_Dry
     second: {fileID: 2100000, guid: 27586b1dd804d6e4e8eca40071b57d5f, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Leaf_Fir
+    second: {fileID: 2100000, guid: b8cbbd44070ae8a48a76d707ee166f7b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Leaf_Jungle
     second: {fileID: 2100000, guid: ad17fd3c9fbec994bb19caae62c71368, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Leaf_Juniper
+    second: {fileID: 2100000, guid: 89cd3b196d97d884eb5826c6a4923431, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Leaf_Larch
+    second: {fileID: 2100000, guid: 67ce38a95f8fceb4e95bf89ce718dcf5, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -127,8 +187,18 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Leaf_Spruce
+    second: {fileID: 2100000, guid: 39cb9f017cfdc5742a10fcfd49dda0a9, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Leech
     second: {fileID: 2100000, guid: 85949174edd922942b9aa9faf6181a71, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Lichen
+    second: {fileID: 2100000, guid: 67c777489f48f4e4ba21f132fc5a53ea, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -252,8 +322,18 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: M_Toxic_Pool
+    second: {fileID: 2100000, guid: da2623e4268a2ec4db3a3451ac8f9039, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: M_Wall
     second: {fileID: 2100000, guid: b844b786fe3bf684b90a984414c0256a, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_Wheat
+    second: {fileID: 2100000, guid: bf0f0f6c8ca1a7a4ebd95edacf8506a1, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule

@@ -37,16 +37,16 @@ namespace Hexwex.Core
     {
         public static readonly IReadOnlyList<ResourceInfo> All = new[]
         {
-            new ResourceInfo(ResourceId.Food, "food", "Еда", ResourceKind.Basic, "даёт население"),
-            new ResourceInfo(ResourceId.Stone, "stone", "Камень", ResourceKind.Basic, "даёт здания"),
-            new ResourceInfo(ResourceId.Wood, "wood", "Дерево", ResourceKind.Basic, "даёт здания"),
-            new ResourceInfo(ResourceId.Population, "population", "Население", ResourceKind.Special, "даёт армию"),
-            new ResourceInfo(ResourceId.Hammers, "hammers", "Молотки", ResourceKind.Special, "даёт здания"),
-            new ResourceInfo(ResourceId.Science, "science", "Наука", ResourceKind.Special, "даёт технологии"),
-            new ResourceInfo(ResourceId.Scouting, "scouting", "Разведка", ResourceKind.Special, "даёт разведку"),
-            new ResourceInfo(ResourceId.Mana, "mana", "Мана", ResourceKind.Special, "даёт активные скиллы"),
-            new ResourceInfo(ResourceId.Power, "power", "Власть", ResourceKind.Special, "меняет выпавшую грань здания"),
-            new ResourceInfo(ResourceId.Mad, "mad", "Сумасшедшие", ResourceKind.Negative, "съедает население"),
+            new ResourceInfo(ResourceId.Food, "food", "Еда", ResourceKind.Basic, "Кормит сумасшедших"),
+            new ResourceInfo(ResourceId.Stone, "stone", "Камень", ResourceKind.Basic, "Даёт здания"),
+            new ResourceInfo(ResourceId.Wood, "wood", "Дерево", ResourceKind.Basic, "Даёт здания"),
+            new ResourceInfo(ResourceId.Population, "population", "Население", ResourceKind.Special, "Работают в зданиях и служат в армии"),
+            new ResourceInfo(ResourceId.Hammers, "hammers", "Молотки", ResourceKind.Special, "Даёт здания"),
+            new ResourceInfo(ResourceId.Science, "science", "Наука", ResourceKind.Special, "Даёт технологии"),
+            new ResourceInfo(ResourceId.Scouting, "scouting", "Разведка", ResourceKind.Special, "Даёт разведку"),
+            new ResourceInfo(ResourceId.Mana, "mana", "Мана", ResourceKind.Special, "Даёт активные скиллы"),
+            new ResourceInfo(ResourceId.Power, "power", "Власть", ResourceKind.Special, "Меняет выпавшую грань здания"),
+            new ResourceInfo(ResourceId.Mad, "mad", "Сумасшедшие", ResourceKind.Negative, "Не работают, съедают еду"),
         };
 
         public static ResourceInfo Get(ResourceId id)

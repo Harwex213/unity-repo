@@ -176,6 +176,16 @@ namespace Hexwex.Core
 
             Pay(player, Buildings.EffectiveCost(building, discount));
             hex.Building = building.Id;
+
+            // A new building takes its workers from the idle people, if there are enough.
+            hex.Workers = 0;
+            bool isStaffed = Population.Of(player).Idle >= Population.WorkersPerBuilding;
+            hex.Workers = isStaffed ? Population.WorkersPerBuilding : 0;
+            if (!isStaffed)
+            {
+                Notice?.Invoke("«" + building.Label + "» не работает: нет свободных жителей");
+            }
+
             RaiseChanged();
 
             return true;
@@ -258,6 +268,12 @@ namespace Hexwex.Core
                 return false;
             }
 
+            // A pick of the face already chosen changes nothing.
+            if (plan.FindRoll(hexId)?.ChosenIndex == faceIndex)
+            {
+                return true;
+            }
+
             string refusal = plan.PickRefusal(Human, hexId, faceIndex);
             if (refusal != null)
             {
@@ -265,6 +281,63 @@ namespace Hexwex.Core
             }
 
             plan.Pick(hexId, faceIndex);
+            RaiseChanged();
+
+            return true;
+        }
+
+        private const string PopulationPhaseNotice = "Жителей можно перераспределять только в фазе строительства";
+
+        /// <summary>
+        /// Puts <paramref name="count"/> workers into the building on the hex, or
+        /// takes them out. People move between idle, the army and the buildings only
+        /// in the build phase: the tax phase has already rolled the dice of the
+        /// working buildings, and the clear phase has already fielded the army.
+        /// </summary>
+        public bool SetHexWorkers(string hexId, int count)
+        {
+            if (Outcome != null || Stage != GameStage.Play)
+            {
+                return false;
+            }
+
+            if (!IsBuildingAllowed)
+            {
+                return Refuse(PopulationPhaseNotice);
+            }
+
+            string refusal = Population.StaffRefusal(Human, hexId, count);
+            if (refusal != null)
+            {
+                return Refuse(refusal);
+            }
+
+            Population.SetStaff(Human, hexId, count);
+            RaiseChanged();
+
+            return true;
+        }
+
+        /// <summary>Moves <paramref name="delta"/> idle people into the army, or soldiers back to idle when it is negative.</summary>
+        public bool ChangeArmy(int delta)
+        {
+            if (Outcome != null || Stage != GameStage.Play)
+            {
+                return false;
+            }
+
+            if (!IsBuildingAllowed)
+            {
+                return Refuse(PopulationPhaseNotice);
+            }
+
+            Player player = Human;
+            if (delta > 0 && Population.Of(player).Idle <= 0)
+            {
+                return Refuse("Нет свободных жителей");
+            }
+
+            Population.SetArmySize(player, player.Army + delta);
             RaiseChanged();
 
             return true;
@@ -391,7 +464,9 @@ namespace Hexwex.Core
             Player player = Human;
             WorldCell cell = World.Get(player.CellId);
             Rng rng = Rng.FromText(Nickname + ":cleanup:" + Turn);
-            List<Unit> roster = Units.BuildRoster(player.Resources[ResourceId.Population], Effects.UnlockedUnits, rng);
+            // Only the people in the army go to battle. The idle and the workers stay home.
+            // Every soldier is a militiaman: the stronghold recruits nothing else.
+            List<Unit> roster = Units.BuildRoster(player.Army);
             LevelSpec level = CleanupLevel.Create(
                 new LevelSetup
                 {
@@ -502,8 +577,8 @@ namespace Hexwex.Core
                 peopleLost += unit.Upkeep;
             }
 
-            player.Army = result.Survivors.Count;
-            player.Resources[ResourceId.Population] = Math.Max(0, player.Resources[ResourceId.Population] - peopleLost);
+            // The fallen leave the army and the population; the survivors stay in the army.
+            Population.LoseSoldiers(player, peopleLost);
             player.Resources[ResourceId.Mana] = Math.Max(0, player.Resources[ResourceId.Mana] - result.ManaSpent);
 
             WorldCell cell = World.Get(player.CellId);
@@ -631,12 +706,12 @@ namespace Hexwex.Core
                     pool[ResourceId.Wood] = (int)Math.Floor(pool[ResourceId.Wood] * 0.75);
                     break;
                 case TrailEventId.Undead:
-                    pool[ResourceId.Population] = Math.Max(0, pool[ResourceId.Population] - 2);
+                    Population.LosePeople(player, 2);
                     break;
                 case TrailEventId.Madness:
                     int moved = Math.Min(2, pool[ResourceId.Population]);
-                    pool[ResourceId.Population] -= moved;
                     pool[ResourceId.Mad] += moved;
+                    Population.LosePeople(player, moved);
                     break;
                 default:
                     // The worm: it eats a building and leaves the hex filthy.
@@ -718,6 +793,15 @@ namespace Hexwex.Core
             LastPayouts = null;
             LastSlotSpin = null;
             TaxPlans = new List<TaxPlan>();
+
+            // The bots put their idle people to work before the dice roll.
+            foreach (Player rival in Players)
+            {
+                if (!rival.IsHuman)
+                {
+                    Population.AutoStaff(rival);
+                }
+            }
 
             foreach (Player player in Players)
             {
@@ -838,8 +922,18 @@ namespace Hexwex.Core
             return false;
         }
 
+        /// <summary>
+        /// Every change of the state ends here, so the population rule holds after
+        /// any of them: the army and the workers never outnumber the population,
+        /// and a hex that lost its building lost its workers too.
+        /// </summary>
         private void RaiseChanged()
         {
+            foreach (Player player in Players)
+            {
+                Population.Settle(player);
+            }
+
             Changed?.Invoke();
         }
     }

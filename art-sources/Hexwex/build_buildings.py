@@ -30,6 +30,7 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -110,19 +111,33 @@ def bush(model, at, size, seed):
     model.blob((size * 0.6, size * 0.6, size * 0.6), (at[0] + size * 0.3, at[1] - size * 0.1, at[2] + size * 0.2), "M_Leaf_Light", seed=seed + 1, rough=0.12, floor=at[2])
 
 
-def flag(made, tag, at, tall, cloth="M_Cloth", length=0.1, drop=0.06):
+def flag(made, tag, at, tall, cloth="M_Cloth", length=0.1, drop=0.06, pole=True):
     """
     A pole with a pennant that flies. The cloth is three strips, numbered from the
     pole; the game hangs each on the one before it, so a wave runs down the cloth.
     """
-    made.extra.tube(0.008, tall, at, "M_Wood", sides=5)
-    made.extra.tube(0.014, 0.03, (at[0], at[1], at[2] + tall), "M_Metal", sides=5, top=0.0)
+    if pole:
+        made.extra.tube(0.008, tall, at, "M_Wood", sides=5)
+        made.extra.tube(0.014, 0.03, (at[0], at[1], at[2] + tall), "M_Metal", sides=5, top=0.0)
     strip = length / 3
     for index in range(3):
         start = at[0] + 0.006 + index * strip
         high = drop * (1 - 0.14 * index)
         part = made.mover("Flag", tag, (start, at[1], at[2] + tall - 0.04), number=index)
         part.box((strip + 0.003, 0.007, high), (start + strip / 2, at[1], at[2] + tall - 0.04 - high / 2), cloth)
+
+
+def keep_banner(castle):
+    """Removes the banner on the keep's pole from the castle mesh: the cloth that hangs above everything else."""
+    mesh = castle.data
+    cloth = [index for index, slot in enumerate(mesh.materials) if slot and slot.name == "M_Cloth"]
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    doomed = [face for face in bm.faces if face.material_index in cloth and min(vert.co.z for vert in face.verts) > 1.2]
+    bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    bm.to_mesh(mesh)
+    bm.free()
+    print("keep banner faces removed:", len(doomed))
 
 
 def cottage(house, at, size, turn, lit=False):
@@ -585,7 +600,11 @@ def stronghold(castle):
     """The Ostrov castle, inside a wall of its own with a tower at each corner."""
     made = building("stronghold")
     base, walls, roof, extra = made.base, made.walls, made.roof, made.extra
+    # The keep's banner comes out of the Ostrov castle as one stiff slab; it is cut away here
+    # and flown again as strips that wave, like the pennants on the towers.
+    keep_banner(castle)
     made.take(castle, placed(0, 0.03, 0.86))
+    flag(made, "keep", (0.0, 0.03 - 0.279 * 0.86, 1.375 * 0.86 + 0.04), 0.0, length=0.15, drop=0.12, pole=False)
 
     base.box((1.12, 1.12, 0.04), (0, 0, 0), "M_Stone")
     base.box((0.98, 0.98, 0.02), (0, 0, 0.04), "M_Dirt")

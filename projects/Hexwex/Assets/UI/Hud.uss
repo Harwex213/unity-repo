@@ -1014,3 +1014,111 @@
 .tech.locked {
     opacity: 0.5;
 }
+
+/* ---------- people: the workers of a building and the army of the stronghold ---------- */
+
+.always {
+    margin-top: 4px;
+}
+
+.always .panel-text {
+    margin-top: 0;
+    color: rgb(240, 207, 122);
+}
+
+.staff-section {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.staff-section.short {
+    border-color: rgba(232, 96, 86, 0.75);
+    background-color: rgba(232, 96, 86, 0.08);
+}
+
+.staff-section.army {
+    border-color: rgba(240, 207, 122, 0.4);
+}
+
+.staff-title {
+    font-size: 13px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: rgb(240, 207, 122);
+}
+
+.staff-row {
+    margin-top: 4px;
+}
+
+.staff-status {
+    flex-grow: 1;
+    font-size: 16px;
+    color: rgb(232, 236, 244);
+}
+
+.staff-section.short .staff-status {
+    color: rgb(244, 128, 116);
+}
+
+.staff-status.strong {
+    flex-grow: 0;
+    margin-right: 6px;
+    font-size: 19px;
+    -unity-font-style: bold;
+}
+
+.staff-dim {
+    flex-grow: 1;
+    font-size: 14px;
+    color: rgb(150, 158, 172);
+}
+
+.staff-buttons {
+    margin-top: 6px;
+}
+
+.staff-button {
+    margin: 0 0 0 6px;
+    padding: 5px 12px;
+    font-size: 14px;
+}
+
+.staff-buttons .staff-button {
+    flex-grow: 1;
+    margin: 0 3px;
+}
+
+.staff-note {
+    margin-top: 5px;
+    font-size: 13px;
+    white-space: normal;
+    color: rgb(150, 158, 172);
+}
+
+.plate.staff {
+    padding: 2px 7px;
+}
+
+.plate.staff .plate-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.plate.staff .plate-amount {
+    margin-right: 0;
+    font-size: 15px;
+}
+
+.plate.staff.short {
+    border-color: rgb(232, 96, 86);
+    background-color: rgba(60, 14, 14, 0.9);
+}
+
+.plate.staff.short .plate-amount {
+    color: rgb(255, 140, 128);
+}

@@ -60,6 +60,7 @@ crashlytics-build.properties
 *.unitypackage
 *.xcarchive
 Builds/
+__pycache__/
 
 # Crash-репорты
 *.stackdump

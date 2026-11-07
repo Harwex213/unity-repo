@@ -67,6 +67,8 @@ namespace Hexwex.Core
         {
             hex.Building = null;
             hex.Toxicity = 0;
+            // The workers become idle.
+            hex.Workers = 0;
         }
 
         /// <summary>A hex that can take the cleansing while <paramref name="sacrificeHexId"/> is sacrificed.</summary>

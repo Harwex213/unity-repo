@@ -85,8 +85,17 @@ namespace Hexwex.View
                         int amount = player.Resources[id] + Landed(id);
                         // In the tax phase the power shown is what is still free to spend.
                         string text = id == ResourceId.Power && plan != null ? plan.PowerLeft(player) + "/" + amount : amount.ToString();
+                        string[] lines = { info.Feeds };
+                        if (id == ResourceId.Population)
+                        {
+                            // The population shows the idle people: the ones the player can still send somewhere.
+                            PopulationSplit people = Population.Of(player);
+                            text = (people.Idle + Landed(id)).ToString();
+                            lines = new[] { info.Feeds, "Свободно: " + people.Idle, "Работают: " + people.Workers, "Служат: " + people.Army };
+                        }
+
                         Text(text, info.Kind == ResourceKind.Negative ? "resource-amount negative" : "resource-amount", cell);
-                        Hint(cell, info.Label, new[] { info.Feeds });
+                        Hint(cell, info.Label, lines);
                     }
                 }
             }

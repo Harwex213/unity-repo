@@ -54,18 +54,13 @@ namespace Hexwex.Core.Tests
         }
 
         [Test]
-        public void TheLevyTakesPeopleUntilNoneAreLeft()
+        public void TheWholeArmyGoesToBattleAsMilitia()
         {
-            List<Unit> roster = Units.BuildRoster(6, MilitiaOnly, new Rng(1));
+            List<Unit> roster = Units.BuildRoster(6);
 
             Assert.AreEqual(6, roster.Count);
-            Assert.IsTrue(roster.All(unit => unit.Key == "militia"));
-            Assert.AreEqual(0, Units.BuildRoster(0, MilitiaOnly, new Rng(1)).Count);
-
-            // A mixed levy never spends more people than there are.
-            string[] unlocked = { "militia", "swordsman", "knight" };
-            List<Unit> mixed = Units.BuildRoster(11, unlocked, new Rng(5));
-            Assert.AreEqual(11, mixed.Sum(unit => unit.Upkeep));
+            Assert.IsTrue(roster.All(unit => unit.Key == Units.ArmyUnit));
+            Assert.AreEqual(0, Units.BuildRoster(0).Count);
         }
 
         [TestCase(1, 0, 1)]
@@ -244,7 +239,8 @@ namespace Hexwex.Core.Tests
             session.EndPhase();
             Assert.AreEqual(Phase.Clear, session.Phase);
             Assert.AreEqual(waiting + 1, session.Battle.Islands.Count);
-            Assert.AreEqual(human.Resources[ResourceId.Population], session.Battle.Roster.Sum(unit => unit.Upkeep));
+            // Only the army goes to battle; the idle and the workers stay home.
+            Assert.AreEqual(human.Army, session.Battle.Roster.Count);
 
             // The turn does not move on while the level runs.
             session.StepBattle(30);
