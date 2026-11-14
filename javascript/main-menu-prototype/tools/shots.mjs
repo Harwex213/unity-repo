@@ -28,7 +28,7 @@ if (hud) {
   await page.evaluate(() => window.__showHud());
   for (const delay of hud.split(",").map(Number)) {
     await page.waitForTimeout(delay * 1000);
-    await page.evaluate((value) => window.__engine.freeze(value), 9);
+    await page.evaluate((value) => window.__engine.freeze(value), 21);
     await page.screenshot({ path: `art/shots/hud-${String(delay).replace(".", "_")}.png` });
   }
 }

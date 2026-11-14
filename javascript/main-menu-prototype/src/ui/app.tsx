@@ -8,6 +8,10 @@ import type { TEngine } from "../render/engine";
 
 /** A key press or click during the intro jumps here, after the blast has settled. */
 const SKIP_TO = TIMELINE.hud;
+/** The key press that starts the intro must not skip it with a double click. */
+const SKIP_GUARD_SECONDS = 0.6;
+/** The synthesised blast is off for now: the explosion plays on the music alone. */
+const IS_BLAST_SOUND_ON = false;
 
 const readDebugTime = (): number | null => {
   const raw = new URLSearchParams(window.location.search).get("t");
@@ -16,47 +20,48 @@ const readDebugTime = (): number | null => {
 };
 
 /**
- * Owns the timeline of the page. The engine owns the time, and this component
- * only reads it to show the HUD and to start the sound at the right moment.
+ * Owns the timeline of the page. The music owns the time, the engine follows the
+ * music, and this component reads the engine to show the HUD.
  */
 const App: FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<TEngine | null>(null);
   const sound = useMemo(() => createSound(), []);
   const [isHudVisible, setHudVisible] = useState(false);
+  const [isGateVisible, setGateVisible] = useState(false);
   const [isMuted, setMuted] = useState(false);
-  const isUnlocked = useRef(false);
   const hudVisibleRef = useRef(false);
-  /** The run of the intro the scheduled sounds belong to. */
-  const scoredRun = useRef(false);
+  const gateVisibleRef = useRef(false);
 
   const scoreIntro = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine || scoredRun.current || !isUnlocked.current) {
-      return;
+    sound.startMusic(0);
+    sound.rumble(TIMELINE.crackStart, TIMELINE.inhale);
+    if (IS_BLAST_SOUND_ON) {
+      sound.blast(TIMELINE.detonate);
     }
-
-    scoredRun.current = true;
-    const time = engine.getTime();
-    sound.rumble(TIMELINE.crackStart - time);
-    sound.blast(TIMELINE.detonate - time);
   }, [sound]);
+
+  const begin = useCallback((engine: TEngine) => {
+    gateVisibleRef.current = false;
+    setGateVisible(false);
+    scoreIntro();
+    engine.setTime(0);
+    engine.start();
+  }, [scoreIntro]);
 
   const showHud = useCallback(() => {
     hudVisibleRef.current = true;
     setHudVisible(true);
-    if (isUnlocked.current) {
-      sound.drone();
-    }
-  }, [sound]);
+  }, []);
 
   const skip = useCallback(() => {
     const engine = engineRef.current;
-    if (!engine || engine.getTime() >= SKIP_TO) {
+    if (!engine || engine.getTime() >= SKIP_TO || engine.getTime() < SKIP_GUARD_SECONDS) {
       return;
     }
 
     sound.silenceIntro();
+    sound.startMusic(SKIP_TO);
     engine.setTime(SKIP_TO);
     showHud();
   }, [showHud, sound]);
@@ -69,10 +74,10 @@ const App: FC = () => {
 
     hudVisibleRef.current = false;
     setHudVisible(false);
-    scoredRun.current = false;
-    engine.setTime(0);
+    sound.silenceIntro();
     scoreIntro();
-  }, [scoreIntro]);
+    engine.setTime(0);
+  }, [scoreIntro, sound]);
 
   const toggleMute = useCallback(() => {
     setMuted((current) => {
@@ -92,7 +97,7 @@ const App: FC = () => {
     const isCalm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const debugTime = readDebugTime();
 
-    void createEngine({ canvas, isCalm }).then((engine) => {
+    void Promise.all([createEngine({ canvas, isCalm }), sound.prepare()]).then(([engine]) => {
       if (isDisposed) {
         engine.dispose();
 
@@ -100,7 +105,8 @@ const App: FC = () => {
       }
 
       engineRef.current = engine;
-      Object.assign(window, { __engine: engine, __showHud: showHud });
+      engine.setClock(sound.musicTime);
+      Object.assign(window, { __engine: engine, __showHud: showHud, __sound: sound });
       if (debugTime !== null) {
         engine.freeze(debugTime);
 
@@ -109,8 +115,13 @@ const App: FC = () => {
 
       if (isCalm) {
         engine.setTime(SKIP_TO + 6);
+        engine.start();
+      } else if (sound.isRunning()) {
+        begin(engine);
+      } else {
+        gateVisibleRef.current = true;
+        setGateVisible(true);
       }
-      engine.start();
     });
 
     const timer = window.setInterval(() => {
@@ -136,25 +147,23 @@ const App: FC = () => {
       engineRef.current?.dispose();
       engineRef.current = null;
     };
-  }, [showHud]);
+  }, [begin, showHud, sound]);
 
-  // The first gesture of the page unlocks the audio. During the intro a gesture skips it.
+  // The first gesture unlocks the audio and starts the intro. Later a gesture skips the intro.
   useEffect(() => {
     const onGesture = (event: Event): void => {
-      if (event instanceof KeyboardEvent && (event.metaKey || event.ctrlKey || event.altKey)) {
+      if (event instanceof KeyboardEvent && (event.metaKey || event.ctrlKey || event.altKey || event.repeat)) {
         return;
       }
 
-      const wasLocked = !isUnlocked.current;
-      isUnlocked.current = true;
       sound.unlock();
-
-      if (hudVisibleRef.current) {
-        if (wasLocked) {
-          sound.drone();
-        }
-      } else {
+      const engine = engineRef.current;
+      if (gateVisibleRef.current && engine) {
+        begin(engine);
+      } else if (!hudVisibleRef.current) {
         skip();
+      } else if (engine && !sound.isMusicOn()) {
+        sound.startMusic(engine.getTime());
       }
     };
 
@@ -165,11 +174,13 @@ const App: FC = () => {
       window.removeEventListener("keydown", onGesture);
       window.removeEventListener("pointerdown", onGesture);
     };
-  }, [skip, sound]);
+  }, [begin, skip, sound]);
 
   return (
     <main className="stage">
       <canvas ref={canvasRef} className="stage__canvas" />
+
+      <p className={`gate ${isGateVisible ? "gate--visible" : ""}`}>{"Нажмите любую клавишу"}</p>
 
       <Hud
         isVisible={isHudVisible}

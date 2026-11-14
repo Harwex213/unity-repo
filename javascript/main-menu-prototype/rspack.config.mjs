@@ -26,7 +26,7 @@ export default {
         type: "javascript/auto",
       },
       { test: /\.css$/i, type: "css/auto" },
-      { test: /\.(png|webp|woff2?|bin)$/i, type: "asset/resource" },
+      { test: /\.(png|webp|woff2?|bin|aac)$/i, type: "asset/resource" },
     ],
   },
   plugins: [

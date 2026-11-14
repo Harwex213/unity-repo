@@ -33,6 +33,35 @@ body {
   height: 100%;
 }
 
+/* The browser needs one gesture before the audio can play, and the intro needs the audio. */
+.gate {
+  position: absolute;
+  bottom: 12vh;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  font-family: var(--small-caps);
+  font-size: clamp(15px, 2vh, 20px);
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  text-align: center;
+  text-transform: lowercase;
+  color: var(--gold);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.gate--visible {
+  animation: gate-breath 3.2s ease-in-out infinite;
+}
+
+@keyframes gate-breath {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.9; }
+}
+
 .hud {
   position: absolute;
   inset: 0;

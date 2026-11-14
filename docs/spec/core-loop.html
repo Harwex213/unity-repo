@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Core Loop: критический путь</title>
+<style>
+:root{--paper:#f5f1e6;--paper2:#fbf8f0;--ink:#1d2733;--muted:#5a6470;--rule:#c9c1ad;--accent:#a8391f;--over:#1f5f8b;--soft:#e7e0cd;--warn:#a8391f}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--paper:#141a21;--paper2:#1a222b;--ink:#e6e2d6;--muted:#9aa5b0;--rule:#39444f;--accent:#e8805f;--over:#6db3e0;--soft:#2a3540;--warn:#e8805f}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 32px 56px}
+nav{display:flex;flex-wrap:wrap;gap:0;border:1.5px solid var(--ink);margin-bottom:18px}
+nav a{flex:1 1 160px;padding:9px 14px;color:var(--ink);text-decoration:none;border-right:1.5px solid var(--ink);font-size:15px}
+nav a:last-child{border-right:0}
+nav a b{font-variant-numeric:tabular-nums;margin-right:8px}
+nav a[aria-current]{background:var(--ink);color:var(--paper)}
+nav a:not([aria-current]):hover{background:var(--soft)}
+header{margin-bottom:14px}
+h1{margin:0;font-size:34px;line-height:1.15;letter-spacing:-.01em}
+.sub{margin:4px 0 0;color:var(--muted);max-width:74ch}
+.scroll{overflow-x:auto;border:0}
+.sheet{display:block;width:100%;min-width:980px;height:auto}
+.paper{fill:var(--paper2)}.mm{stroke:var(--rule);stroke-width:.5;opacity:.45}
+.border{fill:none;stroke:var(--ink);stroke-width:2.5}
+.screen{fill:var(--paper)}.screenb{fill:none;stroke:var(--ink);stroke-width:4}
+.dim{font-size:19px;fill:var(--muted)}
+.p{fill:var(--paper2);stroke:var(--ink);stroke-width:2.5}
+.strong{fill:var(--paper2);stroke:var(--ink);stroke-width:4}
+.dimp{fill:none;stroke:var(--muted);stroke-width:2;stroke-dasharray:3 6}
+.diml{fill:none;stroke:var(--muted);stroke-width:2;stroke-dasharray:3 6}
+.soft{fill:var(--soft);stroke:none}
+.ink{fill:var(--ink);stroke:none}.ink2{fill:var(--soft);stroke:var(--ink);stroke-width:1.5}
+.dash{fill:none;stroke:var(--ink);stroke-width:2;stroke-dasharray:7 6}
+.stow{fill:url(#hatch);stroke:var(--muted);stroke-width:2;stroke-dasharray:8 7}
+.hatchl{stroke:var(--rule);stroke-width:2}
+.l{fill:none;stroke:var(--ink);stroke-width:2}.l2{fill:none;stroke:var(--muted);stroke-width:2.5}
+.t{font-size:21px;fill:var(--ink)}.t.b{font-weight:700}.t.h{font-size:32px;font-weight:700}.t.s{font-size:17px}
+.t.ghost{fill:var(--muted);font-size:24px}.t.m{fill:var(--muted)}
+.warn{fill:var(--paper2);stroke:var(--warn);stroke-width:2}.warnt{fill:var(--warn);font-weight:700}
+.check{fill:none;stroke:var(--ink);stroke-width:4}
+.hex{fill:none;stroke:var(--ink);stroke-width:1.5;opacity:.6}
+.hexf{fill:var(--soft);stroke:var(--ink);stroke-width:2}
+.hexg{fill:url(#hatch);stroke:var(--muted);stroke-width:1.5}
+.hexr{fill:none;stroke:var(--ink);stroke-width:2.5;stroke-dasharray:9 6}
+.hexsel{fill:var(--soft);stroke:var(--accent);stroke-width:6}
+.bld{fill:var(--paper2);stroke:var(--ink);stroke-width:2.5}
+.plate{fill:var(--paper2);stroke:var(--ink);stroke-width:1.5}
+.overbox{fill:var(--paper2);fill-opacity:.9;stroke:var(--over);stroke-width:3;stroke-dasharray:12 8}
+.overout{fill:none;stroke:var(--over);stroke-width:3;stroke-dasharray:12 8}
+.overt{font-size:21px;fill:var(--over)}.overt.b{font-weight:700}
+.overl{fill:none;stroke:var(--over);stroke-width:2}
+.fly{fill:none;stroke:var(--over);stroke-width:2.5;stroke-dasharray:4 7}
+.mote{fill:var(--over)}
+.cloud{fill:var(--soft);stroke:var(--muted);stroke-width:2}
+.rock{fill:var(--paper2);stroke:var(--ink);stroke-width:2.5}
+.leader{fill:none;stroke-width:1.75}.leader.base{stroke:var(--accent)}.leader.over{stroke:var(--over);stroke-dasharray:7 5}
+.badge circle{stroke:none}.badge.base circle{fill:var(--accent)}.badge.over circle{fill:var(--over)}
+.badge text{font-size:21px;font-weight:700;fill:var(--paper2)}
+.lbl{font-size:23px;fill:var(--ink);font-weight:600}
+.dot.base{fill:var(--accent)}.dot.over{fill:var(--over)}
+.leader.on{stroke-width:4}.dot.on{r:11px}.badge.on circle{r:21px}.lbl.on{fill:var(--accent)}
+.cols{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:36px;margin-top:26px}
+h2{font-size:21px;margin:0 0 4px;padding-bottom:6px;border-bottom:2.5px solid var(--ink)}
+h2+.note{margin:6px 0 2px;color:var(--muted);font-size:15px}
+h3{font-size:17px;margin:22px 0 2px}
+ol.parts,ul.feats,ul.wins{list-style:none;margin:0;padding:0}
+ol.parts li{display:grid;grid-template-columns:34px 1fr;gap:0 10px;padding:9px 6px;border-bottom:1px solid var(--rule)}
+ol.parts li.on{background:var(--soft)}
+.num{width:27px;height:27px;border-radius:50%;background:var(--accent);color:var(--paper2);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+li.over .num{background:var(--over)}
+.name{font-weight:650}
+.desc{color:var(--ink);grid-column:2}
+.st{grid-column:2;color:var(--muted);font-size:15px;margin-top:2px}
+ul.feats li{padding:9px 0;border-bottom:1px solid var(--rule)}
+ul.feats b{font-weight:650}
+ul.wins li{padding:8px 0;border-bottom:1px solid var(--rule)}
+kbd{font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--muted);border-radius:4px;padding:0 5px;background:var(--paper2)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:10px;font-size:14px;color:var(--muted)}
+.legend i{display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+footer{margin-top:28px;color:var(--muted);font-size:14px}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+@media (max-width:900px){.wrap{padding:14px 16px 40px}.cols{grid-template-columns:minmax(0,1fr)}h1{font-size:27px}nav a{flex-basis:50%;border-bottom:1px solid var(--ink)}}
+@media print{nav{display:none}.cols{break-before:auto}}
+
+header.core{display:block}
+.pill{fill:var(--paper2);stroke:var(--ink);stroke-width:3}.ptext{font-size:27px;font-weight:700;fill:var(--ink)}
+a:hover .pill{fill:var(--soft)}
+.cap{font-size:25px;font-weight:650;fill:var(--ink)}.cap2{font-size:21px;fill:var(--muted)}
+.arrow{fill:none;stroke:var(--ink);stroke-width:2.5}.arrow.strong{stroke-width:4}
+.ahf{fill:var(--ink)}.ahfs{fill:var(--over)}.ahfh{fill:var(--accent)}
+.loopbox{fill:none;stroke:var(--ink);stroke-width:2;stroke-dasharray:10 8}
+.node rect{fill:var(--paper2);stroke:var(--ink);stroke-width:3}.node.end rect{fill:var(--ink)}
+.node .nb{fill:var(--accent)}.nbt{font-size:21px;font-weight:700;fill:var(--paper2)}
+.ntitle{font-size:27px;font-weight:700;fill:var(--ink)}.nline{font-size:20px;fill:var(--ink)}
+.node.end .ntitle,.node.end .nline{fill:var(--paper)}
+.fl{fill:none;stroke-width:2.5}.fl.soft{stroke:var(--over);stroke-dasharray:8 6}.fl.hard{stroke:var(--accent)}
+.fail rect{fill:var(--paper2);stroke-width:3}.fail.soft rect{stroke:var(--over);stroke-dasharray:10 7}.fail.hard rect{stroke:var(--accent)}
+.ftitle{font-size:20px;font-weight:700;fill:var(--ink)}.fline{font-size:17px;fill:var(--ink)}
+.path{margin-top:28px}
+.row{display:grid;grid-template-columns:44px minmax(150px,1fr) minmax(0,2.4fr) minmax(0,2fr) minmax(0,2fr);gap:0 18px;padding:12px 6px;border-bottom:1px solid var(--rule)}
+.row.head{font-size:14px;color:var(--muted);padding:8px 6px;border-bottom:1.5px solid var(--ink)}
+.row b{font-weight:650}.row .ph{display:block;color:var(--muted);font-size:14px}
+.tbl{width:100%;border-collapse:collapse;margin-top:6px}
+.tbl th{text-align:left;font-size:14px;font-weight:500;color:var(--muted);padding:8px 14px 8px 0;border-bottom:1.5px solid var(--ink)}
+.tbl td{vertical-align:top;padding:10px 14px 10px 0;border-bottom:1px solid var(--rule)}
+.tbl a{color:var(--ink);font-weight:650}
+.sec{margin-top:32px}
+@media (max-width:900px){.row{grid-template-columns:34px 1fr}.row>*:nth-child(n+3){grid-column:2;margin-top:4px}.row.head{display:none}.row>[data-h]::before{content:attr(data-h) ": ";color:var(--muted)}.tbl{display:block;overflow-x:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Листы"><a href="ui-core-loop.html" aria-current="page">Core Loop</a><a href="ui-phase-1-build.html"><b>1</b>Фаза строительства</a><a href="ui-phase-2-resources.html"><b>2</b>Фаза ресурсов</a><a href="ui-phase-3-movement.html"><b>3</b>Фаза передвижения</a><a href="ui-phase-4-battle.html"><b>4</b>Фаза битвы</a></nav>
+
+<header class="core"><h1>Core Loop: критический путь</h1>
+<p class="sub">Кратчайшая цепочка шагов от первого клика до победы. Цель игры: найти и победить босса, получить трофей и построить Центральный конвертер раньше соперников. Всё остальное в игре либо питает этот путь, либо мешает ему.</p></header>
+<div class="scroll"><svg class="sheet" viewBox="0 0 2000 680" role="img" aria-label="Критический путь Core Loop">
+<defs>
+  <pattern id="mm" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" class="mm"/></pattern>
+  <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ahf"/></marker>
+  <marker id="ahs" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ahfs"/></marker>
+  <marker id="ahh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ahfh"/></marker>
+</defs>
+<rect class="paper" width="2000" height="680" fill="url(#mm)"/><rect class="border" x="8" y="8" width="1984" height="664"/>
+<text class="cap" x="1000" y="40" text-anchor="middle">Один ход: все игроки проходят четыре фазы, фаза кончается, когда все нажали «Готов»</text><a href="ui-phase-1-build.html"><rect class="pill" x="334" y="62" width="270" height="66" rx="33"/><text class="ptext" x="469" y="104" text-anchor="middle">1. Строительство</text></a><path class="arrow" d="M614 95 H674" marker-end="url(#ah)"/><a href="ui-phase-2-resources.html"><rect class="pill" x="688" y="62" width="270" height="66" rx="33"/><text class="ptext" x="823" y="104" text-anchor="middle">2. Ресурсы</text></a><path class="arrow" d="M968 95 H1028" marker-end="url(#ah)"/><a href="ui-phase-3-movement.html"><rect class="pill" x="1042" y="62" width="270" height="66" rx="33"/><text class="ptext" x="1177" y="104" text-anchor="middle">3. Передвижение</text></a><path class="arrow" d="M1322 95 H1382" marker-end="url(#ah)"/><a href="ui-phase-4-battle.html"><rect class="pill" x="1396" y="62" width="270" height="66" rx="33"/><text class="ptext" x="1531" y="104" text-anchor="middle">4. Битва</text></a><path class="arrow" d="M1531 132 V162 H469 V140" marker-end="url(#ah)"/><rect class="loopbox" x="275" y="246" width="1450" height="192" rx="10"/><g class="node" data-n="1"><rect x="47" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="73" cy="292" r="17"/><text class="nbt" x="73" y="299" text-anchor="middle">1</text><text class="ntitle" x="99" y="301" text-anchor="start">Старт</text><text class="nline" x="61" y="330" text-anchor="start">Поставить</text><text class="nline" x="61" y="354" text-anchor="start">начальное здание</text><text class="nline" x="61" y="378" text-anchor="start">«Твердыня»,</text><text class="nline" x="61" y="402" text-anchor="start">нажать «Начать»</text></g><path class="arrow strong" d="M261 348 H281" marker-end="url(#ah)"/><g class="node" data-n="2"><rect x="289" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="315" cy="292" r="17"/><text class="nbt" x="315" y="299" text-anchor="middle">2</text><text class="ntitle" x="341" y="301" text-anchor="start">Экономика</text><text class="nline" x="303" y="338" text-anchor="start">Ферма, рудник,</text><text class="nline" x="303" y="364" text-anchor="start">лесопилка</text><text class="nline" x="303" y="390" text-anchor="start">и рабочие</text></g><path class="arrow strong" d="M503 348 H523" marker-end="url(#ah)"/><g class="node" data-n="3"><rect x="531" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="557" cy="292" r="17"/><text class="nbt" x="557" y="299" text-anchor="middle">3</text><text class="ntitle" x="583" y="301" text-anchor="start">Армия</text><text class="nline" x="545" y="338" text-anchor="start">Призвать жителей</text><text class="nline" x="545" y="364" text-anchor="start">в твердыне</text></g><path class="arrow strong" d="M745 348 H765" marker-end="url(#ah)"/><g class="node" data-n="4"><rect x="773" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="799" cy="292" r="17"/><text class="nbt" x="799" y="299" text-anchor="middle">4</text><text class="ntitle" x="825" y="301" text-anchor="start">Разведка</text><text class="nline" x="787" y="338" text-anchor="start">Обсерватория,</text><text class="nline" x="787" y="364" text-anchor="start">поиск логова</text><text class="nline" x="787" y="390" text-anchor="start">под туманом</text></g><path class="arrow strong" d="M987 348 H1007" marker-end="url(#ah)"/><g class="node" data-n="5"><rect x="1015" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="1041" cy="292" r="17"/><text class="nbt" x="1041" y="299" text-anchor="middle">5</text><text class="ntitle" x="1067" y="301" text-anchor="start">Перелёт</text><text class="nline" x="1029" y="338" text-anchor="start">Один гекс за ход</text><text class="nline" x="1029" y="364" text-anchor="start">к логову босса</text></g><path class="arrow strong" d="M1229 348 H1249" marker-end="url(#ah)"/><g class="node" data-n="6"><rect x="1257" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="1283" cy="292" r="17"/><text class="nbt" x="1283" y="299" text-anchor="middle">6</text><text class="ntitle" x="1309" y="301" text-anchor="start">Босс</text><text class="nline" x="1271" y="338" text-anchor="start">Зачистить</text><text class="nline" x="1271" y="364" text-anchor="start">остров босса,</text><text class="nline" x="1271" y="390" text-anchor="start">получить трофей</text></g><path class="arrow strong" d="M1471 348 H1491" marker-end="url(#ah)"/><g class="node" data-n="7"><rect x="1499" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="1525" cy="292" r="17"/><text class="nbt" x="1525" y="299" text-anchor="middle">7</text><text class="ntitle" x="1551" y="301" text-anchor="start">Конвертер</text><text class="nline" x="1513" y="338" text-anchor="start">10 камня,</text><text class="nline" x="1513" y="364" text-anchor="start">10 дерева,</text><text class="nline" x="1513" y="390" text-anchor="start">6 молотков</text></g><path class="arrow strong" d="M1713 348 H1733" marker-end="url(#ah)"/><g class="node end" data-n="8"><rect x="1741" y="262" width="212" height="160" rx="8"/><circle class="nb" cx="1767" cy="292" r="17"/><text class="nbt" x="1767" y="299" text-anchor="middle">8</text><text class="ntitle" x="1793" y="301" text-anchor="start">Победа</text><text class="nline" x="1755" y="338" text-anchor="start">«Готов»: фаза</text><text class="nline" x="1755" y="364" text-anchor="start">закончилась,</text><text class="nline" x="1755" y="390" text-anchor="start">яд побеждён</text></g><path class="fl soft" d="M395 422 V512" marker-end="url(#ahs)"/><path class="fl soft" d="M311 514 V424" marker-end="url(#ahs)"/><g class="fail soft"><rect x="289" y="520" width="212" height="118" rx="8"/><text class="ftitle" x="303" y="554" text-anchor="start">Голод</text><text class="fline" x="303" y="586" text-anchor="start">Бунт в начале битвы,</text><text class="fline" x="303" y="611" text-anchor="start">потери людей и зданий</text></g><path class="fl soft" d="M637 422 V512" marker-end="url(#ahs)"/><path class="fl soft" d="M553 514 V424" marker-end="url(#ahs)"/><g class="fail soft"><rect x="531" y="520" width="212" height="118" rx="8"/><text class="ftitle" x="545" y="554" text-anchor="start">Токсичность</text><text class="fline" x="545" y="586" text-anchor="start">Слот от 250 в колбе,</text><text class="fline" x="545" y="611" text-anchor="start">гекс умирает на 100%</text></g><path class="fl soft" d="M1121 422 V512" marker-end="url(#ahs)"/><path class="fl soft" d="M1037 514 V424" marker-end="url(#ahs)"/><g class="fail soft"><rect x="1015" y="520" width="212" height="118" rx="8"/><text class="ftitle" x="1029" y="554" text-anchor="start">Дикая клетка</text><text class="fline" x="1029" y="586" text-anchor="start">Перелёт сюда будит</text><text class="fline" x="1029" y="611" text-anchor="start">бой в конце хода</text></g><path class="fl hard" d="M1363 422 V512" marker-end="url(#ahh)"/><g class="fail hard"><rect x="1257" y="520" width="212" height="118" rx="8"/><text class="ftitle" x="1271" y="554" text-anchor="start">Твердыня в руинах</text><text class="fline" x="1271" y="586" text-anchor="start">Поражение</text><text class="fline" x="1271" y="611" text-anchor="start">в конце хода</text></g><path class="fl hard" d="M1605 422 V512" marker-end="url(#ahh)"/><g class="fail hard"><rect x="1499" y="520" width="212" height="118" rx="8"/><text class="ftitle" x="1513" y="554" text-anchor="start">Нет зданий</text><text class="fline" x="1513" y="586" text-anchor="start">Поражение: потеряны</text><text class="fline" x="1513" y="611" text-anchor="start">все постройки</text></g><path class="fl hard" d="M1675 422 V494 H1847 V512" marker-end="url(#ahh)"/><g class="fail hard"><rect x="1741" y="520" width="212" height="118" rx="8"/><text class="ftitle" x="1755" y="554" text-anchor="start">Соперник первым</text><text class="fline" x="1755" y="586" text-anchor="start">Поражение: чужой</text><text class="fline" x="1755" y="611" text-anchor="start">конвертер построен</text></g><g class="key"><path class="fl soft" d="M47 542 h60"/><text class="cap2" x="117" y="549" text-anchor="start">мешает, но путь</text><text class="cap2" x="117" y="574" text-anchor="start">продолжается</text><path class="fl hard" d="M47 608 h60"/><text class="cap2" x="117" y="615" text-anchor="start">игра окончена</text></g>
+</svg></div>
+<section class="path"><h2>Сценарий по шагам</h2>
+<div class="row head"><span></span><span>Шаг</span><span>Что делает игрок</span><span>Условие перехода</span><span>Что мешает</span></div>
+<div class="row"><span class="num">1</span><span><b>Старт</b><span class="ph">Подготовка</span></span><span>Кликнуть свободный гекс своего острова, поставить начальное здание «Твердыня», нажать «Начать». Твердыню можно переносить, пока игра не началась.</span><span data-h="Переход">Твердыня стоит. Соперники ставят свои сами.</span><span data-h="Мешает">После «Начать» место твердыни не меняется.</span></div><div class="row"><span class="num">2</span><span><b>Экономика</b><span class="ph">Строительство, ресурсы</span></span><span>Поставить здания на подходящие биомы, назначить в каждое рабочего, в фазе ресурсов собрать кубики и при нужде сменить грани за власть.</span><span data-h="Переход">Доход закрывает еду и копит камень, дерево и молотки.</span><span data-h="Мешает">Старт: 10 еды, а 3 солдата едят 6 за ход, рабочий ещё 1. Без фермы еда кончится на втором ходу.</span></div><div class="row"><span class="num">3</span><span><b>Армия</b><span class="ph">Строительство</span></span><span>В карточке твердыни нажать «+ Призвать». В бой идёт вся армия, новых жителей даёт деревня.</span><span data-h="Переход">Армии хватает, чтобы пережить бой с охраной босса.</span><span data-h="Мешает">Каждый солдат ест 2 еды за ход. Погибшие уходят и из армии, и из населения.</span></div><div class="row"><span class="num">4</span><span><b>Разведка</b><span class="ph">Передвижение</span></span><span>Построить обсерваторию, тратить разведку на соседние гексы, искать логово Повелителя Мора.</span><span data-h="Переход">Логово открыто, и понятен маршрут к нему.</span><span data-h="Мешает">Туман скрывает логово. Цена гекса растёт с расстоянием. На старте разведки 2.</span></div><div class="row"><span class="num">5</span><span><b>Перелёт</b><span class="ph">Передвижение</span></span><span>Каждый ход лететь в соседний свободный гекс на шаг ближе к логову.</span><span data-h="Переход">Остров стоит в логове.</span><span data-h="Мешает">Логово лежит дальше всего от стартовых островов: в 8 проверенных мирах это 9–19 гексов. Дикая клетка на пути будит бой.</span></div><div class="row"><span class="num">6</span><span><b>Босс</b><span class="ph">Битва</span></span><span>Вести остров к острову босса и зачистить его. Если бой не удался, можно отступить через окно и пробовать на следующем ходу: логово не закрывается.</span><span data-h="Переход">Босс повержен: игрок получает трофей «Центральная конверсия», открывается Центральный конвертер.</span><span data-h="Мешает">Потеря всех построек в бою заканчивает игру. Логово одно, и соперник может занять его первым.</span></div><div class="row"><span class="num">7</span><span><b>Конвертер</b><span class="ph">Строительство</span></span><span>Накопить 10 камня, 10 дерева и 6 молотков, выбрать карточку и поставить конвертер на свободный гекс.</span><span data-h="Переход">Конвертер стоит на острове.</span><span data-h="Мешает">Конвертер строится только на следующем ходу после победы над боссом. Трата ресурсов до этого момента отодвигает финиш.</span></div><div class="row"><span class="num">8</span><span><b>Победа</b><span class="ph">Конец игры</span></span><span>Нажать «Готов» и дождаться соперников.</span><span data-h="Переход">Фаза строительства закончилась: игра проверяет концовку и показывает экран «Победа».</span><span data-h="Мешает">Соперник, который построил конвертер в тот же ход, победе не мешает.</span></div>
+</section>
+<section class="sec"><h2>Что один ход даёт пути</h2>
+<table class="tbl"><thead><tr><th>Фаза</th><th>Вход</th><th>Решения игрока</th><th>Выход</th></tr></thead><tbody>
+<tr><td><a href="ui-phase-1-build.html">1. Строительство</a></td><td>Камень, дерево, молотки, свободные жители</td><td>Ставить здания, назначать рабочих, призывать армию, сносить, чистить почву</td><td>Новые кубики, армия, меньше токсичности</td></tr><tr><td><a href="ui-phase-2-resources.html">2. Ресурсы</a></td><td>Кубики зданий с рабочими, власть, еда</td><td>Менять грани за власть, запускать деревни, нажать «Собрать»</td><td>Все ресурсы, рост токсичности, расход еды, слот от 250</td></tr><tr><td><a href="ui-phase-3-movement.html">3. Передвижение</a></td><td>Разведка, один перелёт за ход</td><td>Открывать гексы, выбирать клетку, лететь или остаться</td><td>Клетка боя. Без перелёта токсичность гексов остаётся шлейфом</td></tr><tr><td><a href="ui-phase-4-battle.html">4. Битва</a></td><td>Вся армия, мана, остров целиком</td><td>Вести остров, разрушать гексы, стыковать острова, отступать</td><td>Новые гексы, потери, трофей босса. Пустая клетка пропускает бой</td></tr>
+</tbody></table></section>
+<section class="sec"><h2>Концовки</h2><table class="tbl"><thead><tr><th>Экран</th><th>Условие</th><th>Когда проверяется</th></tr></thead><tbody>
+<tr><td><b>Победа</b></td><td>Вы построили конвертер. Неважно, если соперник построил его в один ход с вами.</td><td>Конец хода</td></tr><tr><td><b>Поражение: руины</b></td><td>Твердыня лежит в руинах.</td><td>Конец хода</td></tr><tr><td><b>Поражение: соперник</b></td><td>Соперник первым построил конвертер.</td><td>Конец хода</td></tr>
+</tbody></table></section>
+
+</div>
+</body>
+</html>

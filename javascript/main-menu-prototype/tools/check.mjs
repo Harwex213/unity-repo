@@ -37,13 +37,20 @@ const frames = (page, ms) => page.evaluate((duration) => new Promise((resolve) =
   requestAnimationFrame(step);
 }), ms);
 
+const time = (target) => target.evaluate(() => window.__engine.getTime());
+const music = (target) => target.evaluate(() => window.__sound.musicTime());
 const page = await open(2560, 1440, "no-preference");
-console.log("intro 1440p", await frames(page, 2500));
+await page.waitForSelector(".gate--visible", { timeout: 30000 });
+console.log("gate:", await page.textContent(".gate"), "t =", await time(page));
+await page.keyboard.press("Space");
+console.log("logo 1440p", await frames(page, 3000));
+await page.waitForFunction(() => window.__engine.getTime() > 9.8, null, { timeout: 12000 });
 console.log("blast 1440p", await frames(page, 3000));
 await page.waitForSelector(".hud--visible", { timeout: 6000 });
-console.log("hud at t =", (await page.evaluate(() => window.__engine.getTime())).toFixed(2));
+console.log("hud at t =", (await time(page)).toFixed(2));
 await page.waitForTimeout(3600);
 console.log("menu 1440p", await frames(page, 2000));
+console.log("music - picture, s:", ((await music(page)) - (await time(page))).toFixed(3));
 const active = () => page.evaluate(() => document.querySelector(".hud-entry--active .hud-entry__title").textContent);
 console.log("start entry:", await active());
 await page.keyboard.press("ArrowDown");
@@ -60,16 +67,20 @@ console.log("card:", await page.textContent(".hud-card__title"));
 await page.waitForTimeout(2300);
 console.log("card closed:", (await page.$(".hud-card")) === null);
 await page.keyboard.press("r");
-await page.waitForTimeout(400);
+await page.waitForTimeout(900);
 console.log("replay t =", (await page.evaluate(() => window.__engine.getTime())).toFixed(2), "hud hidden:", (await page.$(".hud--visible")) === null);
 await page.keyboard.press("Space");
 await page.waitForTimeout(300);
 console.log("skip t =", (await page.evaluate(() => window.__engine.getTime())).toFixed(2), "hud:", (await page.$(".hud--visible")) !== null);
+console.log("music follows the skip, s:", (await music(page)).toFixed(2));
 await page.context().close();
 
 const calm = await open(1280, 720, "reduce");
 await calm.waitForSelector(".hud--visible", { timeout: 3000 });
 console.log("reduced motion starts in the menu, t =", (await calm.evaluate(() => window.__engine.getTime())).toFixed(2));
+await calm.keyboard.press("ArrowDown");
+await calm.waitForTimeout(400);
+console.log("reduced motion: music starts with the first key, s:", (await music(calm)).toFixed(2));
 await calm.context().close();
 
 console.log("errors:", errors.length ? errors : "none");

@@ -7,13 +7,14 @@ import {
 } from "three";
 import albedoSrc from "../assets/planet-albedo.webp";
 import cloudsSrc from "../assets/planet-clouds.webp";
+import harwexSrc from "../assets/harwex.webp";
 import islandSrc from "../assets/island.webp";
 import lavaSrc from "../assets/lava.webp";
 import maskSrc from "../assets/planet-mask.webp";
 import nebulaSrc from "../assets/nebula.webp";
 import noiseSrc from "../assets/noise3d.bin";
 import rockSrc from "../assets/rock.webp";
-import { TIMELINE, menuShift, sceneAt, smooth } from "../core/timeline";
+import { TIMELINE, menuShift, sceneAt, smooth, studioAt } from "../core/timeline";
 import { createPlanetGeometry, createRandom } from "./fracture";
 import { BACKGROUND_FRAGMENT, BACKGROUND_VERTEX } from "./shaders/background";
 import { HEADER } from "./shaders/common";
@@ -24,6 +25,7 @@ import { PLANET_FRAGMENT, PLANET_VERTEX } from "./shaders/planet";
 import {
   BRIGHT_FRAGMENT, DOWN_FRAGMENT, FINAL_FRAGMENT, MERGE_FRAGMENT, POST_VERTEX, SHAFT_FRAGMENT, STREAK_FRAGMENT, UP_FRAGMENT,
 } from "./shaders/post";
+import { STUDIO_FRAGMENT } from "./shaders/studio";
 import { VOLUME_FRAGMENT, VOLUME_VERTEX } from "./shaders/volume";
 import type { Texture } from "three";
 import type { TVec3 } from "../core/timeline";
@@ -35,6 +37,10 @@ const EMBER_COUNT = 460;
 const NOISE_SIZE = 128;
 const MAX_PIXELS = 2560 * 1440;
 const SPIN_SPEED = 0.028;
+/** The turn of the planet at the blast, chosen so the debris leaves the view of the star open. */
+const BLAST_ANGLE = 3.8284;
+/** A larger difference to the master clock is a jump in the music, not a drift. */
+const CLOCK_SNAP_SECONDS = 0.25;
 /** The world direction of the first fissure. It looks at the camera at the moment of the blast. */
 const EPICENTRE_WORLD = new Vector3(0.2, 0.12, 0.97).normalize();
 const SPIN_AXIS = new Vector3(0.3, 0.9, 0.31).normalize();
@@ -51,6 +57,8 @@ type TEngine = {
   readonly setTime: (seconds: number) => void;
   readonly freeze: (seconds: number) => void;
   readonly getTime: () => number;
+  /** A master clock, such as the position in the music. The picture follows it while it gives a value. */
+  readonly setClock: (clock: () => number | null) => void;
   readonly setPointer: (x: number, y: number) => void;
   readonly dispose: () => void;
 };
@@ -95,8 +103,8 @@ const planetRotation = (time: number): Quaternion => {
   const tilt = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), SPIN_AXIS);
   // The field of debris stops turning soon after the blast: the gap toward the star must stay open.
   const blast = TIMELINE.detonate;
-  const turned = time < blast ? time : blast + (1 - Math.exp(blast - time));
-  const spin = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turned * SPIN_SPEED + 3.75);
+  const turned = time < blast ? time - blast : 1 - Math.exp(blast - time);
+  const spin = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turned * SPIN_SPEED + BLAST_ANGLE);
 
   return tilt.multiply(spin);
 };
@@ -194,7 +202,7 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.setClearColor(0x000000, 1);
 
-  const [albedo, mask, clouds, nebula, rock, lava, island, noise] = await Promise.all([
+  const [albedo, mask, clouds, nebula, rock, lava, island, harwex, noise] = await Promise.all([
     loadTexture(albedoSrc, true, "repeat"),
     loadTexture(maskSrc, true, "repeat"),
     loadTexture(cloudsSrc, true, "repeat"),
@@ -202,6 +210,7 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
     loadTexture(rockSrc, true, "mirror"),
     loadTexture(lavaSrc, true, "mirror"),
     loadTexture(islandSrc, true, "clamp"),
+    loadTexture(harwexSrc, true, "clamp"),
     loadNoise(),
   ]);
   island.premultiplyAlpha = true;
@@ -367,6 +376,21 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
     uCoreGlow: { value: 0 },
   };
   const volumeMaterial = createRawMaterial(VOLUME_VERTEX, VOLUME_FRAGMENT, volumeUniforms);
+
+  const harwexImage = harwex.image as HTMLImageElement;
+  const studioUniforms = {
+    tLogo: { value: harwex },
+    tNoise: shared.tNoise,
+    uTime: shared.uTime,
+    uAspect: { value: 1 },
+    uLogoAspect: { value: harwexImage.width / harwexImage.height },
+    uLogoWidth: { value: 1 },
+    uScale: { value: 1 },
+    uLight: { value: 0 },
+    uSweep: { value: 0 },
+    uFlare: { value: 0 },
+  };
+  const studioMaterial = createRawMaterial(POST_VERTEX, STUDIO_FRAGMENT, studioUniforms);
 
   const mergeUniforms = { tScene: { value: null as Texture | null }, tVolume: { value: null as Texture | null } };
   const mergeMaterial = createRawMaterial(POST_VERTEX, MERGE_FRAGMENT, mergeUniforms);
@@ -615,19 +639,33 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
 
     const main = targets;
 
-    // 1. Opaque scene.
-    renderer.setRenderTarget(main.scene);
-    renderer.clear(true, true, false);
-    renderer.render(background, fullscreenCamera);
-    renderer.render(scene, camera);
+    const isStudio = seconds < TIMELINE.fadeInStart;
+    const studio = studioAt(seconds);
 
-    // 2. Gas.
-    volumeUniforms.tDepth.value = main.scene.depthTexture;
-    runPass(volumeMaterial, main.volume);
+    if (isStudio) {
+      // The logo stands on black, so the world does not need to render.
+      studioUniforms.uAspect.value = aspect;
+      studioUniforms.uLogoWidth.value = Math.min(0.92, aspect * 0.8);
+      studioUniforms.uScale.value = studio.scale;
+      studioUniforms.uLight.value = studio.light;
+      studioUniforms.uSweep.value = studio.sweep;
+      studioUniforms.uFlare.value = studio.flare;
+      runPass(studioMaterial, main.merged);
+    } else {
+      // 1. Opaque scene.
+      renderer.setRenderTarget(main.scene);
+      renderer.clear(true, true, false);
+      renderer.render(background, fullscreenCamera);
+      renderer.render(scene, camera);
 
-    mergeUniforms.tScene.value = main.scene.texture;
-    mergeUniforms.tVolume.value = main.volume.texture;
-    runPass(mergeMaterial, main.merged);
+      // 2. Gas.
+      volumeUniforms.tDepth.value = main.scene.depthTexture;
+      runPass(volumeMaterial, main.volume);
+
+      mergeUniforms.tScene.value = main.scene.texture;
+      mergeUniforms.tVolume.value = main.volume.texture;
+      runPass(mergeMaterial, main.merged);
+    }
 
     // 3. Bloom pyramid.
     let source = main.merged;
@@ -648,7 +686,13 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
 
     // 4. Light shafts from the core, through the gaps between the shards.
     const coreOnScreen = lightScreen.set(0, 0, 0).project(camera);
-    shaftUniforms.uLight.value.set(coreOnScreen.x * 0.5 + 0.5, coreOnScreen.y * 0.5 + 0.5);
+    if (isStudio) {
+      // On the logo the shafts fall from the band of light.
+      const width = studioUniforms.uLogoWidth.value * studio.scale;
+      shaftUniforms.uLight.value.set(0.5 + ((studio.sweep - 0.5) * width) / aspect, 0.56);
+    } else {
+      shaftUniforms.uLight.value.set(coreOnScreen.x * 0.5 + 0.5, coreOnScreen.y * 0.5 + 0.5);
+    }
     brightUniforms.tSource.value = main.merged.texture;
     runPass(brightMaterial, main.bright);
 
@@ -680,25 +724,27 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
     finalUniforms.tShafts.value = main.shaftA.texture;
     finalUniforms.tStreak.value = main.streakA.texture;
     finalUniforms.uAspect.value = aspect;
-    finalUniforms.uFade.value = state.fade;
-    finalUniforms.uExposure.value = state.exposure;
+    finalUniforms.uFade.value = isStudio ? studio.fade : state.fade;
+    finalUniforms.uExposure.value = isStudio ? 1 : state.exposure;
     finalUniforms.uFlash.value = isCalm ? 0 : state.flash;
     finalUniforms.uAberration.value = state.aberration;
-    finalUniforms.uShafts.value = tau > 0 ? state.shafts : 0;
+    finalUniforms.uShafts.value = isStudio ? studio.flare * 0.8 : tau > 0 ? state.shafts : 0;
     finalUniforms.uShockRadius.value = sinceBlast * 1.55;
     finalUniforms.uShockStrength.value = tau > 0 ? 0.03 * Math.exp(-sinceBlast * 1.1) : 0;
     runPass(finalMaterial, null);
   };
 
   // All programs compile on the first frame, while the screen is still black.
-  renderFrame(0);
   renderFrame(TIMELINE.detonate + 1);
+  // The canvas keeps the last frame until the intro starts, and that frame must be black.
+  renderFrame(0);
 
   let frameId = 0;
   let isRunning = false;
   let isFrozen = false;
   let lastNow = 0;
   let slowFrames = 0;
+  let clock: () => number | null = () => null;
 
   const tick = (now: number): void => {
     frameId = requestAnimationFrame(tick);
@@ -706,6 +752,12 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
     lastNow = now;
     if (!isFrozen) {
       time += delta;
+      // The audio clock moves in steps. The picture leans on the clock softly and stays smooth.
+      const master = clock();
+      if (master !== null) {
+        const error = master - time;
+        time = Math.abs(error) > CLOCK_SNAP_SECONDS ? master : time + error * 0.08;
+      }
     }
 
     // Keeps the frame rate on weak GPUs: the picture gets softer, never slower.
@@ -743,6 +795,9 @@ const createEngine = async ({ canvas, isCalm }: TEngineOptions): Promise<TEngine
       renderFrame(seconds);
     },
     getTime: () => time,
+    setClock: (next) => {
+      clock = next;
+    },
     setPointer: (x, y) => {
       pointer.targetX = x;
       pointer.targetY = y;

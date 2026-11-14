@@ -79,6 +79,14 @@ logo_image = trim(Image.fromarray((out * 255).astype(np.uint8)), 18)
 logo_image.save(OUT / "logo.webp", quality=95, method=6)
 print("logo", logo_image.size)
 
+# The studio logo is added over black in the shader, so it keeps its black background.
+studio = Image.open(SRC / "harwex-b.png").convert("RGB")
+left, top, right, bottom = studio.convert("L").point(lambda v: 255 if v > 24 else 0).getbbox()
+studio = studio.crop((left - 40, top - 40, right + 40, bottom + 40))
+studio = studio.resize((studio.width * 2, studio.height * 2), Image.LANCZOS)
+studio.save(OUT / "harwex.webp", quality=93, method=6)
+print("harwex", studio.size)
+
 sigil = trim(Image.open(SRC / "sigil.png").convert("RGBA"))
 sigil.resize((420, round(420 * sigil.height / sigil.width)), Image.LANCZOS).save(OUT / "sigil.webp", quality=95, method=6)
 

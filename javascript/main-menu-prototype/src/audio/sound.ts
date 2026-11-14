@@ -1,19 +1,38 @@
+import musicUrl from "./background-music.aac";
+
 /**
- * All sound is synthesised, so the prototype has no audio files. A browser
- * opens the audio only after a user gesture. The first key press or click unlocks
- * the sound, so a first run may play the explosion silently. A replay has the full mix.
+ * The music is a file, the effects are synthesised. A browser opens the audio only
+ * after a user gesture, so the intro waits for the first key press. The track is
+ * also the clock of the intro: the picture follows `musicTime`, and the effects are
+ * scheduled against the same zero, so all three stay locked together.
  */
 
 type TSound = {
+  /** Loads and decodes the track. Without the track the page still runs, with the effects only. */
+  readonly prepare: () => Promise<void>;
+  /** True when the browser already allows the audio to play. */
+  readonly isRunning: () => boolean;
   readonly unlock: () => void;
   readonly setMuted: (isMuted: boolean) => void;
-  readonly rumble: (delaySeconds: number) => void;
-  readonly blast: (delaySeconds: number) => void;
-  readonly drone: () => void;
+  readonly startMusic: (fromSeconds: number) => void;
+  readonly isMusicOn: () => boolean;
+  /** The position that the listener hears now, or null if no track plays. */
+  readonly musicTime: () => number | null;
+  /** The times are positions in the track. */
+  readonly rumble: (from: number, to: number) => void;
+  readonly blast: (at: number) => void;
   readonly hover: () => void;
   readonly confirm: () => void;
   readonly silenceIntro: () => void;
 };
+
+/** All parts of a run start this far ahead, so they start together. */
+const LEAD_SECONDS = 0.08;
+const MUSIC_LEVEL = 0.9;
+/** The blast stays below full scale on top of the music: 1 clips the output. */
+const EFFECTS_LEVEL = 0.55;
+/** A jump in the track fades in, so the cut does not click. */
+const SEEK_FADE_SECONDS = 0.25;
 
 const createImpulse = (context: AudioContext, seconds: number, decay: number): AudioBuffer => {
   const length = Math.floor(context.sampleRate * seconds);
@@ -49,10 +68,15 @@ const createSound = (): TSound => {
   let introBus: GainNode | null = null;
   /** The scheduled parts of the intro. A skip has to cancel them before they play. */
   let introSources: AudioScheduledSourceNode[] = [];
-  let isDroneOn = false;
+  let musicBus: GainNode | null = null;
+  let music: AudioBuffer | null = null;
+  let musicSource: AudioBufferSourceNode | null = null;
+  let musicFade: GainNode | null = null;
+  /** The time of the audio context at the first sample of the track. */
+  let musicZero = 0;
   let isMuted = false;
 
-  const ensure = (): AudioContext | null => {
+  const ensure = (): AudioContext => {
     if (context) {
       return context;
     }
@@ -76,8 +100,14 @@ const createSound = (): TSound => {
     hall.connect(hallGain).connect(master);
 
     introBus = created.createGain();
+    introBus.gain.value = EFFECTS_LEVEL;
     introBus.connect(master);
     introBus.connect(hall);
+
+    // The music skips the hall: the track has its own space.
+    musicBus = created.createGain();
+    musicBus.gain.value = MUSIC_LEVEL;
+    musicBus.connect(master);
 
     noise = createNoise(created, 8);
     context = created;
@@ -85,37 +115,69 @@ const createSound = (): TSound => {
     return created;
   };
 
-  const rumble = (delaySeconds: number): void => {
+  const startMusic = (fromSeconds: number): void => {
     const audio = ensure();
-    if (!audio || !noise || !introBus || delaySeconds < 0) {
+    if (!musicBus) {
       return;
     }
 
-    const at = audio.currentTime + delaySeconds;
+    const at = audio.currentTime + LEAD_SECONDS;
+    musicZero = at - fromSeconds;
+    if (musicSource && musicFade) {
+      musicFade.gain.cancelScheduledValues(audio.currentTime);
+      musicFade.gain.setTargetAtTime(0, audio.currentTime, 0.03);
+      musicSource.stop(audio.currentTime + 0.2);
+    }
+
+    if (!music) {
+      return;
+    }
+
+    const source = audio.createBufferSource();
+    source.buffer = music;
+    // The track ends in silence and starts with a quiet pad, so the whole track loops well.
+    source.loop = true;
+    const fade = audio.createGain();
+    fade.gain.setValueAtTime(fromSeconds > 0 ? 0.0001 : 1, at);
+    fade.gain.exponentialRampToValueAtTime(1, at + SEEK_FADE_SECONDS);
+    source.connect(fade).connect(musicBus);
+    source.start(at, fromSeconds % music.duration);
+    musicSource = source;
+    musicFade = fade;
+  };
+
+  const rumble = (from: number, to: number): void => {
+    const audio = ensure();
+    if (!noise || !introBus) {
+      return;
+    }
+
+    const at = musicZero + from;
+    const rise = to - from;
     const source = audio.createBufferSource();
     source.buffer = noise;
     const filter = audio.createBiquadFilter();
     filter.type = "lowpass";
     filter.frequency.setValueAtTime(70, at);
-    filter.frequency.exponentialRampToValueAtTime(260, at + 1.35);
+    filter.frequency.exponentialRampToValueAtTime(260, at + rise);
     const gain = audio.createGain();
     gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(0.9, at + 1.3);
+    gain.gain.exponentialRampToValueAtTime(1.3, at + rise);
     // The silence of the inhale: the rumble drops right before the blast.
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + 1.65);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + rise + 0.32);
     source.connect(filter).connect(gain).connect(introBus);
     source.start(at);
-    source.stop(at + 1.8);
+    source.stop(at + rise + 0.45);
     introSources.push(source);
   };
 
-  const blast = (delaySeconds: number): void => {
+  const blast = (position: number): void => {
     const audio = ensure();
-    if (!audio || !noise || !introBus || delaySeconds < 0) {
+    if (!noise || !introBus) {
       return;
     }
 
-    const at = audio.currentTime + delaySeconds;
+    const at = musicZero + position;
 
     const sub = audio.createOscillator();
     sub.type = "sine";
@@ -145,46 +207,6 @@ const createSound = (): TSound => {
     introSources.push(sub, crack);
   };
 
-  /** A slow minor chord of filtered saws, close to a far choir. */
-  const drone = (): void => {
-    const audio = ensure();
-    if (!audio || !master || !hall || isDroneOn) {
-      return;
-    }
-
-    isDroneOn = true;
-    const bus = audio.createGain();
-    bus.gain.setValueAtTime(0.0001, audio.currentTime);
-    bus.gain.exponentialRampToValueAtTime(0.1, audio.currentTime + 7);
-    const filter = audio.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 520;
-    filter.Q.value = 3;
-    const sweep = audio.createOscillator();
-    sweep.frequency.value = 0.045;
-    const sweepDepth = audio.createGain();
-    sweepDepth.gain.value = 240;
-    sweep.connect(sweepDepth).connect(filter.frequency);
-    sweep.start();
-
-    [55, 82.41, 110, 130.81, 164.81].forEach((frequency, index) => {
-      [-5, 6].forEach((detune) => {
-        const voice = audio.createOscillator();
-        voice.type = "sawtooth";
-        voice.frequency.value = frequency;
-        voice.detune.value = detune + index;
-        const level = audio.createGain();
-        level.gain.value = 0.2 / (index + 1.4);
-        voice.connect(level).connect(filter);
-        voice.start();
-      });
-    });
-
-    filter.connect(bus);
-    bus.connect(master);
-    bus.connect(hall);
-  };
-
   const ping = (frequency: number, level: number, seconds: number): void => {
     const audio = context;
     if (!audio || !master || !hall) {
@@ -211,9 +233,19 @@ const createSound = (): TSound => {
   };
 
   return {
+    prepare: async () => {
+      const audio = ensure();
+      try {
+        const response = await fetch(musicUrl);
+        music = await audio.decodeAudioData(await response.arrayBuffer());
+      } catch (error) {
+        console.warn("The music did not load", error);
+      }
+    },
+    isRunning: () => context?.state === "running",
     unlock: () => {
       const audio = ensure();
-      if (audio && audio.state === "suspended") {
+      if (audio.state === "suspended") {
         void audio.resume();
       }
     },
@@ -223,9 +255,18 @@ const createSound = (): TSound => {
         master.gain.setTargetAtTime(next ? 0 : 0.8, context.currentTime, 0.06);
       }
     },
+    startMusic,
+    isMusicOn: () => musicSource !== null,
+    musicTime: () => {
+      const audio = context;
+      if (!audio || !musicSource) {
+        return null;
+      }
+
+      return Math.max(audio.currentTime - musicZero - (audio.outputLatency || audio.baseLatency || 0), 0);
+    },
     rumble,
     blast,
-    drone,
     hover: () => ping(660, 0.03, 0.5),
     confirm: () => {
       ping(165, 0.18, 2.6);
@@ -244,7 +285,7 @@ const createSound = (): TSound => {
       introSources = [];
       window.setTimeout(() => {
         sources.forEach((source) => source.stop());
-        bus.gain.setTargetAtTime(1, audio.currentTime, 0.01);
+        bus.gain.setTargetAtTime(EFFECTS_LEVEL, audio.currentTime, 0.01);
       }, 160);
     },
   };

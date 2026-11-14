@@ -1,23 +1,31 @@
 /**
- * The storyboard, in seconds from the first frame:
+ * The storyboard, in seconds from the first frame. The music sets the cuts:
  *
- *   0-1  the black screen fades into the planet, without the HUD
- *   1-6  the planet explodes
- *   6+   the HUD appears with an animation
+ *   0.0-5.6    the studio logo fades in and out on black, the first accent of the track lights it
+ *   5.7-7.3    the black screen fades into the planet, without the HUD
+ *   7.45-10.3  the cracks spread while the bass of the track builds up
+ *   10.3       the planet explodes
+ *   13.5+      the HUD appears with an animation
  *
  * Every moment of the intro is a pure function of the time. The engine can jump
  * to any moment, and a skip or a replay needs no extra state.
  */
 const TIMELINE = {
-  fadeInEnd: 1,
-  crackStart: 1.05,
+  studioIn: 0.5,
+  /** The first clear accent of the track. A band of light crosses the logo here. */
+  studioFlare: 2.61,
+  studioOut: 4.7,
+  studioEnd: 5.8,
+  fadeInStart: 5.9,
+  fadeInEnd: 7.5,
+  crackStart: 7.55,
   /** The planet holds its breath: the rumble stops and the light drops. */
-  inhale: 2.45,
-  detonate: 2.8,
+  inhale: 10.1,
+  detonate: 10.5,
   /** The dust thins out here and the surviving island becomes visible. */
-  islandReveal: 4.3,
-  explosionEnd: 6,
-  hud: 6,
+  islandReveal: 11.8,
+  explosionEnd: 13.5,
+  hud: 13.5,
 } as const;
 
 type TVec3 = readonly [number, number, number];
@@ -36,6 +44,18 @@ type TSceneState = {
   readonly shafts: number;
 };
 
+type TStudioState = {
+  /** 0 is black, 1 is the full picture. */
+  readonly fade: number;
+  /** The light on the logo: 0.35 while the logo emerges, 1 after the accent. */
+  readonly light: number;
+  /** The position of the band of light, from 0 at the left edge of the logo to 1 at the right. */
+  readonly sweep: number;
+  /** A short burst of the accent. */
+  readonly flare: number;
+  readonly scale: number;
+};
+
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 const smooth = (from: number, to: number, value: number): number => {
   const x = clamp01((value - from) / (to - from));
@@ -43,6 +63,20 @@ const smooth = (from: number, to: number, value: number): number => {
   return x * x * (3 - 2 * x);
 };
 const mix = (from: number, to: number, amount: number): number => from + (to - from) * amount;
+
+/** The camera pushes in on the logo all the time, so the shot never freezes. */
+const studioAt = (t: number): TStudioState => {
+  const { studioIn, studioFlare, studioOut, studioEnd } = TIMELINE;
+  const sinceFlare = t - studioFlare;
+
+  return {
+    fade: smooth(studioIn, studioIn + 1.5, t) * (1 - smooth(studioOut, studioEnd, t)),
+    light: mix(0.35, 1, smooth(studioFlare - 0.5, studioFlare + 0.5, t)),
+    sweep: sinceFlare / 1.5 - 0.1,
+    flare: sinceFlare < 0 ? smooth(-0.45, 0, sinceFlare) : Math.exp(-sinceFlare * 1.1),
+    scale: mix(0.965, 1.035, t / studioEnd),
+  };
+};
 
 /** Smooth noise of one variable, in the range -1..1. */
 const wobble = (x: number, seed: number): number =>
@@ -65,12 +99,12 @@ const traumaAt = (t: number): number => {
 };
 
 const sceneAt = (t: number, aspect: number, pointerX: number, pointerY: number): TSceneState => {
-  const { fadeInEnd, inhale, detonate, explosionEnd } = TIMELINE;
+  const { fadeInStart, fadeInEnd, inhale, detonate, explosionEnd } = TIMELINE;
   const sinceBlast = Math.max(0, t - detonate);
 
   // The camera creeps toward the planet, recoils from the blast, then settles
   // on the wide shot of the menu. The pull is slow at the end, so the shot never freezes.
-  const push = smooth(0, detonate, t);
+  const push = smooth(fadeInStart, detonate, t);
   const pull = 1 - Math.exp(-sinceBlast * 0.78);
   const pan = smooth(detonate + 0.5, explosionEnd + 1.5, t);
   const shift = menuShift(aspect);
@@ -105,7 +139,7 @@ const sceneAt = (t: number, aspect: number, pointerX: number, pointerY: number):
     cameraTarget,
     fov: 28 + blastPunch * 5 * (1 - Math.exp(-sinceBlast * 18)),
     roll: wobble(t * 13, 5.2) * shake * 0.1 + Math.sin(t * 0.05) * 0.008 * pan,
-    fade: smooth(0, fadeInEnd, t),
+    fade: smooth(fadeInStart, fadeInEnd, t),
     exposure: mix(1.08, 1, push) * (1 - inhaleDim * 0.68) + glare * 0.14,
     flash: t >= detonate ? Math.exp(-sinceBlast * 6) : 0,
     aberration: 0.5 + trauma * 3.2,
@@ -113,5 +147,5 @@ const sceneAt = (t: number, aspect: number, pointerX: number, pointerY: number):
   };
 };
 
-export type { TSceneState, TVec3 };
-export { TIMELINE, clamp01, menuShift, mix, sceneAt, smooth };
+export type { TSceneState, TStudioState, TVec3 };
+export { TIMELINE, clamp01, menuShift, mix, sceneAt, smooth, studioAt };
