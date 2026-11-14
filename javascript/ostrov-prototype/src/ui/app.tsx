@@ -38,14 +38,14 @@ const App: FC<TAppProps> = ({ registry }) => {
 
           <SlotModal registry={registry} />
 
-          {/* The learn guide, on only with the `?guide` flag. */}
+          {/* The learn guide. */}
           <LearnGuide registry={registry} />
 
           <EndGameModal registry={registry} />
         </>
       )}
 
-      {/* The main menu, on only with the `?menu` flag. */}
+      {/* The main menu. */}
       <MainMenu registry={registry} />
     </>
   );

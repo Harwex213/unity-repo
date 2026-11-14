@@ -4,7 +4,8 @@ import { PHASES } from "../core/phases";
 import { createWorld } from "../core/world-gen";
 import { pendingIslands } from "../core/world-rules";
 import { enterClearingAction, finishClearingAction } from "./cleanup-actions";
-import { playRivalBuild, playRivalClear, playRivalScout } from "./rival-actions";
+import { playRivalBuild, playRivalClear, playRivalRiot, playRivalScout } from "./rival-actions";
+import { clearRiotState, startRiotAction } from "./riot-actions";
 import { scheduleRivalStrongholds, startGameAction as startSetupGame } from "./setup-actions";
 import { resetSlot, spinSlotAtTaxEnd } from "./slot-actions";
 import { clearTaxState, collectRivalTaxAction, collectTaxAction, startTaxPhaseAction } from "./tax-actions";
@@ -53,6 +54,7 @@ const createSession = (store: TStore) => {
   store.battle.hud.value = null;
   store.battle.result.value = null;
   store.battle.resolved.value = false;
+  clearRiotState(store);
   store.ui.armedBuilding.value = null;
   store.ui.demolishMode.value = false;
   store.ui.soilCleanse.value = null;
@@ -159,6 +161,12 @@ const advancePhase = (store: TStore) => {
     store.game.phase.value = "clear";
     beginRivalPhase(store);
 
+    // A starving island riots first, so a battle fights with what is left.
+    // The riot modal holds the turn: the player is not ready, and a battle
+    // stays paused, until "Ясно". The handler is set below, per branch.
+    let afterRiot: () => void = () => undefined;
+    const isRioting = startRiotAction(store, () => afterRiot());
+
     // A cell with no wild islands has nothing to clear. The player stays on
     // the world map, is ready at once and waits for the rivals' cleanup.
     if (pendingIslands(store.derived.currentCell.peek(), store.derived.humanPlayer.peek()) === 0) {
@@ -166,13 +174,29 @@ const advancePhase = (store: TStore) => {
       store.battle.result.value = null;
       // The scout phase can end from the island page too.
       goToPage(store, "world");
-      markHumanReady(store);
+      const turn = store.game.turn.peek();
+      afterRiot = () => {
+        if (store.game.phase.peek() === "clear" && store.game.turn.peek() === turn) {
+          markHumanReady(store);
+        }
+      };
+
+      if (!isRioting) {
+        markHumanReady(store);
+      }
 
       return;
     }
 
     goToPage(store, "battle");
     enterClearingAction(store);
+
+    if (isRioting) {
+      store.battle.paused.value = true;
+      afterRiot = () => {
+        store.battle.paused.value = false;
+      };
+    }
 
     return;
   }
@@ -223,6 +247,8 @@ const finishRivalPhase = (store: TStore, rivalId: string) => {
   }
 
   if (phase === "clear") {
+    // A starving rival riots before it fights, as the player does.
+    playRivalRiot(store, rivalId);
     playRivalClear(store, rivalId);
   }
 
@@ -236,6 +262,22 @@ const finishRivalPhase = (store: TStore, rivalId: string) => {
  */
 const beginRivalPhase = (store: TStore) => {
   scheduleRivalReadiness(store, (rivalId) => finishRivalPhase(store, rivalId));
+};
+
+/**
+ * A loaded store snapshot has no running timers. This starts the timers of the
+ * rivals that have not finished yet.
+ */
+const resumeRivals = (store: TStore) => {
+  const stage = store.game.stage.peek();
+
+  if (stage === "setup") {
+    scheduleRivalStrongholds(store);
+  }
+
+  if (stage === "play" && !store.game.outcome.peek()) {
+    beginRivalPhase(store);
+  }
 };
 
 /** The player is done with the phase. The phase moves on if the rivals are done too. */
@@ -267,6 +309,11 @@ const endPhaseAction = (store: TStore) => {
   // An animation owns the turn until it finishes, and the turn does not run
   // before the game has started.
   if (store.ui.busy.peek() || store.game.stage.peek() !== "play" || store.game.outcome.peek()) {
+    return;
+  }
+
+  // The riot modal holds the turn until "Ясно".
+  if (store.battle.riot.peek()) {
     return;
   }
 
@@ -320,4 +367,4 @@ const newGameAction = (store: TStore) => {
   createSession(store);
 };
 
-export { createSession, endPhaseAction, newGameAction, startGameAction };
+export { createSession, endPhaseAction, newGameAction, resumeRivals, startGameAction };

@@ -85,7 +85,7 @@ type TSoilCleanseFx = {
 };
 
 const createUiState = () => ({
-  /** The main menu, open at boot only with the `?menu` flag. */
+  /** The main menu. It opens at boot. */
   mainMenu: signal<TMainMenuState>("closed"),
   /** The credits panel of the main menu. */
   menuCreditsOpen: signal<boolean>(false),

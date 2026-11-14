@@ -1,24 +1,28 @@
-import { addressWithoutMenu, MENU_FADE_OUT_MS } from "../core/main-menu";
+import { MENU_FADE_OUT_MS } from "../core/main-menu";
 import { createSession } from "./game-actions";
 import { enableGuide } from "./guide-actions";
 import type { TDifficulty } from "../core/main-menu";
 import type { TStore } from "../store/store";
 
 /**
- * The main menu. It opens at boot with the `?menu` flag. While it is open the
- * game page is not mounted, so the canvases and the hotkeys of the game do not
- * run. A start fades the menu out over the freshly created game.
+ * The main menu. It opens at boot. While it is open the game page is not
+ * mounted, so the canvases and the hotkeys of the game do not run. A start
+ * fades the menu out over the freshly created game.
  */
 
 /** One timer for the fade-out: a second start cannot stack another. */
 let fadeTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-/** Opens the menu and closes everything the game had open on top of the page. */
-const openMainMenuAction = (store: TStore) => {
+const clearMenuFade = () => {
   if (fadeTimeoutId !== null) {
     clearTimeout(fadeTimeoutId);
     fadeTimeoutId = null;
   }
+};
+
+/** Opens the menu and closes everything the game had open on top of the page. */
+const openMainMenuAction = (store: TStore) => {
+  clearMenuFade();
 
   store.ui.techModalOpen.value = false;
   store.ui.factionsModalFactionId.value = null;
@@ -28,7 +32,7 @@ const openMainMenuAction = (store: TStore) => {
 };
 
 type TStartFromMenuOptions = {
-  /** Turns the learn guide on for this game. Off keeps the `?guide` flag's choice. */
+  /** Turns the learn guide on for this game and shows its cards again. Off keeps the current choice. */
   readonly guide: boolean;
 };
 
@@ -63,14 +67,10 @@ const startFromMenuAction = (store: TStore, options: TStartFromMenuOptions) => {
 
 /**
  * "Выход". A browser tab cannot close itself, and the game has nothing behind
- * the menu, so the page reloads without the menu flag and boots the usual way.
+ * the menu, so the menu closes on a fresh session on the island.
  */
 const exitMenuAction = (store: TStore) => {
-  if (store.ui.mainMenu.peek() !== "open") {
-    return;
-  }
-
-  window.location.replace(addressWithoutMenu(window.location.href));
+  startFromMenuAction(store, { guide: false });
 };
 
 const setDifficultyAction = (store: TStore, difficulty: TDifficulty) => {
@@ -87,6 +87,7 @@ const closeMenuCreditsAction = (store: TStore) => {
 
 export type { TStartFromMenuOptions };
 export {
+  clearMenuFade,
   closeMenuCreditsAction,
   exitMenuAction,
   openMainMenuAction,

@@ -6,7 +6,8 @@ import { createGuideState } from "./guide-state";
 import { createRouteState } from "./route-state";
 import { createUiState } from "./ui-state";
 import { createWorldState } from "./world-state";
-import { findRoll, powerLeft, planPowerSpent } from "../core/tax-plan";
+import { foodDemand } from "../core/tax";
+import { findRoll, planFoodIncome, powerLeft, planPowerSpent } from "../core/tax-plan";
 import { techEffects } from "../core/techs";
 import { getCell } from "../core/world-gen";
 import type { TGuideStepId } from "../core/guide";
@@ -145,9 +146,29 @@ const createDerived = (
     return null;
   });
 
+  const effects = computed(() => techEffects(game.researched.value));
+
+  /**
+   * The food the end of the tax phase takes, and whether the pool, with the
+   * food this phase pays, covers it. Outside the tax phase nothing is due.
+   */
+  const foodPlanned = computed(() => {
+    const player = humanPlayer.value;
+    const plan = humanTaxPlan.value;
+    if (!player || !plan || game.tax.value?.status !== "rolled") {
+      return { demand: 0, isShort: false };
+    }
+
+    const demand = foodDemand(player, effects.value.madCuredPerTurn);
+    const available = player.resources.food + planFoodIncome(player, plan, effects.value);
+
+    return { demand, isShort: available < demand };
+  });
+
   return {
     humanPlayer,
     isHumanReady,
+    foodPlanned,
     guideContextStep,
     isCleanupSkipped,
     isReadyLocked,
@@ -178,7 +199,7 @@ const createDerived = (
       return map && cellId ? getCell(map, cellId) : null;
     }),
     /** Everything the researched technologies change, computed in one place. */
-    techEffects: computed(() => techEffects(game.researched.value)),
+    techEffects: effects,
     hoveredHex: computed(() => findHex(viewedPlayer.value, ui.hoveredHexId.value)),
     selectedHex: computed(() => findHex(viewedPlayer.value, ui.selectedHexId.value)),
     demolishTargetHex: computed(() => findHex(viewedPlayer.value, ui.demolishTargetHexId.value)),

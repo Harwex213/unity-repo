@@ -2,6 +2,9 @@ import { useSignals } from "@preact/signals-react/runtime";
 import { useEffect, useRef } from "react";
 import { populationOf } from "../../core/population";
 import { getResource } from "../../core/resources";
+import { riotSize } from "../../core/riot";
+import { foodDemand, isStarving } from "../../core/tax";
+import { plural } from "../../core/toxic-slot";
 import { useStore } from "../../store/store";
 import { Icon } from "./icon";
 import type { FC } from "react";
@@ -48,6 +51,8 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
   const store = useStore();
   const pool = store.derived.humanPlayer.value?.resources;
   const powerPlanned = store.derived.powerPlanned.value;
+  const foodPlanned = store.derived.foodPlanned.value;
+  const madCured = store.derived.techEffects.value.madCuredPerTurn;
   const iconRefs = useRef(new Map<TResourceId, HTMLElement>());
 
   useEffect(() => {
@@ -76,6 +81,10 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
   }
 
   const people = populationOf(player);
+  const starving = isStarving(player);
+  const rioters = riotSize(player).total;
+  // Red while the phase's food will not cover the eating, and after a phase that did not.
+  const isFoodShort = foodPlanned.isShort || (foodPlanned.demand === 0 && starving);
   const setIconRef = (id: TResourceId) => (node: HTMLElement | null) => {
     if (node) {
       iconRefs.current.set(id, node);
@@ -92,11 +101,12 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
             const resource = getResource(id);
             // The first column of the first panel stands at the left edge of the screen.
             const edgeClass = panelIndex === 0 && columnIndex === 0 ? " resource--left-edge" : "";
+            const shortClass = resource.id === "food" && isFoodShort ? " resource--short" : "";
 
             return (
               <div
                 key={resource.id}
-                className={`resource has-hint resource--${resource.kind} resource--${resource.id}${edgeClass}`}
+                className={`resource has-hint resource--${resource.kind} resource--${resource.id}${edgeClass}${shortClass}`}
                 style={{ gridRow: rowIndex + 1, gridColumn: columnIndex + 1 }}
               >
                 <span className="resource__icon" ref={setIconRef(resource.id)}>
@@ -115,6 +125,13 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
                   </span>
                 ) : null}
 
+                {/* The food everyone eats when the tax phase ends. */}
+                {resource.id === "food" && foodPlanned.demand > 0 ? (
+                  <span className={`resource__pending ${foodPlanned.isShort ? "resource__pending--short" : ""}`}>
+                    {`−${foodPlanned.demand}`}
+                  </span>
+                ) : null}
+
                 <span className="hint">
                   <span className="hint__title">
                     {resource.label}
@@ -123,6 +140,18 @@ const ResourcesPanel: FC<TResourcesPanelProps> = ({ registry }) => {
                   <span className="hint__row">
                     {resource.feeds}
                   </span>
+
+                  {resource.id === "food" ? (
+                    <span className="hint__row">
+                      {`Расход за ход: ${foodDemand(player, madCured)}`}
+                    </span>
+                  ) : null}
+
+                  {resource.id === "food" && starving ? (
+                    <span className="hint__row resource__hint-short">
+                      {`Голод: бунт в фазе битвы (≈${rioters} ${plural(rioters, "бунтовщик", "бунтовщика", "бунтовщиков")})`}
+                    </span>
+                  ) : null}
 
                   {resource.id === "population" ? (
                     <>

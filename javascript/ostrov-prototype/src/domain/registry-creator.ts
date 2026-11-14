@@ -19,7 +19,9 @@ import {
 } from "./menu-actions";
 import { changeArmyAction, setHexWorkersAction } from "./population-actions";
 import { navigateToIslandAction, navigateToWorldAction } from "./route-actions";
+import { closeRiotAction } from "./riot-actions";
 import { placeStrongholdAction } from "./setup-actions";
+import { loadStoreSnapshotAction, saveStoreSnapshotAction } from "./snapshot-actions";
 import { closeSlotModalAction } from "./slot-actions";
 import {
   armSkillAction,
@@ -34,6 +36,7 @@ import { cancelSoilCleanseAction, pickSoilHexAction, toggleSoilCleanseAction } f
 import { researchTechAction } from "./tech-actions";
 import {
   closeTaxPickAction,
+  launchBuildingAction,
   openTaxPickAction,
   pickTaxFaceAction,
   setCameraAction,
@@ -89,12 +92,14 @@ const createRegistry = (store: TStore) => {
     openTaxPickAction,
     closeTaxPickAction,
     pickTaxFaceAction,
+    launchBuildingAction,
     closeSlotModalAction,
     researchTechAction,
     selectWorldCellAction,
     scoutAction,
     moveIslandAction,
     closeTrailEventAction,
+    closeRiotAction,
     setCleanupInputAction,
     stepCleanupAction,
     setCleanupSpeedAction,
@@ -115,6 +120,8 @@ const createRegistry = (store: TStore) => {
     setDifficultyAction,
     openMenuCreditsAction,
     closeMenuCreditsAction,
+    saveStoreSnapshotAction,
+    loadStoreSnapshotAction,
   };
 
   // The actions differ in arity, so the store is bound through one shared shape.

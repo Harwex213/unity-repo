@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals-react";
 import type { TCleanupHud, TCleanupResult, TCleanupSim } from "../core/cleanup-sim";
+import type { TRiotReport } from "../core/riot";
 import type { TSkillId } from "../core/skills";
 import type { TUnitId } from "../core/units";
 
@@ -24,6 +25,11 @@ const createBattleState = () => ({
   resolved: signal<boolean>(false),
   /** The skill waiting for a target hex, or `null`. A click on a hex casts it. */
   targeting: signal<TSkillId | null>(null),
+  /**
+   * The starvation riot on the player's island at the start of this clearing
+   * phase. The riot modal shows it; its button clears it. See `core/riot.ts`.
+   */
+  riot: signal<TRiotReport | null>(null),
 });
 
 type TBattleState = ReturnType<typeof createBattleState>;

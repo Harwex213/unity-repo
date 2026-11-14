@@ -6,8 +6,8 @@ import taxArt from "../assets/tutorial/tax.webp";
 
 /**
  * The learn guide: five cards, one per part of the core loop. Each card shows
- * once, when the game first reaches its moment. The guide is off unless the
- * address has the `?guide` flag.
+ * once, when the game first reaches its moment. The guide is on from the
+ * start, and "Пропустить" turns it off.
  */
 
 type TGuideStepId = "intro" | "build" | "tax" | "scout" | "battle";
@@ -63,31 +63,5 @@ const getGuideStep = (id: TGuideStepId) => {
   return step;
 };
 
-const GUIDE_FLAGS = ["guide", "tutorial"];
-
-/**
- * Reads boolean flags from the query part of the address, before the hash. A
- * flag is on when it is present with no value or with any value except `0`,
- * `false`, `off` and `no`. Any of the given names turns the flag on.
- */
-const isQueryFlagOn = (search: string, flags: readonly string[]) => {
-  const params = new URLSearchParams(search);
-
-  return flags.some((flag) => {
-    const value = params.get(flag);
-    if (value === null) {
-      return false;
-    }
-
-    return !["0", "false", "off", "no"].includes(value.trim().toLowerCase());
-  });
-};
-
-/**
- * `?guide`, `?guide=1`, `?tutorial` and `?tutorial=1` turn the guide on, and
- * `guide=0` (or `false`, `off`) keeps it off.
- */
-const isGuideRequested = (search: string) => isQueryFlagOn(search, GUIDE_FLAGS);
-
 export type { TGuideStep, TGuideStepId };
-export { getGuideStep, GUIDE_STEPS, guideStepIndex, isGuideRequested, isQueryFlagOn };
+export { getGuideStep, GUIDE_STEPS, guideStepIndex };

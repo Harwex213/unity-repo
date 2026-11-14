@@ -5,15 +5,20 @@
 
 type TRng = () => number;
 
+/** A generator that can tell its position, so a store snapshot can continue it. */
+type TSeededRng = TRng & {
+  readonly state: () => number;
+};
+
 const HASH_PRIME_1 = 0x9e3779b9;
 const HASH_PRIME_2 = 0x85ebca6b;
 const HASH_PRIME_3 = 0xc2b2ae35;
 
 /** mulberry32: small, fast, good enough for terrain. */
-const createRng = (seed: number): TRng => {
+const createRng = (seed: number): TSeededRng => {
   let state = seed >>> 0;
 
-  return () => {
+  const next = () => {
     state = (state + HASH_PRIME_1) >>> 0;
     let value = state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
@@ -21,6 +26,8 @@ const createRng = (seed: number): TRng => {
 
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
+
+  return Object.assign(next, { state: () => state });
 };
 
 /** Turns any string into a seed, so `createRng(hashSeed(nickname))` is stable. */
@@ -63,5 +70,5 @@ const pickWeighted = <T,>(rng: TRng, items: readonly T[], weightOf: (item: T) =>
   return pick(rng, items);
 };
 
-export type { TRng };
+export type { TRng, TSeededRng };
 export { createRng, hashSeed, pick, pickWeighted, randomInt };

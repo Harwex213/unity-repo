@@ -40,7 +40,7 @@ const closeGuide = (store: TStore) => {
   }
 };
 
-/** Boot only: the `?guide` flag of the address turns the guide on. */
+/** The main menu turns the guide back on after a skip. */
 const enableGuide = (store: TStore, enabled: boolean) => {
   store.guide.enabled.value = enabled;
 };

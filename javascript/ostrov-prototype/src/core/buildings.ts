@@ -107,6 +107,8 @@ const BUILDINGS: readonly TBuilding[] = [
     art: ICONS.village,
     hexArt: HEX_ART.village,
     cost: { stone: 3, wood: 3, hammers: 1 },
+    // The village does not roll with the others: its owner launches it.
+    manualLaunch: true,
     baseFaces: settlementBaseFaces("population"),
     biomeFaces: settlementBiomeFaces("population"),
   },

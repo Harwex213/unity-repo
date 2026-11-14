@@ -6,8 +6,8 @@ import type { TGuideStepId } from "../core/guide";
  * cards again.
  */
 const createGuideState = () => ({
-  /** Set at boot from the `?guide` flag. Off means the guide never shows. */
-  enabled: signal<boolean>(false),
+  /** On from the start. Off means the guide never shows. */
+  enabled: signal<boolean>(true),
   /** The card on screen, or `null` when the guide is closed. */
   openStep: signal<TGuideStepId | null>(null),
   /** The cards the player has already seen. Each one opens by itself only once. */
