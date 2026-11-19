@@ -1,0 +1,203 @@
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --border: #dde1e6;
+  --text: #1d2329;
+  --muted: #6b7682;
+  --accent: #2f6fde;
+  --accent-soft: #e5eefc;
+  --hover: #eef1f4;
+  --canvas-bg: #eceef1;
+  --grid-minor: #dfe2e6;
+  --grid-major: #cdd2d8;
+  --sidebar-width: 260px;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181c;
+    --panel: #1c2026;
+    --border: #2d333b;
+    --text: #dfe4ea;
+    --muted: #8b95a1;
+    --accent: #6ea2ff;
+    --accent-soft: #22324d;
+    --hover: #242a32;
+    --canvas-bg: #111418;
+    --grid-minor: #1c2127;
+    --grid-major: #262c34;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* The canvas handles pinch; the page itself must not zoom or bounce. */
+  overscroll-behavior: none;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-header {
+  padding: 16px 16px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.document-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 16px;
+  overflow-y: auto;
+}
+
+.document-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.document-item:hover {
+  background: var(--hover);
+}
+
+.document-item.is-selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.document-title {
+  font-weight: 600;
+}
+
+.document-description {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-view {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Touch gestures go to the pointer handlers, not to browser scroll and zoom. */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.canvas.is-dragging {
+  cursor: grabbing;
+}
+
+.zoom-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.zoom-controls button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.zoom-controls button:hover {
+  background: var(--hover);
+}
+
+.zoom-label {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* On a narrow screen the document list becomes a strip above the canvas. */
+@media (max-width: 700px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-header {
+    display: none;
+  }
+
+  .document-list {
+    flex-direction: row;
+    padding: 8px;
+    overflow-x: auto;
+  }
+
+  .document-item {
+    flex: none;
+  }
+}
