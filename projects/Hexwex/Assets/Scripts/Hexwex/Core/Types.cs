@@ -196,8 +196,12 @@ namespace Hexwex.Core
         public bool BossSlain;
         /// <summary>Losing every building is a defeat only for a player who had something to lose.</summary>
         public bool HasHadBuildings;
-        /// <summary>A defeated rival is out of the game: it no longer plays its phases.</summary>
+        /// <summary>A defeated player is out of the game: it no longer plays its phases.</summary>
         public bool Eliminated;
+        /// <summary>Why the player was eliminated, or <c>null</c> while it plays.</summary>
+        public GameOutcomeReason? EliminatedBy;
+        /// <summary>The technologies this player has researched. Each seat researches on its own.</summary>
+        public List<TechId> Researched = new List<TechId>();
 
         public HexTile FindHex(string hexId)
         {

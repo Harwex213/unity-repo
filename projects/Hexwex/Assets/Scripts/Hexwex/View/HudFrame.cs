@@ -66,8 +66,8 @@ namespace Hexwex.View
             _resources.Clear();
             _chipByResource.Clear();
             _resources.style.display = _game.ShowBattle ? DisplayStyle.None : DisplayStyle.Flex;
-            Player player = Session.Human;
-            TaxPlan plan = Session.HumanTaxPlan;
+            Player player = Me;
+            TaxPlan plan = MyTaxPlan;
 
             foreach (ResourceId[][] rows in ResourceLayout)
             {
@@ -198,8 +198,8 @@ namespace Hexwex.View
                 RefreshOverlay();
             }, "Технологии", "Наука копится в ресурсах и открывает технологии.");
 
-            Player player = Session.Human;
-            int discount = Session.Effects.StoneDiscount;
+            Player player = Me;
+            int discount = MyEffects.StoneDiscount;
             VisualElement cards = El("cards panel", _buildRow);
             foreach (Building building in Buildings.All)
             {
@@ -352,7 +352,8 @@ namespace Hexwex.View
         private void RefreshEndTurn()
         {
             _endTurn.Clear();
-            bool isShown = Session.Stage == GameStage.Play && Session.Outcome == null && !_game.ShowBattle && !_game.IsReadonly && Session.Phase != Phase.Clear;
+            // In the clear phase the battle has its own way out; a seat whose battle is over waits here for the others.
+            bool isShown = Session.Stage == GameStage.Play && MyOutcome == null && !_game.ShowBattle && !_game.IsReadonly && (Session.Phase != Phase.Clear || _game.IsWaitingForOthers);
             _endTurn.style.display = isShown ? DisplayStyle.Flex : DisplayStyle.None;
             if (!isShown)
             {
@@ -360,10 +361,16 @@ namespace Hexwex.View
             }
 
             int current = (int)Session.Phase;
-            string banner = _game.Collecting ? "Сбор…" : Session.IsTaxOpen ? "Собрать" : "Готов";
+            string banner = _game.Collecting ? "Сбор…" : _game.IsWaitingForOthers ? "Ждём…" : Session.IsTaxOpen ? "Собрать" : "Готов";
             VisualElement panel = El("end-turn-panel panel", _endTurn);
             Button button = Btn(banner, "end-banner", _game.EndPhase, panel);
-            button.SetEnabled(!_game.Collecting);
+            button.SetEnabled(!_game.Collecting && !_game.IsWaitingForOthers);
+            if (_game.IsWaitingForOthers)
+            {
+                // Who the phase still waits for, by name.
+                List<string> waiting = Session.WaitingFor().ConvertAll(id => Session.PlayerOf(id).Nickname);
+                Hint(button, "Ждём других игроков", new[] { string.Join(", ", waiting) });
+            }
 
             PhaseWheel wheel = new PhaseWheel();
             wheel.AddToClassList("wheel");

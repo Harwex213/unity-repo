@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Hexwex.Core;
+using Hexwex.Net;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -28,6 +29,53 @@ namespace Hexwex.View
         [SerializeField] private bool openMenuAtStart = true;
 
         public GameSession Session { get; private set; }
+        /// <summary>The network game this machine takes part in, or <c>null</c> in a single-player game.</summary>
+        public NetGame Net { get; private set; }
+        /// <summary>The actions of the seat played here: straight to the session offline, through the host online.</summary>
+        public GameActions Act { get; private set; }
+
+        /// <summary>The seat played on this machine: seat 0 offline, the one the host gave online.</summary>
+        public string MyId
+        {
+            get { return Net != null && Net.LocalPlayerId != null ? Net.LocalPlayerId : IslandGen.HumanPlayerId; }
+        }
+
+        public Player Me
+        {
+            get { return Session.PlayerOf(MyId); }
+        }
+
+        public Seat MySeat
+        {
+            get { return Session.SeatOf(MyId); }
+        }
+
+        public CleanupSim MyBattle
+        {
+            get { return MySeat?.Battle; }
+        }
+
+        public TaxPlan MyTaxPlan
+        {
+            get { return Session.TaxPlanOf(MyId); }
+        }
+
+        public TechEffects MyEffects
+        {
+            get { return Session.EffectsOf(MyId); }
+        }
+
+        /// <summary>How the game ended for this seat, or <c>null</c> while it plays.</summary>
+        public GameOutcome MyOutcome
+        {
+            get { return Session.OutcomeFor(MyId); }
+        }
+
+        /// <summary>This seat has ended the phase and the others have not yet.</summary>
+        public bool IsWaitingForOthers
+        {
+            get { return Net != null && Session.IsReady(MyId); }
+        }
         public BuildingId? ArmedBuilding { get; private set; }
         public bool DemolishMode { get; private set; }
         public bool SoilMode { get; private set; }
@@ -57,14 +105,14 @@ namespace Hexwex.View
             {
                 Player viewed = ViewedPlayerId != null ? Session.Players.Find(player => player.Id == ViewedPlayerId) : null;
 
-                return viewed ?? Session.Human;
+                return viewed ?? Me;
             }
         }
 
         /// <summary>A rival's island is for looking only: nothing on it can be built, razed or picked.</summary>
         public bool IsReadonly
         {
-            get { return Session != null && ViewedPlayer != Session.Human; }
+            get { return Session != null && ViewedPlayer != Me; }
         }
         public bool BattlePaused { get; private set; }
         /// <summary>1 or 2: how many seconds of battle one second of play runs.</summary>
@@ -96,7 +144,7 @@ namespace Hexwex.View
         public GuideStepId? GuideContext()
         {
             bool isMenuUp = mainMenu != null && mainMenu.HoldsInput;
-            if (Session == null || Session.Outcome != null || isMenuUp)
+            if (Session == null || MyOutcome != null || isMenuUp)
             {
                 return null;
             }
@@ -191,21 +239,75 @@ namespace Hexwex.View
             }
         }
 
-        /// <summary>A fresh session. The nickname is the seed: the same name grows the same island.</summary>
+        /// <summary>A fresh single-player session. The nickname is the seed: the same name grows the same island.</summary>
         public void NewGame(string seed)
+        {
+            LeaveNetwork();
+            Adopt(new GameSession(seed));
+        }
+
+        /// <summary>
+        /// Takes part in a network game. Until the host starts it the menu shows the
+        /// table; at the start this machine's copy of the game takes the screen.
+        /// </summary>
+        public void JoinNetwork(NetGame net)
+        {
+            LeaveNetwork();
+            Net = net;
+            Net.Notice += hud.ShowNotice;
+            Net.Started += () => Adopt(Net.Session);
+            Net.Closed += OnNetworkClosed;
+            Net.Desync += (seat, sequence, ours, theirs) => Debug.LogError("Hexwex: seat " + seat + " drifted at command " + sequence + " (" + ours + " vs " + theirs + ")");
+        }
+
+        /// <summary>Leaves the network game, if any: a client resigns its seat, a host closes the table.</summary>
+        public void LeaveNetwork()
+        {
+            if (Net == null)
+            {
+                return;
+            }
+
+            NetGame net = Net;
+            Net = null;
+            net.Notice -= hud.ShowNotice;
+            net.Dispose();
+        }
+
+        private void OnNetworkClosed(string reason)
+        {
+            hud.ShowNotice(reason);
+            Debug.Log("Hexwex: network game closed: " + reason);
+        }
+
+        private void OnApplicationQuit()
+        {
+            LeaveNetwork();
+        }
+
+        /// <summary>Puts a session on screen, a new one or this machine's copy of a network game.</summary>
+        private void Adopt(GameSession session)
         {
             if (Session != null)
             {
-                Session.Changed -= Redraw;
+                Session.Changed -= OnSessionChanged;
                 Session.Notice -= hud.ShowNotice;
             }
 
             islandView.Clear();
             globeView.Clear();
             SetBattleShown(false);
-            Session = new GameSession(seed);
-            Session.Changed += Redraw;
-            Session.Notice += hud.ShowNotice;
+            Session = session;
+            Session.Changed += OnSessionChanged;
+            // Online the notices come from the network game, already sorted to this seat.
+            if (Net == null)
+            {
+                Session.Notice += hud.ShowNotice;
+            }
+
+            Act ??= new GameActions(this);
+            _seenPhase = Session.Phase;
+            _seenTurn = Session.Turn;
             PendingNickname = Session.Nickname;
             Collecting = false;
             _collected = false;
@@ -224,7 +326,29 @@ namespace Hexwex.View
 
         public void StartGame()
         {
-            Session.StartGame();
+            Act.StartGame();
+        }
+
+        private Phase _seenPhase;
+        private int _seenTurn;
+
+        /// <summary>Every change of the session: the screen follows a phase that moved on, then redraws.</summary>
+        private void OnSessionChanged()
+        {
+            if (Session.Phase != _seenPhase || Session.Turn != _seenTurn)
+            {
+                Phase before = _seenPhase;
+                _seenPhase = Session.Phase;
+                _seenTurn = Session.Turn;
+                FollowPhase(before);
+            }
+            else if (ShowBattle && MyBattle == null)
+            {
+                // This seat's battle has ended while the others still fight theirs.
+                SetBattleShown(false);
+            }
+
+            Redraw();
         }
 
         /// <summary>Clicking the armed card again disarms it, which is how the player cancels.</summary>
@@ -236,7 +360,7 @@ namespace Hexwex.View
             }
 
             Building building = Buildings.Get(buildingId);
-            if (!Buildings.IsUnlocked(Session.Human, building))
+            if (!Buildings.IsUnlocked(Me, building))
             {
                 hud.ShowNotice("«" + building.Label + "» откроется после победы над боссом");
 
@@ -274,7 +398,7 @@ namespace Hexwex.View
                 return;
             }
 
-            string block = Session.SoilCleanseBlock();
+            string block = Session.SoilCleanseBlock(MyId);
             if (block != null)
             {
                 hud.ShowNotice(block);
@@ -289,7 +413,8 @@ namespace Hexwex.View
 
         public void EndPhase()
         {
-            if (Collecting)
+            // Once this seat has ended the phase it waits for the others.
+            if (Collecting || IsWaitingForOthers)
             {
                 return;
             }
@@ -303,18 +428,24 @@ namespace Hexwex.View
             }
 
             _collected = false;
-            Phase before = Session.Phase;
 
             // Every phase starts on the player's own island.
             SetViewedPlayer(null);
 
             ClearModes();
-            Session.EndPhase();
+            // Offline the phase moves on at once; online when every seat has ended it.
+            // Either way the screen follows it in FollowPhase.
+            Act.EndPhase();
+            Redraw();
+        }
 
-            if (before == Phase.Tax && Session.LastPayouts != null)
+        /// <summary>What the screen does when the phase has moved on from <paramref name="before"/>.</summary>
+        private void FollowPhase(Phase before)
+        {
+            if (before == Phase.Tax && MySeat.LastPayouts != null)
             {
-                PendingSpin = Session.LastSlotSpin;
-                hud.ShowNotice(DescribePayouts(Session.LastPayouts));
+                PendingSpin = MySeat.LastSlotSpin;
+                hud.ShowNotice(DescribePayouts(MySeat.LastPayouts));
             }
 
             if (before == Phase.Build && Session.IsTaxOpen)
@@ -325,23 +456,23 @@ namespace Hexwex.View
             // The scout phase happens on the global map, and the turn starts on the island.
             if (before == Phase.Tax && Session.Phase == Phase.Scout)
             {
-                SelectedCellId = Session.Human.CellId;
+                SelectedCellId = Me.CellId;
                 SetWorldShown(true);
             }
 
             if (before == Phase.Scout)
             {
-                PendingTrail = Session.LastTrailEvent;
+                PendingTrail = MySeat.LastTrailEvent;
                 SetWorldShown(false);
 
                 // Wild islands in the cell: the clear phase is a battle on its own level.
-                if (Session.Phase == Phase.Clear && Session.Battle != null)
+                if (Session.Phase == Phase.Clear && MyBattle != null)
                 {
                     SetBattleShown(true);
                 }
             }
 
-            if (before == Phase.Clear && Session.Battle == null)
+            if (before == Phase.Clear && MyBattle == null)
             {
                 SetBattleShown(false);
             }
@@ -351,8 +482,6 @@ namespace Hexwex.View
             {
                 SetWorldShown(false);
             }
-
-            Redraw();
         }
 
         /// <summary>
@@ -362,13 +491,13 @@ namespace Hexwex.View
         /// </summary>
         private void StartCollection()
         {
-            TaxPlan plan = Session.HumanTaxPlan;
+            TaxPlan plan = MyTaxPlan;
             SetViewedPlayer(null);
             ClearModes();
             StopReveal();
             Collecting = true;
             // The motes aim at the HUD as it is laid out now; the redraw after it would move nothing, but its new elements have no place yet.
-            hud.StartCollection(plan.Payouts(Session.Human, Session.Effects), () =>
+            hud.StartCollection(plan.Payouts(Me, MyEffects), () =>
             {
                 Collecting = false;
                 _collected = true;
@@ -386,7 +515,7 @@ namespace Hexwex.View
         private void StartReveal()
         {
             _revealDelays.Clear();
-            TaxPlan plan = Session.HumanTaxPlan;
+            TaxPlan plan = MyTaxPlan;
             if (plan == null)
             {
                 return;
@@ -395,7 +524,7 @@ namespace Hexwex.View
             List<HexTile> hexes = new List<HexTile>();
             foreach (TaxRoll roll in plan.Rolls)
             {
-                HexTile hex = Session.Human.FindHex(roll.HexId);
+                HexTile hex = Me.FindHex(roll.HexId);
                 if (hex != null)
                 {
                     hexes.Add(hex);
@@ -474,7 +603,7 @@ namespace Hexwex.View
         {
             get
             {
-                return Session.Stage == GameStage.Play && Session.Outcome == null
+                return Session.Stage == GameStage.Play && MyOutcome == null
                     && (Session.Phase == Phase.Build || Session.Phase == Phase.Scout);
             }
         }
@@ -491,7 +620,7 @@ namespace Hexwex.View
                 return;
             }
 
-            string next = playerId == Session.Human.Id ? null : playerId;
+            string next = playerId == Me.Id ? null : playerId;
             ClearModes();
             HoveredHexId = null;
             if (ShowWorld)
@@ -526,7 +655,7 @@ namespace Hexwex.View
             SetViewedPlayer(null);
             if (!ShowWorld && SelectedCellId == null)
             {
-                SelectedCellId = Session.Human.CellId;
+                SelectedCellId = Me.CellId;
             }
 
             SetWorldShown(!ShowWorld);
@@ -537,7 +666,7 @@ namespace Hexwex.View
         {
             if (SelectedCellId != null)
             {
-                Session.Scout(SelectedCellId);
+                Act.Scout(SelectedCellId);
             }
         }
 
@@ -545,7 +674,7 @@ namespace Hexwex.View
         {
             if (SelectedCellId != null)
             {
-                Session.MoveIsland(SelectedCellId);
+                Act.MoveIsland(SelectedCellId);
             }
         }
 
@@ -558,7 +687,7 @@ namespace Hexwex.View
         /// <summary>Arms the battle's skill for a target hex, or drops it when it is armed already.</summary>
         public void ToggleSkill()
         {
-            CleanupSim sim = Session.Battle;
+            CleanupSim sim = MyBattle;
             if (sim == null)
             {
                 return;
@@ -616,7 +745,7 @@ namespace Hexwex.View
             if (show)
             {
                 _homeOrbit = cameraRig.Current;
-                battleView.Bind(Session.Battle, Props.Hex(Session.Human.Color));
+                battleView.Bind(MyBattle, Props.Hex(Me.Color));
                 Vector3 center = battleView.PlayerCenter(1f);
                 cameraRig.Current = new CameraRig.Orbit
                 {
@@ -661,7 +790,7 @@ namespace Hexwex.View
         /// </summary>
         private void UpdateBattle(Mouse mouse, Vector2 pointer, bool overUi)
         {
-            CleanupSim sim = Session.Battle;
+            CleanupSim sim = MyBattle;
             if (sim == null)
             {
                 return;
@@ -704,13 +833,13 @@ namespace Hexwex.View
                 int ticks = Mathf.Min(MaxTicksPerFrame, Mathf.FloorToInt(_accumulator / (float)CleanupSim.TickSeconds));
                 _accumulator -= ticks * (float)CleanupSim.TickSeconds;
                 _accumulator = Mathf.Min(_accumulator, (float)CleanupSim.TickSeconds);
-                Session.StepBattle(ticks);
+                Act.StepBattle(ticks);
                 AnnounceBattleEvents(sim);
             }
             else if (!isRunning)
             {
                 // The level has ended: the session takes its result.
-                Session.StepBattle(0);
+                Act.StepBattle(0);
             }
 
             if (sim.Status != SimStatus.Running)
@@ -721,7 +850,7 @@ namespace Hexwex.View
             if (SkillArmed && !overUi && battleView.Pick(worldCamera.ScreenPointToRay(pointer), out int island, out int hex))
             {
                 battleView.SetTarget(island, hex);
-                if (mouse.leftButton.wasPressedThisFrame && Session.CastShatter(island, hex))
+                if (mouse.leftButton.wasPressedThisFrame && Act.CastShatter(island, hex))
                 {
                     SkillArmed = false;
                     battleView.SetTarget(-1, -1);
@@ -794,7 +923,7 @@ namespace Hexwex.View
                 _reachable.Clear();
                 if (Session.IsExplorationOpen)
                 {
-                    _reachable.UnionWith(WorldRules.ReachableCellIds(Session.World, Session.Human.CellId, Session.MovedThisTurn));
+                    _reachable.UnionWith(WorldRules.ReachableCellIds(Session.World, Me.CellId, MySeat.MovedThisTurn));
                 }
 
                 globeView.Render(Session.World, Session.Players, CellMarkOf);
@@ -817,7 +946,7 @@ namespace Hexwex.View
                 {
                     _islandOrbit = cameraRig.Current;
                     _islandSunRotation = sun.transform.rotation;
-                    WorldCell home = Session.World.Get(Session.Human.CellId);
+                    WorldCell home = Session.World.Get(Me.CellId);
                     Vector3 direction = home != null ? globeView.DirectionOf(home) : Vector3.back;
                     // Seen a little from the side, so what stands on the cells reads as standing.
                     Vector3 tiltAxis = Vector3.Cross(direction, Vector3.up);
@@ -880,6 +1009,9 @@ namespace Hexwex.View
 
         private void Update()
         {
+            // The network is read first and always: the table fills while the menu is open.
+            Net?.Poll();
+
             // Behind the open menu the island turns slowly; the game takes no input until the menu has gone.
             bool isMenuOpen = mainMenu != null && mainMenu.IsOpen;
             bool isGuideOpen = learnGuide != null && learnGuide.IsOpen;
@@ -888,7 +1020,7 @@ namespace Hexwex.View
             if ((mainMenu != null && mainMenu.HoldsInput) || isGuideOpen)
             {
                 // A card over the battle holds its clock, but the level stays on screen.
-                if (isGuideOpen && ShowBattle && Session != null && Session.Battle != null)
+                if (isGuideOpen && ShowBattle && Session != null && MyBattle != null)
                 {
                     cameraRig.Follow = battleView.PlayerCenter(1f);
                     battleView.Draw(1f, worldCamera);
@@ -997,7 +1129,7 @@ namespace Hexwex.View
 
             if (Session.Stage == GameStage.Setup)
             {
-                Session.PlaceStronghold(hexId);
+                Act.PlaceStronghold(hexId);
 
                 return;
             }
@@ -1011,7 +1143,7 @@ namespace Hexwex.View
 
             if (Session.IsBuildingAllowed && DemolishMode)
             {
-                Session.Demolish(hexId);
+                Act.Demolish(hexId);
 
                 return;
             }
@@ -1019,11 +1151,11 @@ namespace Hexwex.View
             if (Session.IsBuildingAllowed && ArmedBuilding.HasValue)
             {
                 Building building = Buildings.Get(ArmedBuilding.Value);
-                Session.Build(hexId, building.Id);
+                Act.Build(hexId, building.Id);
 
                 // The card stays armed for the next hex, unless the player just
                 // spent the last of what it costs.
-                if (!Buildings.CanAfford(Session.Human.Resources, building, Session.Effects.StoneDiscount))
+                if (!Buildings.CanAfford(Me.Resources, building, MyEffects.StoneDiscount))
                 {
                     ArmedBuilding = null;
                     Redraw();
@@ -1039,7 +1171,7 @@ namespace Hexwex.View
         /// <summary>A hex click while the soil cleansing is armed: the sacrifice first, then the target.</summary>
         private void PickSoilHex(string hexId)
         {
-            Player player = Session.Human;
+            Player player = Me;
             HexTile hex = player.FindHex(hexId);
             if (hex == null)
             {
@@ -1072,7 +1204,7 @@ namespace Hexwex.View
             }
 
             string sacrificeHexId = SoilSacrificeHexId;
-            if (Session.CleanseSoil(sacrificeHexId, hexId))
+            if (Act.CleanseSoil(sacrificeHexId, hexId))
             {
                 // The destroyed hex is gone: nothing may point at it any more.
                 if (SelectedHexId == sacrificeHexId)
@@ -1119,7 +1251,7 @@ namespace Hexwex.View
             if (ArmedBuilding.HasValue && Session.IsBuildingAllowed)
             {
                 Building building = Buildings.Get(ArmedBuilding.Value);
-                if (BuildRules.BuildRefusal(Session.Human, hex, building, Session.Effects.StoneDiscount) == null)
+                if (BuildRules.BuildRefusal(Me, hex, building, MyEffects.StoneDiscount) == null)
                 {
                     return HexMark.Allowed;
                 }

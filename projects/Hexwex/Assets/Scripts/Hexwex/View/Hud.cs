@@ -46,6 +46,15 @@ namespace Hexwex.View
             get { return _game.Session; }
         }
 
+        // The seat played on this machine: seat 0 offline, the network's seat online.
+        private string MyId => _game.MyId;
+        private Player Me => _game.Me;
+        private Seat MySeat => _game.MySeat;
+        private CleanupSim MyBattle => _game.MyBattle;
+        private TaxPlan MyTaxPlan => _game.MyTaxPlan;
+        private TechEffects MyEffects => _game.MyEffects;
+        private GameOutcome MyOutcome => _game.MyOutcome;
+
         public void Bind(GameRoot game)
         {
             _game = game;
@@ -326,7 +335,7 @@ namespace Hexwex.View
 
             HexDie die = HexDie.On(player, hex);
             // A rival's island is for looking only: its dice are not the player's to turn.
-            TaxRoll roll = _game.IsReadonly ? null : Session.HumanTaxPlan?.FindRoll(hex.Id);
+            TaxRoll roll = _game.IsReadonly ? null : MyTaxPlan?.FindRoll(hex.Id);
 
             if (StructureHp.TryGet(player, hex, out StructureKind kind, out int hp, out int max))
             {
@@ -403,7 +412,7 @@ namespace Hexwex.View
 
             if (!_game.IsReadonly)
             {
-                Button button = Btn(isStaffed ? "Снять" : "Назначить", "small-button staff-button", () => Session.SetHexWorkers(hex.Id, isStaffed ? workers - 1 : workers + 1), row);
+                Button button = Btn(isStaffed ? "Снять" : "Назначить", "small-button staff-button", () => _game.Act.SetHexWorkers(hex.Id, isStaffed ? workers - 1 : workers + 1), row);
                 button.SetEnabled(isBuildPhase && (isStaffed || idle > 0));
                 string hint = isStaffed ? "Снятый рабочий станет свободным. Здание перестанет работать." : "Свободных жителей: " + idle;
                 if (!isBuildPhase)
@@ -447,8 +456,8 @@ namespace Hexwex.View
             Text("· свободны: " + idle, "staff-dim", row);
 
             VisualElement buttons = El("row staff-buttons", section);
-            Btn("− Распустить", "small-button staff-button", () => Session.ChangeArmy(-1), buttons).SetEnabled(isBuildPhase && army > 0);
-            Btn("+ Призвать", "small-button staff-button", () => Session.ChangeArmy(1), buttons).SetEnabled(isBuildPhase && idle > 0);
+            Btn("− Распустить", "small-button staff-button", () => _game.Act.ChangeArmy(-1), buttons).SetEnabled(isBuildPhase && army > 0);
+            Btn("+ Призвать", "small-button staff-button", () => _game.Act.ChangeArmy(1), buttons).SetEnabled(isBuildPhase && idle > 0);
 
             string note = !isBuildPhase ? PhaseRefusal : idle <= 0 ? "Нет свободных жителей, чтобы призвать" : "Вся армия идёт в бой в фазе зачистки";
             Text(note, "staff-note", section);
@@ -460,7 +469,7 @@ namespace Hexwex.View
             {
                 int faceIndex = index;
                 Face face = faces[index];
-                Tax.FacePayout(face, hex, Session.Effects, out int amount, out int toxicity);
+                Tax.FacePayout(face, hex, MyEffects, out int amount, out int toxicity);
 
                 string classes = roll != null ? "face" : "face static";
                 string note = "";
@@ -469,14 +478,14 @@ namespace Hexwex.View
                     int cost = TaxPlan.PickCost(roll, index);
                     note = index == roll.RolledIndex ? "выпало" : cost + " власти";
                     classes += index == roll.ChosenIndex ? " chosen" : "";
-                    classes += Session.HumanTaxPlan.PickRefusal(player, hex.Id, index) != null ? " refused" : "";
+                    classes += MyTaxPlan.PickRefusal(player, hex.Id, index) != null ? " refused" : "";
                 }
 
                 Button row = new Button(() =>
                 {
                     if (roll != null)
                     {
-                        Session.PickTaxFace(hex.Id, faceIndex);
+                        _game.Act.PickTaxFace(hex.Id, faceIndex);
                     }
                 });
                 foreach (string name in classes.Split(' '))
@@ -524,12 +533,12 @@ namespace Hexwex.View
             _bottom.Clear();
             bool isBuilding = false;
             RefreshBottomContent(ref isBuilding);
-            RefreshBuildRow(isBuilding && Session.Outcome == null);
+            RefreshBuildRow(isBuilding && MyOutcome == null);
             // The message bar shows only when it has something to say, over the building bar when that is up.
             _bottom.style.bottom = isBuilding ? 224f : 16f;
             // In battle there are no resources beside it, so the bar may run wider.
             _bottom.EnableInClassList("wide", _game.ShowBattle);
-            _bottom.style.display = Session.Outcome == null && _bottom.childCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            _bottom.style.display = MyOutcome == null && _bottom.childCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private void RefreshBottomContent(ref bool isBuilding)
@@ -544,13 +553,30 @@ namespace Hexwex.View
 
             if (Session.Stage == GameStage.Setup)
             {
-                Text(Session.Human.StrongholdHexId == null ? "Кликните свободный гекс, чтобы поставить твердыню." : "Твердыня стоит. Кликните другой гекс, чтобы перенести её.", "hint", _bottom);
+                Text(Me.StrongholdHexId == null ? "Кликните свободный гекс, чтобы поставить твердыню." : "Твердыня стоит. Кликните другой гекс, чтобы перенести её.", "hint", _bottom);
+                if (_game.Net != null)
+                {
+                    // A network game: the world is the host's, and the host starts it once every stronghold stands.
+                    List<string> missing = Session.HumanIds.FindAll(id => Session.PlayerOf(id).StrongholdHexId == null).ConvertAll(id => Session.PlayerOf(id).Nickname);
+                    Text(missing.Count == 0 ? "Все твердыни стоят." : "Ещё ставят твердыню: " + string.Join(", ", missing), "hint", _bottom);
+                    if (_game.Net.IsHost)
+                    {
+                        Btn("Начать", "end-button", _game.StartGame, _bottom).SetEnabled(missing.Count == 0);
+                    }
+                    else
+                    {
+                        Text("Игру начнёт хост.", "hint", _bottom);
+                    }
+
+                    return;
+                }
+
                 TextField seed = new TextField { value = _game.PendingNickname ?? "" };
                 seed.AddToClassList("seed-field");
                 seed.RegisterValueChangedCallback(change => _game.PendingNickname = change.newValue);
                 _bottom.Add(seed);
                 Btn("Новый остров", "small-button", () => _game.NewGame(_game.PendingNickname), _bottom);
-                Btn("Начать", "end-button", _game.StartGame, _bottom).SetEnabled(Session.Human.StrongholdHexId != null);
+                Btn("Начать", "end-button", _game.StartGame, _bottom).SetEnabled(Me.StrongholdHexId != null);
 
                 return;
             }
@@ -603,7 +629,7 @@ namespace Hexwex.View
         private void RefreshCellPanel()
         {
             World world = Session.World;
-            Player player = Session.Human;
+            Player player = Me;
             WorldCell cell = world.Get(_game.SelectedCellId ?? _game.HoveredCellId);
             _hexPanel.style.display = DisplayStyle.Flex;
 
@@ -618,7 +644,7 @@ namespace Hexwex.View
             bool isHere = cell.Id == player.CellId;
             CellVisibility visibility = WorldRules.Visibility(world, cell);
             ScoutCheck scout = WorldRules.CheckScout(world, player.CellId, cell.Id, player.Resources[ResourceId.Scouting]);
-            string moveRefusal = WorldRules.MoveRefusal(world, player.CellId, cell.Id, Session.MovedThisTurn);
+            string moveRefusal = WorldRules.MoveRefusal(world, player.CellId, cell.Id, MySeat.MovedThisTurn);
             Player owner = cell.Revealed && cell.OwnerId != null ? Session.Players.Find(candidate => candidate.Id == cell.OwnerId) : null;
             bool isLair = cell.Revealed && cell.Boss;
             bool isHeld = cell.Kind == CellKind.Island && !cell.Cleared && cell.IslandCount > 0;
@@ -731,7 +757,7 @@ namespace Hexwex.View
 
             if (!isHere)
             {
-                Btn(Session.MovedThisTurn ? "Уже перелетали" : "Перелететь сюда", "small-button", _game.FlyToSelected, buttons)
+                Btn(MySeat.MovedThisTurn ? "Уже перелетали" : "Перелететь сюда", "small-button", _game.FlyToSelected, buttons)
                     .SetEnabled(!isLocked && moveRefusal == null);
             }
         }
@@ -753,7 +779,7 @@ namespace Hexwex.View
             }
 
             Text(
-                Session.MovedThisTurn
+                MySeat.MovedThisTurn
                     ? "Остров перелетел. Разведайте гексы на границе тумана или закончите фазу."
                     : "Разведайте гекс на границе тумана и перелетите в соседний. Остров, который остался на месте, оставит в гексе свой яд.",
                 "hint",
@@ -803,7 +829,7 @@ namespace Hexwex.View
         /// </summary>
         public void RefreshBattle()
         {
-            if (_root == null || Session == null || Session.Battle == null || !_game.ShowBattle)
+            if (_root == null || Session == null || MyBattle == null || !_game.ShowBattle)
             {
                 return;
             }
@@ -811,7 +837,7 @@ namespace Hexwex.View
             RefreshResources();
             RefreshHexPanel();
 
-            string key = BattleBottomKey(Session.Battle);
+            string key = BattleBottomKey(MyBattle);
             if (key != _battleBottomKey)
             {
                 RefreshBottom();
@@ -826,7 +852,7 @@ namespace Hexwex.View
         /// <summary>The state of the level: the army, the stronghold, every enemy island, the way out.</summary>
         private void RefreshBattlePanel()
         {
-            CleanupSim sim = Session.Battle;
+            CleanupSim sim = MyBattle;
             if (sim == null)
             {
                 _hexPanel.style.display = DisplayStyle.None;
@@ -892,7 +918,7 @@ namespace Hexwex.View
         /// <summary>The battle's bar: the skill, the clock, and how to sail.</summary>
         private void RefreshBattleBottom()
         {
-            CleanupSim sim = Session.Battle;
+            CleanupSim sim = MyBattle;
             if (sim == null)
             {
                 return;
@@ -1015,13 +1041,13 @@ namespace Hexwex.View
                 return;
             }
 
-            TaxPlan plan = Session.HumanTaxPlan;
+            TaxPlan plan = MyTaxPlan;
             if (plan == null || !Session.IsTaxOpen || _game.ShowWorld || _game.IsReadonly || _game.Collecting)
             {
                 return;
             }
 
-            Player player = Session.Human;
+            Player player = Me;
             foreach (TaxRoll roll in plan.Rolls)
             {
                 HexTile hex = player.FindHex(roll.HexId);
@@ -1031,7 +1057,7 @@ namespace Hexwex.View
                 }
 
                 Face face = roll.Faces[roll.ChosenIndex];
-                Tax.FacePayout(face, hex, Session.Effects, out int amount, out int toxicity);
+                Tax.FacePayout(face, hex, MyEffects, out int amount, out int toxicity);
 
                 VisualElement plate = El(roll.ChosenIndex == roll.RolledIndex ? "plate" : "plate changed", _plates);
                 plate.pickingMode = PickingMode.Ignore;
@@ -1077,10 +1103,10 @@ namespace Hexwex.View
         {
             _overlay.Clear();
 
-            if (Session.Outcome != null)
+            if (MyOutcome != null)
             {
                 _overlay.style.display = DisplayStyle.Flex;
-                AddOutcome(El("modal", _overlay), Session.Outcome);
+                AddOutcome(El("modal", _overlay), MyOutcome);
 
                 return;
             }
@@ -1104,10 +1130,10 @@ namespace Hexwex.View
                 return;
             }
 
-            if (_game.ShowBattle && Session.BattleResult != null)
+            if (_game.ShowBattle && MySeat.BattleResult != null)
             {
                 _overlay.style.display = DisplayStyle.Flex;
-                AddBattleResult(El("modal wide", _overlay), Session.BattleResult);
+                AddBattleResult(El("modal wide", _overlay), MySeat.BattleResult);
 
                 return;
             }
@@ -1148,6 +1174,7 @@ namespace Hexwex.View
                 case GameOutcomeReason.Elimination: return "Все соперники выбыли.";
                 case GameOutcomeReason.Ruined: return "Твердыня лежит в руинах.";
                 case GameOutcomeReason.NoBuildings: return "На острове не осталось ни одного здания.";
+                case GameOutcomeReason.Left: return "Вы покинули игру.";
                 default: return "Соперник построил Центральный конвертер раньше.";
             }
         }
@@ -1167,7 +1194,7 @@ namespace Hexwex.View
         {
             Action close = _externalClose;
             Action refresh = _externalRefresh;
-            Text("Технологии · наука " + Session.Human.Resources[ResourceId.Science], "modal-title", modal);
+            Text("Технологии · наука " + Me.Resources[ResourceId.Science], "modal-title", modal);
             ScrollView list = new ScrollView();
             list.AddToClassList("tech-list");
             modal.Add(list);
@@ -1175,13 +1202,13 @@ namespace Hexwex.View
             foreach (Tech tech in Techs.All)
             {
                 Tech current = tech;
-                bool owned = Session.Researched.Contains(tech.Id);
-                bool available = Techs.IsAvailable(tech, Session.Researched);
+                bool owned = Me.Researched.Contains(tech.Id);
+                bool available = Techs.IsAvailable(tech, Me.Researched);
                 string state = owned ? "изучено" : tech.Trophy ? "трофей босса" : available ? tech.Cost + " науки" : "недоступно";
 
                 Button row = new Button(() =>
                 {
-                    Session.Research(current.Id);
+                    _game.Act.Research(current.Id);
                     (refresh ?? RefreshOverlay)();
                 });
                 row.AddToClassList("tech");

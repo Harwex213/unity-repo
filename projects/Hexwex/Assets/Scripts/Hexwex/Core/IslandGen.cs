@@ -106,26 +106,55 @@ namespace Hexwex.Core
             }
         }
 
-        /// <summary>The whole roster of a session: the human first, then the three rivals.</summary>
+        /// <summary>The most players a session holds: the human seats and the bots together.</summary>
+        public const int MaxPlayers = 4;
+
+        /// <summary>The id of a human seat. Seat 0 is the single player's <see cref="HumanPlayerId"/>.</summary>
+        public static string HumanSeatId(int seat)
+        {
+            return seat == 0 ? HumanPlayerId : HumanPlayerId + (seat + 1);
+        }
+
+        /// <summary>The whole roster of a single-player session: the human first, then the three rivals.</summary>
         public static List<Player> CreatePlayers(string nickname)
         {
-            Rng humanRng = Rng.FromText(nickname);
+            return CreatePlayers(nickname, new[] { nickname });
+        }
 
-            Player human = new Player
+        /// <summary>
+        /// The roster of a session with <paramref name="humanNicknames"/> people at it,
+        /// one per seat. Seat 0 grows its island from the world seed, as the single
+        /// player does. Every further seat takes the next rival's slot and colour,
+        /// with an island of its own and the human's starting pool and army, so no
+        /// person starts behind another. The rivals left over fill the other slots
+        /// exactly as they would in a single-player game.
+        /// </summary>
+        public static List<Player> CreatePlayers(string seed, IReadOnlyList<string> humanNicknames)
+        {
+            int humans = Math.Max(1, Math.Min(MaxPlayers, humanNicknames != null ? humanNicknames.Count : 1));
+            List<Player> players = new List<Player>();
+            for (int seat = 0; seat < humans; seat += 1)
             {
-                Id = HumanPlayerId,
-                Nickname = nickname,
-                Color = HumanColor,
-                IsHuman = true,
-                Hexes = CreateIsland(humanRng),
-                Resources = ResourceTable.CreateStartingPool(),
-                Army = HumanStartingArmy,
-            };
+                string id = HumanSeatId(seat);
+                string name = humanNicknames != null && seat < humanNicknames.Count && !string.IsNullOrWhiteSpace(humanNicknames[seat])
+                    ? humanNicknames[seat].Trim()
+                    : seat == 0 ? seed : "Игрок " + (seat + 1);
+                players.Add(new Player
+                {
+                    Id = id,
+                    Nickname = name,
+                    Color = seat == 0 ? HumanColor : Rivals[seat - 1].color,
+                    IsHuman = true,
+                    Hexes = CreateIsland(Rng.FromText(seat == 0 ? seed : seed + ":" + id)),
+                    Resources = ResourceTable.CreateStartingPool(),
+                    Army = HumanStartingArmy,
+                });
+            }
 
-            List<Player> players = new List<Player> { human };
-            foreach ((string id, string rivalNickname, string color) in Rivals)
+            for (int slot = humans - 1; slot < Rivals.Length; slot += 1)
             {
-                players.Add(CreateRival(id, rivalNickname, color, nickname));
+                (string id, string rivalNickname, string color) = Rivals[slot];
+                players.Add(CreateRival(id, rivalNickname, color, seed));
             }
 
             return players;
@@ -149,7 +178,14 @@ namespace Hexwex.Core
         }
 
         /// <summary>Rewrites hexes until every required group is present at least once.</summary>
-        private static void EnforceRequiredGroups(List<HexTile> hexes, Rng rng)
+        /// <summary>The weight a biome has in the generator before its neighbours count.</summary>
+        public static int DefaultBiomeWeight(BiomeId biome)
+        {
+            return BiomeWeights[(int)biome];
+        }
+
+        /// <summary>Makes sure the island has somewhere to mine, to log and to farm: a missing group takes over one random hex.</summary>
+        public static void EnforceRequiredGroups(List<HexTile> hexes, Rng rng)
         {
             foreach (BiomeId[] group in RequiredGroups)
             {

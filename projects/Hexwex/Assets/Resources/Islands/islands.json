@@ -1,0 +1,307 @@
+{
+    "version": 1,
+    "name": "islands",
+    "created": "2026-11-14 15:35",
+    "settings": {
+        "seed": "Mom010",
+        "recipes": [
+            {
+                "name": "Тип 1",
+                "count": 1,
+                "size": 30,
+                "compactness": 0.014999999664723874,
+                "clumping": 0.20000000298023225,
+                "mode": "share",
+                "biomes": [
+                    {
+                        "biome": "grassland",
+                        "amount": 10
+                    },
+                    {
+                        "biome": "plains",
+                        "amount": 9
+                    },
+                    {
+                        "biome": "forrest",
+                        "amount": 8
+                    },
+                    {
+                        "biome": "savanna",
+                        "amount": 5
+                    },
+                    {
+                        "biome": "rainforest",
+                        "amount": 4
+                    },
+                    {
+                        "biome": "taiga",
+                        "amount": 6
+                    },
+                    {
+                        "biome": "tundra",
+                        "amount": 5
+                    },
+                    {
+                        "biome": "desert",
+                        "amount": 4
+                    },
+                    {
+                        "biome": "polar_desert",
+                        "amount": 2
+                    },
+                    {
+                        "biome": "swamp",
+                        "amount": 4
+                    },
+                    {
+                        "biome": "badlands",
+                        "amount": 3
+                    },
+                    {
+                        "biome": "crater",
+                        "amount": 2
+                    },
+                    {
+                        "biome": "volcano",
+                        "amount": 1
+                    },
+                    {
+                        "biome": "hills",
+                        "amount": 7
+                    },
+                    {
+                        "biome": "mountains",
+                        "amount": 5
+                    },
+                    {
+                        "biome": "cliffs",
+                        "amount": 4
+                    }
+                ],
+                "requireBuildable": true,
+                "toxicityMin": 0,
+                "toxicityMax": 0,
+                "buildingChance": 0.0
+            }
+        ]
+    },
+    "islands": [
+        {
+            "name": "Тип 1 1",
+            "recipe": "Тип 1",
+            "seed": "Mom010:0:1",
+            "hexes": [
+                {
+                    "q": 0,
+                    "r": 0,
+                    "biome": "cliffs",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 1,
+                    "r": -1,
+                    "biome": "savanna",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 2,
+                    "r": -1,
+                    "biome": "mountains",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": -2,
+                    "biome": "badlands",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": -3,
+                    "biome": "crater",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 0,
+                    "r": -1,
+                    "biome": "forrest",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 1,
+                    "r": -2,
+                    "biome": "plains",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 4,
+                    "r": -4,
+                    "biome": "grassland",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 1,
+                    "r": 0,
+                    "biome": "grassland",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 0,
+                    "r": -2,
+                    "biome": "tundra",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 5,
+                    "r": -5,
+                    "biome": "grassland",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 0,
+                    "r": 1,
+                    "biome": "desert",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": -4,
+                    "biome": "hills",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": -1,
+                    "biome": "mountains",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": 0,
+                    "biome": "rainforest",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 0,
+                    "r": 2,
+                    "biome": "plains",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -1,
+                    "r": 3,
+                    "biome": "desert",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 4,
+                    "r": 0,
+                    "biome": "plains",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -1,
+                    "r": -1,
+                    "biome": "hills",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 6,
+                    "r": -5,
+                    "biome": "hills",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -2,
+                    "r": 3,
+                    "biome": "savanna",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -3,
+                    "r": 4,
+                    "biome": "forrest",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": 1,
+                    "biome": "polar_desert",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -4,
+                    "r": 5,
+                    "biome": "swamp",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 4,
+                    "r": -1,
+                    "biome": "rainforest",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": 3,
+                    "r": 2,
+                    "biome": "grassland",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -1,
+                    "r": -2,
+                    "biome": "tundra",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -2,
+                    "r": -2,
+                    "biome": "taiga",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -1,
+                    "r": 0,
+                    "biome": "taiga",
+                    "toxicity": 0,
+                    "building": ""
+                },
+                {
+                    "q": -2,
+                    "r": -3,
+                    "biome": "forrest",
+                    "toxicity": 0,
+                    "building": ""
+                }
+            ]
+        }
+    ]
+}

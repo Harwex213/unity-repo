@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Hexwex.Net;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -63,6 +64,13 @@ namespace Hexwex.View
         private Material _backdropMaterial;
         private Vector2 _pointer;
         private float _openedAt;
+
+        // The network screen: what was typed, and why the last attempt failed.
+        private string _netName;
+        private string _netAddress = "127.0.0.1";
+        private string _netPort = UtpTransport.DefaultPort.ToString();
+        private string _netSeed;
+        private string _netError;
 
         private enum MenuState
         {
@@ -305,6 +313,7 @@ namespace Hexwex.View
             VisualElement nav = Add(inner, "main-menu__nav");
             AddEntry(nav, "Пролог", "Обучение", "scouting", () => StartGame(true));
             AddEntry(nav, "Глава первая", "Новая игра", "stronghold", () => StartGame(false));
+            AddEntry(nav, "Союз", "Сетевая игра", "factions", OpenNetwork);
             AddEntry(nav, "Летопись", "Фракции", "factions", OpenFactions);
             AddEntry(nav, "Архив", "Технологии", "technology", OpenTechs);
             AddEntry(nav, "Эпилог", "Авторы", "population", OpenCredits);
@@ -484,15 +493,26 @@ namespace Hexwex.View
                 return;
             }
 
-            CloseOverlay();
             _game.NewGame(_game.PendingNickname);
-            _hud.SetVisible(true);
             if (withGuide && _game.LearnGuide != null)
             {
                 // The intro card opens once the fade-out ends: the guide waits for the menu to close.
                 _game.LearnGuide.Guide.Enable();
             }
 
+            EnterGame();
+        }
+
+        /// <summary>The menu fades out over the game that has just begun.</summary>
+        private void EnterGame()
+        {
+            if (_state != MenuState.Open)
+            {
+                return;
+            }
+
+            CloseOverlay();
+            _hud.SetVisible(true);
             _state = MenuState.Leaving;
             _closeAt = Time.unscaledTime + FadeOutSeconds;
             _root.AddToClassList("leaving");
@@ -511,6 +531,162 @@ namespace Hexwex.View
 #else
             Application.Quit();
 #endif
+        }
+
+        /* ---------- the network game: host, join, and the table ---------- */
+
+        /// <summary>"Сетевая игра": host a game on this machine, or join one by its address.</summary>
+        private void OpenNetwork()
+        {
+            _netName ??= string.IsNullOrWhiteSpace(Environment.UserName) ? "Игрок" : Environment.UserName;
+            _netSeed ??= _game.PendingNickname;
+            ShowOverlay(BuildNetwork);
+        }
+
+        private void BuildNetwork()
+        {
+            VisualElement modal = Add(_overlay, "modal main-menu-network");
+            Label(modal, "Союз", "main-menu-entry__label");
+            NetGame net = _game.Net;
+            if (net == null)
+            {
+                Label(modal, "Сетевая игра", "modal-title");
+                Label(modal, "Хост создаёт стол на своём компьютере. Остальные подключаются по его адресу: 127.0.0.1 на этом же компьютере, адрес в локальной сети на другом.", "panel-text");
+                Field(modal, "Ваше имя", _netName, value => _netName = value);
+                Field(modal, "Мир (сид)", _netSeed, value => _netSeed = value);
+                Field(modal, "Адрес хоста", _netAddress, value => _netAddress = value);
+                Field(modal, "Порт", _netPort, value => _netPort = value);
+                if (_netError != null)
+                {
+                    Label(modal, _netError, "main-menu-network__error");
+                }
+
+                VisualElement row = Add(modal, "main-menu-network__buttons");
+                MenuButton(row, "Создать игру", HostGame);
+                MenuButton(row, "Подключиться", JoinGame);
+                MenuButton(modal, "Закрыть", CloseOverlay);
+
+                return;
+            }
+
+            Label(modal, net.IsHost ? "Ваш стол" : "Стол хоста", "modal-title");
+            Label(modal, "Мир: " + (net.Seed ?? "…"), "panel-text");
+            if (net.Names.Count == 0)
+            {
+                Label(modal, "Подключение…", "panel-text");
+            }
+
+            for (int seat = 0; seat < net.Names.Count; seat += 1)
+            {
+                VisualElement row = Add(modal, "main-menu-credits__row");
+                Label(row, seat == 0 ? "Хост" : "Место " + (seat + 1), "main-menu-credits__role");
+                Label(row, net.Names[seat] + (seat == net.Seat ? " (вы)" : ""), "main-menu-credits__name");
+            }
+
+            Label(modal, "Свободные места займут боты.", "panel-text");
+            VisualElement buttons = Add(modal, "main-menu-network__buttons");
+            if (net is NetHost host)
+            {
+                MenuButton(buttons, "Начать игру", host.StartGame);
+                MenuButton(buttons, "Закрыть стол", LeaveTable);
+            }
+            else
+            {
+                Label(modal, "Игру начнёт хост.", "panel-text");
+                MenuButton(buttons, "Выйти", LeaveTable);
+            }
+        }
+
+        private void HostGame()
+        {
+            if (!TryPort(out ushort port))
+            {
+                return;
+            }
+
+            try
+            {
+                Attach(new NetHost(UtpTransport.Listen(port), _netName, _netSeed));
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
+        private void JoinGame()
+        {
+            if (!TryPort(out ushort port))
+            {
+                return;
+            }
+
+            try
+            {
+                Attach(new NetClient(UtpTransport.Connect(_netAddress, port), _netName));
+            }
+            catch (Exception exception)
+            {
+                Fail(exception.Message);
+            }
+        }
+
+        private bool TryPort(out ushort port)
+        {
+            if (ushort.TryParse((_netPort ?? "").Trim(), out port) && port > 0)
+            {
+                return true;
+            }
+
+            Fail("Порт — число от 1 до 65535");
+
+            return false;
+        }
+
+        /// <summary>Hands the network game to the game, and follows its table on this screen.</summary>
+        private void Attach(NetGame net)
+        {
+            _netError = null;
+            _game.JoinNetwork(net);
+            net.LobbyChanged += () => _rebuildOverlay?.Invoke();
+            net.Started += EnterGame;
+            net.Closed += reason =>
+            {
+                // Turned away, or the host went: back to the network screen with the reason.
+                if (_state == MenuState.Open)
+                {
+                    _game.LeaveNetwork();
+                    Fail(reason);
+                }
+            };
+            _rebuildOverlay?.Invoke();
+        }
+
+        private void LeaveTable()
+        {
+            _game.LeaveNetwork();
+            _rebuildOverlay?.Invoke();
+        }
+
+        private void Fail(string reason)
+        {
+            _netError = reason;
+            _rebuildOverlay?.Invoke();
+        }
+
+        private static void Field(VisualElement parent, string label, string value, Action<string> changed)
+        {
+            TextField field = new TextField(label) { value = value ?? "" };
+            field.AddToClassList("main-menu-network__field");
+            field.RegisterValueChangedCallback(change => changed(change.newValue));
+            parent.Add(field);
+        }
+
+        private static void MenuButton(VisualElement parent, string text, Action run)
+        {
+            Button button = new Button(run) { text = text };
+            button.AddToClassList("main-menu-button");
+            parent.Add(button);
         }
 
         private void OpenFactions()

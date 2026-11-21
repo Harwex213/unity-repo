@@ -406,3 +406,41 @@
 .main-menu-entry__title {
     -unity-text-align: middle-left;
 }
+
+/* ---------- the network game: host, join, and the table ---------- */
+
+.main-menu-network {
+    width: 560px;
+}
+
+.main-menu-network__field {
+    margin: 6px 0 0 0;
+}
+
+.main-menu-network__field > Label {
+    min-width: 150px;
+    font-size: 15px;
+    color: rgb(196, 202, 214);
+}
+
+.main-menu-network__field .unity-text-field__input {
+    font-size: 16px;
+    padding: 4px 8px;
+}
+
+.main-menu-network__buttons {
+    flex-direction: row;
+    margin-top: 12px;
+}
+
+.main-menu-network__buttons .main-menu-button {
+    flex-grow: 1;
+    margin: 0 4px;
+}
+
+.main-menu-network__error {
+    margin-top: 8px;
+    font-size: 14px;
+    white-space: normal;
+    color: rgb(244, 128, 116);
+}

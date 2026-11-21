@@ -4,6 +4,8 @@
     "references": [
         "Hexwex.Core",
         "Hexwex.View",
+        "Hexwex.Net",
+        "Hexwex.Net.Unity",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

@@ -3,6 +3,8 @@
     "rootNamespace": "Hexwex.View",
     "references": [
         "Hexwex.Core",
+        "Hexwex.Net",
+        "Hexwex.Net.Unity",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],

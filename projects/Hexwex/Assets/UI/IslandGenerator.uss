@@ -1,0 +1,212 @@
+/* The island generator scene: a settings panel on the left over the 3D preview. */
+
+.generator {
+    flex-grow: 1;
+}
+
+.generator-tags {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.generator-tag {
+    position: absolute;
+    translate: -50% -100%;
+    padding: 3px 10px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(240, 236, 226);
+    background-color: rgba(13, 19, 32, 0.85);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+.generator-tag.selected {
+    border-color: rgb(240, 207, 122);
+    color: rgb(240, 207, 122);
+}
+
+.generator-panel {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    bottom: 12px;
+    width: 470px;
+    padding: 14px 14px 10px 14px;
+    background-color: rgba(10, 15, 27, 0.94);
+    border-width: 1px;
+    border-color: rgba(240, 207, 122, 0.35);
+    border-radius: 10px;
+}
+
+.generator-title {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
+}
+
+.generator-note,
+.generator-hint {
+    margin: 2px 0 6px 0;
+    font-size: 12px;
+    white-space: normal;
+    color: rgb(150, 158, 172);
+}
+
+.generator-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.generator-section {
+    margin-top: 8px;
+}
+
+.generator-subtitle {
+    margin: 8px 0 4px 0;
+    font-size: 13px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: rgb(240, 207, 122);
+}
+
+.generator-card {
+    margin-top: 10px;
+    padding: 6px 8px 8px 4px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.generator-card > .unity-foldout__toggle {
+    font-size: 15px;
+    -unity-font-style: bold;
+}
+
+.generator-biomes {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.generator-biome {
+    flex-direction: row;
+    align-items: center;
+    width: 50%;
+}
+
+.generator-swatch {
+    width: 12px;
+    height: 12px;
+    margin-right: 2px;
+    border-radius: 3px;
+}
+
+.generator-amount {
+    flex-grow: 1;
+}
+
+.generator-amount > Label {
+    min-width: 110px;
+    font-size: 12px;
+}
+
+.generator-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.generator-button {
+    padding: 4px 10px;
+    font-size: 13px;
+}
+
+.generator-button.primary {
+    flex-grow: 1;
+    padding: 7px 10px;
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(240, 207, 122);
+}
+
+.generator-button.danger {
+    color: rgb(244, 128, 116);
+}
+
+.generator-add {
+    margin-top: 10px;
+    padding: 8px;
+}
+
+.generator-files {
+    flex-grow: 1;
+}
+
+.generator-status {
+    margin-top: 8px;
+    font-size: 13px;
+    white-space: normal;
+    color: rgb(150, 214, 110);
+}
+
+.generator-status.error {
+    color: rgb(244, 128, 116);
+}
+
+.generator-details {
+    margin-top: 4px;
+    font-size: 12px;
+    white-space: normal;
+    color: rgb(196, 202, 214);
+}
+
+/* Readable labels on the dark panel, and sections that keep their height. */
+
+.generator-panel .unity-base-field__label,
+.generator-panel .unity-toggle > .unity-base-field__label,
+.generator-panel .unity-foldout__text {
+    color: rgb(214, 220, 232);
+}
+
+.generator-panel .unity-base-field__label {
+    min-width: 170px;
+    font-size: 13px;
+}
+
+.generator-section {
+    flex-shrink: 0;
+}
+
+.generator-button {
+    min-height: 26px;
+    flex-shrink: 0;
+}
+
+.generator-button.primary {
+    min-height: 34px;
+}
+
+.generator-status,
+.generator-details {
+    flex-shrink: 0;
+}
+
+.generator-panel .generator-amount > .unity-base-field__label {
+    min-width: 96px;
+    font-size: 12px;
+}
+
+.generator-scroll .unity-scroll-view__horizontal-scroller {
+    display: none;
+}
+
+.generator-button.primary {
+    background-color: rgba(240, 207, 122, 0.18);
+    border-color: rgba(240, 207, 122, 0.6);
+}

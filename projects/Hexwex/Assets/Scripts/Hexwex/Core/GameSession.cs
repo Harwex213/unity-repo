@@ -4,23 +4,59 @@ using System.Collections.Generic;
 namespace Hexwex.Core
 {
     /// <summary>
+    /// What one human seat has going on in the current turn: the things that are
+    /// that person's own and not the island's or the world's.
+    /// </summary>
+    public sealed class Seat
+    {
+        public string PlayerId;
+        /// <summary>The person has ended the current phase and waits for the others.</summary>
+        public bool IsReady;
+        /// <summary>What the last tax phase paid, for the view to animate.</summary>
+        public List<TaxPayout> LastPayouts;
+        /// <summary>The spin at the end of the last tax phase, or <c>null</c> when the slot stayed off.</summary>
+        public SlotSpin LastSlotSpin;
+        /// <summary>Staying in a cell dumps toxicity into it, so a flight has to be remembered.</summary>
+        public bool MovedThisTurn;
+        /// <summary>The event the trail threw when the last scout phase closed, or <c>null</c>.</summary>
+        public TrailEvent LastTrailEvent;
+        /// <summary>The running level of the clear phase, or <c>null</c> outside it.</summary>
+        public CleanupSim Battle;
+        /// <summary>Set when the level ends, while the clear phase is still open.</summary>
+        public CleanupResult BattleResult;
+        /// <summary>What the last battle handed back to the island.</summary>
+        public CleanupResult LastBattleResult;
+        /// <summary>Strongholds ruined in this turn's battle: they skip this turn's repair.</summary>
+        public HashSet<string> RuinedNow;
+        public int SoilCleansedTurn;
+    }
+
+    /// <summary>
     /// One game of Toxic Island. It stands where the prototype's <c>store/</c> and
     /// <c>domain/</c> stood: it owns the only mutable state, and every action goes
     /// through it. The view reads the state, calls the actions and listens to
     /// <see cref="Changed"/> and <see cref="Notice"/>; it never writes.
     ///
-    /// The prototype paces the rivals with timers and plays animations between
-    /// steps. Neither changes a result, because every roll is seeded by the world
-    /// seed, the turn and the player. Here the rivals play their phase the moment
-    /// the player ends it.
+    /// A session has one or more human seats and bots in the other slots (see
+    /// <see cref="IslandGen.CreatePlayers(string, IReadOnlyList{string})"/>). Every
+    /// action names the player it is for. The overloads without a player act for
+    /// seat 0, which is all a single-player game has.
     ///
-    /// A turn is build, tax, scout, clear. The clear phase is a real-time battle:
-    /// the view asks for its ticks through <see cref="StepBattle"/>. A turn whose
-    /// cell holds no wild islands skips it.
+    /// The phases are played together: a person who ends a phase is ready, and the
+    /// phase moves on when every person still in the game is ready. The bots play
+    /// their part at that moment. With one person the phase moves on at once, as
+    /// it always did. Every roll is seeded by the world seed, the turn and the
+    /// player, and seat 0 keeps the single player's seeds.
+    ///
+    /// A turn is build, tax, scout, clear. The clear phase is a real-time battle,
+    /// one for each person whose cell holds wild islands: the view asks for its
+    /// ticks through <see cref="StepBattle(string, int)"/>.
     /// </summary>
     public sealed class GameSession
     {
         public const string DefaultNickname = "Mom010";
+
+        private const string PopulationPhaseNotice = "Жителей можно перераспределять только в фазе строительства";
 
         /// <summary>The nickname is the world seed: the same name always grows the same islands.</summary>
         public string Nickname { get; private set; }
@@ -28,48 +64,56 @@ namespace Hexwex.Core
         public GameStage Stage { get; private set; }
         public int Turn { get; private set; }
         public Phase Phase { get; private set; }
-        public List<TechId> Researched { get; private set; }
-        /// <summary><c>null</c> while the game goes on.</summary>
+        /// <summary>The end of the game for everyone, or <c>null</c> while it goes on. Its kind and reason are seat 0's; see <see cref="OutcomeFor"/>.</summary>
         public GameOutcome Outcome { get; private set; }
         /// <summary>Every player's rolled dice. Set only while the tax phase is open.</summary>
         public List<TaxPlan> TaxPlans { get; private set; }
-        /// <summary>What the player's last tax phase paid, for the view to animate.</summary>
-        public List<TaxPayout> LastPayouts { get; private set; }
-        /// <summary>The player's spin at the end of the last tax phase, or <c>null</c> when the slot stayed off.</summary>
-        public SlotSpin LastSlotSpin { get; private set; }
         /// <summary>The global map: the sphere of cells the islands fly over.</summary>
         public World World { get; private set; }
-        /// <summary>Staying in a cell dumps toxicity into it, so a flight has to be remembered.</summary>
-        public bool MovedThisTurn { get; private set; }
-        /// <summary>The event the trail threw when the last scout phase closed, or <c>null</c>.</summary>
-        public TrailEvent LastTrailEvent { get; private set; }
-        /// <summary>The running level of the clear phase, or <c>null</c> outside it.</summary>
-        public CleanupSim Battle { get; private set; }
-        /// <summary>Set when the level ends, while the clear phase is still open. The results screen shows it.</summary>
-        public CleanupResult BattleResult { get; private set; }
-        /// <summary>What the last battle handed back to the island.</summary>
-        public CleanupResult LastBattleResult { get; private set; }
+        /// <summary>The human seats, in seat order. Seat 0 comes first.</summary>
+        public List<string> HumanIds { get; private set; }
 
-        private int _soilCleansedTurn;
+        private readonly Dictionary<string, Seat> _seats = new Dictionary<string, Seat>();
 
         /// <summary>Raised after any change of the state.</summary>
         public event Action Changed;
-        /// <summary>A short message for the player: why an action was refused, or what a rival did.</summary>
+        /// <summary>A short message for seat 0: why its action was refused, or what a rival did.</summary>
         public event Action<string> Notice;
+        /// <summary>
+        /// A short message for one person, by player id, or for everyone when the id
+        /// is <c>null</c>. A host sends each one where it belongs.
+        /// </summary>
+        public event Action<string, string> PlayerNotice;
 
+        /// <summary>A single-player game: one person, and the three rivals.</summary>
         public GameSession(string nickname)
+            : this(nickname, null)
+        {
+        }
+
+        /// <summary>
+        /// A game with a seat for each of <paramref name="humanNicknames"/>; bots fill
+        /// the rest. <paramref name="nickname"/> is the world seed. With no names, seat 0
+        /// takes the seed as its name, as a single player does.
+        /// </summary>
+        public GameSession(string nickname, IReadOnlyList<string> humanNicknames)
         {
             string trimmed = (nickname ?? "").Trim();
 
             Nickname = trimmed.Length > 0 ? trimmed : DefaultNickname;
-            Players = IslandGen.CreatePlayers(Nickname);
+            Players = IslandGen.CreatePlayers(Nickname, humanNicknames != null && humanNicknames.Count > 0 ? humanNicknames : new[] { Nickname });
             World = WorldGen.Create(Nickname, Players.ConvertAll(player => player.Id), out Dictionary<string, string> placement);
+            HumanIds = new List<string>();
             foreach (Player player in Players)
             {
                 player.CellId = placement.TryGetValue(player.Id, out string cellId) ? cellId : "";
+                if (player.IsHuman)
+                {
+                    HumanIds.Add(player.Id);
+                    _seats[player.Id] = new Seat { PlayerId = player.Id };
+                }
             }
 
-            Researched = new List<TechId>();
             Turn = 1;
             Phase = Phase.Build;
             Stage = GameStage.Setup;
@@ -91,19 +135,128 @@ namespace Hexwex.Core
             }
         }
 
+        /* ---------- seat 0: what a single-player game reads ---------- */
+
         public Player Human
         {
             get { return Players.Find(player => player.Id == IslandGen.HumanPlayerId); }
         }
 
+        /// <summary>Seat 0's technologies.</summary>
+        public List<TechId> Researched
+        {
+            get { return Human.Researched; }
+        }
+
         public TechEffects Effects
         {
-            get { return Techs.Effects(Researched); }
+            get { return EffectsOf(IslandGen.HumanPlayerId); }
         }
 
         public TaxPlan HumanTaxPlan
         {
-            get { return TaxPlans?.Find(plan => plan.PlayerId == IslandGen.HumanPlayerId); }
+            get { return TaxPlanOf(IslandGen.HumanPlayerId); }
+        }
+
+        public List<TaxPayout> LastPayouts
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).LastPayouts; }
+        }
+
+        public SlotSpin LastSlotSpin
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).LastSlotSpin; }
+        }
+
+        public bool MovedThisTurn
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).MovedThisTurn; }
+        }
+
+        public TrailEvent LastTrailEvent
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).LastTrailEvent; }
+        }
+
+        public CleanupSim Battle
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).Battle; }
+        }
+
+        public CleanupResult BattleResult
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).BattleResult; }
+        }
+
+        public CleanupResult LastBattleResult
+        {
+            get { return SeatOf(IslandGen.HumanPlayerId).LastBattleResult; }
+        }
+
+        /* ---------- any seat ---------- */
+
+        /// <summary>The seat of that person, or <c>null</c> for a bot or an unknown id.</summary>
+        public Seat SeatOf(string playerId)
+        {
+            return playerId != null && _seats.TryGetValue(playerId, out Seat seat) ? seat : null;
+        }
+
+        public Player PlayerOf(string playerId)
+        {
+            return Players.Find(player => player.Id == playerId);
+        }
+
+        public TechEffects EffectsOf(string playerId)
+        {
+            Player player = PlayerOf(playerId);
+
+            return player != null ? Techs.Effects(player.Researched) : TechEffects.None;
+        }
+
+        public TaxPlan TaxPlanOf(string playerId)
+        {
+            return TaxPlans?.Find(plan => plan.PlayerId == playerId);
+        }
+
+        /// <summary>
+        /// How the game has ended for that person: the shared end once the game is
+        /// over, or their own defeat when they have left a game the others play on.
+        /// <c>null</c> while they play.
+        /// </summary>
+        public GameOutcome OutcomeFor(string playerId)
+        {
+            if (Outcome != null)
+            {
+                return Outcome.For(playerId);
+            }
+
+            Player player = PlayerOf(playerId);
+            if (player != null && player.Eliminated)
+            {
+                return new GameOutcome
+                {
+                    Kind = GameOutcomeKind.Defeat,
+                    Reason = player.EliminatedBy ?? GameOutcomeReason.Ruined,
+                    WinnerIds = new List<string>(),
+                    Turn = Turn,
+                };
+            }
+
+            return null;
+        }
+
+        /// <summary>Whether that person has ended the current phase and waits for the others.</summary>
+        public bool IsReady(string playerId)
+        {
+            Seat seat = SeatOf(playerId);
+
+            return seat != null && seat.IsReady;
+        }
+
+        /// <summary>The people the current phase still waits for.</summary>
+        public List<string> WaitingFor()
+        {
+            return HumanIds.FindAll(id => IsInPlay(id) && !SeatOf(id).IsReady);
         }
 
         public bool IsBuildingAllowed
@@ -116,29 +269,42 @@ namespace Hexwex.Core
             get { return Stage == GameStage.Play && Phase == Phase.Tax && Outcome == null && TaxPlans != null; }
         }
 
+        public bool IsExplorationOpen
+        {
+            get { return Stage == GameStage.Play && Phase == Phase.Scout && Outcome == null; }
+        }
+
+        /* ---------- setup ---------- */
+
+        public bool PlaceStronghold(string hexId)
+        {
+            return PlaceStronghold(IslandGen.HumanPlayerId, hexId);
+        }
+
         /// <summary>
         /// A click on a hex during setup. The first click places the stronghold, and
         /// a later click moves it. The choice is final once the game has started.
         /// </summary>
-        public bool PlaceStronghold(string hexId)
+        public bool PlaceStronghold(string playerId, string hexId)
         {
-            if (Stage != GameStage.Setup)
+            Player player = Person(playerId);
+            if (Stage != GameStage.Setup || player == null)
             {
                 return false;
             }
 
-            if (!Stronghold.CanPlace(Human, hexId))
+            if (!Stronghold.CanPlace(player, hexId))
             {
-                return Refuse("Твердыню можно поставить только на свободный гекс своего острова");
+                return Refuse(playerId, "Твердыню можно поставить только на свободный гекс своего острова");
             }
 
-            Stronghold.Place(Human, hexId);
+            Stronghold.Place(player, hexId);
             RaiseChanged();
 
             return true;
         }
 
-        /// <summary>"Начать". It is refused until the player's stronghold stands.</summary>
+        /// <summary>"Начать". It is refused until every person's stronghold stands.</summary>
         public bool StartGame()
         {
             if (Stage != GameStage.Setup)
@@ -148,7 +314,13 @@ namespace Hexwex.Core
 
             if (Human.StrongholdHexId == null)
             {
-                return Refuse("Сначала поставьте твердыню");
+                return Refuse(IslandGen.HumanPlayerId, "Сначала поставьте твердыню");
+            }
+
+            List<string> missing = HumanIds.FindAll(id => PlayerOf(id).StrongholdHexId == null);
+            if (missing.Count > 0)
+            {
+                return Refuse(IslandGen.HumanPlayerId, "Ещё не все поставили твердыню: " + string.Join(", ", missing.ConvertAll(id => PlayerOf(id).Nickname)));
             }
 
             Stage = GameStage.Play;
@@ -157,21 +329,28 @@ namespace Hexwex.Core
             return true;
         }
 
+        /* ---------- the build phase ---------- */
+
         public bool Build(string hexId, BuildingId buildingId)
         {
-            Player player = Human;
-            HexTile hex = player.FindHex(hexId);
+            return Build(IslandGen.HumanPlayerId, hexId, buildingId);
+        }
+
+        public bool Build(string playerId, string hexId, BuildingId buildingId)
+        {
+            Player player = PersonInPlay(playerId);
+            HexTile hex = player?.FindHex(hexId);
             if (!IsBuildingAllowed || hex == null)
             {
                 return false;
             }
 
             Building building = Buildings.Get(buildingId);
-            int discount = Effects.StoneDiscount;
+            int discount = EffectsOf(playerId).StoneDiscount;
             string refusal = BuildRules.BuildRefusal(player, hex, building, discount);
             if (refusal != null)
             {
-                return Refuse(refusal);
+                return Refuse(playerId, refusal);
             }
 
             Pay(player, Buildings.EffectiveCost(building, discount));
@@ -183,7 +362,7 @@ namespace Hexwex.Core
             hex.Workers = isStaffed ? Population.WorkersPerBuilding : 0;
             if (!isStaffed)
             {
-                Notice?.Invoke("«" + building.Label + "» не работает: нет свободных жителей");
+                Tell(playerId, "«" + building.Label + "» не работает: нет свободных жителей");
             }
 
             RaiseChanged();
@@ -193,8 +372,13 @@ namespace Hexwex.Core
 
         public bool Demolish(string hexId)
         {
-            Player player = Human;
-            HexTile hex = player.FindHex(hexId);
+            return Demolish(IslandGen.HumanPlayerId, hexId);
+        }
+
+        public bool Demolish(string playerId, string hexId)
+        {
+            Player player = PersonInPlay(playerId);
+            HexTile hex = player?.FindHex(hexId);
             if (!IsBuildingAllowed || hex == null)
             {
                 return false;
@@ -203,7 +387,7 @@ namespace Hexwex.Core
             string refusal = BuildRules.DemolishRefusal(player, hex);
             if (refusal != null)
             {
-                return Refuse(refusal);
+                return Refuse(playerId, refusal);
             }
 
             BuildRules.Demolish(hex);
@@ -212,30 +396,46 @@ namespace Hexwex.Core
             return true;
         }
 
-        /// <summary>Why the stronghold cannot cleanse soil right now, or <c>null</c> when it can.</summary>
         public string SoilCleanseBlock()
+        {
+            return SoilCleanseBlock(IslandGen.HumanPlayerId);
+        }
+
+        /// <summary>Why the stronghold cannot cleanse soil right now, or <c>null</c> when it can.</summary>
+        public string SoilCleanseBlock(string playerId)
         {
             if (!IsBuildingAllowed)
             {
                 return "Очистка почвы доступна только в фазе строительства";
             }
 
-            return BuildRules.SoilCleanseRefusal(Human, _soilCleansedTurn == Turn);
+            Player player = PersonInPlay(playerId);
+            if (player == null)
+            {
+                return "Вы выбыли из игры";
+            }
+
+            return BuildRules.SoilCleanseRefusal(player, SeatOf(playerId).SoilCleansedTurn == Turn);
+        }
+
+        public bool CleanseSoil(string sacrificeHexId, string purifyHexId)
+        {
+            return CleanseSoil(IslandGen.HumanPlayerId, sacrificeHexId, purifyHexId);
         }
 
         /// <summary>
         /// The stronghold's soil cleansing: one hex leaves the island, and the
         /// toxicity of another drops to 0. It costs no resources and works once per turn.
         /// </summary>
-        public bool CleanseSoil(string sacrificeHexId, string purifyHexId)
+        public bool CleanseSoil(string playerId, string sacrificeHexId, string purifyHexId)
         {
-            string block = SoilCleanseBlock();
+            string block = SoilCleanseBlock(playerId);
             if (block != null)
             {
-                return Refuse(block);
+                return Refuse(playerId, block);
             }
 
-            Player player = Human;
+            Player player = PersonInPlay(playerId);
             HexTile sacrifice = player.FindHex(sacrificeHexId);
             HexTile target = player.FindHex(purifyHexId);
             if (sacrifice == null || target == null)
@@ -246,24 +446,131 @@ namespace Hexwex.Core
             string refusal = BuildRules.SacrificeRefusal(player, sacrifice) ?? BuildRules.PurifyRefusal(target, sacrificeHexId);
             if (refusal != null)
             {
-                return Refuse(refusal);
+                return Refuse(playerId, refusal);
             }
 
             BuildRules.CleanseSoil(player, sacrificeHexId, purifyHexId);
-            _soilCleansedTurn = Turn;
+            SeatOf(playerId).SoilCleansedTurn = Turn;
             RaiseChanged();
 
             return true;
+        }
+
+        public bool SetHexWorkers(string hexId, int count)
+        {
+            return SetHexWorkers(IslandGen.HumanPlayerId, hexId, count);
+        }
+
+        /// <summary>
+        /// Puts <paramref name="count"/> workers into the building on the hex, or
+        /// takes them out. People move between idle, the army and the buildings only
+        /// in the build phase: the tax phase has already rolled the dice of the
+        /// working buildings, and the clear phase has already fielded the army.
+        /// </summary>
+        public bool SetHexWorkers(string playerId, string hexId, int count)
+        {
+            Player player = PersonInPlay(playerId);
+            if (Outcome != null || Stage != GameStage.Play || player == null)
+            {
+                return false;
+            }
+
+            if (!IsBuildingAllowed)
+            {
+                return Refuse(playerId, PopulationPhaseNotice);
+            }
+
+            string refusal = Population.StaffRefusal(player, hexId, count);
+            if (refusal != null)
+            {
+                return Refuse(playerId, refusal);
+            }
+
+            Population.SetStaff(player, hexId, count);
+            RaiseChanged();
+
+            return true;
+        }
+
+        public bool ChangeArmy(int delta)
+        {
+            return ChangeArmy(IslandGen.HumanPlayerId, delta);
+        }
+
+        /// <summary>Moves <paramref name="delta"/> idle people into the army, or soldiers back to idle when it is negative.</summary>
+        public bool ChangeArmy(string playerId, int delta)
+        {
+            Player player = PersonInPlay(playerId);
+            if (Outcome != null || Stage != GameStage.Play || player == null)
+            {
+                return false;
+            }
+
+            if (!IsBuildingAllowed)
+            {
+                return Refuse(playerId, PopulationPhaseNotice);
+            }
+
+            if (delta > 0 && Population.Of(player).Idle <= 0)
+            {
+                return Refuse(playerId, "Нет свободных жителей");
+            }
+
+            Population.SetArmySize(player, player.Army + delta);
+            RaiseChanged();
+
+            return true;
+        }
+
+        public bool Research(TechId techId)
+        {
+            return Research(IslandGen.HumanPlayerId, techId);
+        }
+
+        /// <summary>Science buys technologies. Nothing else spends it.</summary>
+        public bool Research(string playerId, TechId techId)
+        {
+            Player player = PersonInPlay(playerId);
+            if (Outcome != null || player == null)
+            {
+                return false;
+            }
+
+            Tech tech = Techs.Get(techId);
+            if (!Techs.IsAvailable(tech, player.Researched))
+            {
+                return Refuse(playerId, "«" + tech.Label + "» пока недоступна");
+            }
+
+            if (player.Resources[ResourceId.Science] < tech.Cost)
+            {
+                return Refuse(playerId, "Не хватает науки на «" + tech.Label + "»: нужно " + tech.Cost + " науки");
+            }
+
+            player.Researched.Add(tech.Id);
+            player.Techs += 1;
+            player.Resources[ResourceId.Science] -= tech.Cost;
+            RaiseChanged();
+
+            return true;
+        }
+
+        /* ---------- the tax phase ---------- */
+
+        public bool PickTaxFace(string hexId, int faceIndex)
+        {
+            return PickTaxFace(IslandGen.HumanPlayerId, hexId, faceIndex);
         }
 
         /// <summary>
         /// Makes a face the one the building pays. Nothing is paid and no power
         /// leaves the pool here: the plan remembers the choice until the phase ends.
         /// </summary>
-        public bool PickTaxFace(string hexId, int faceIndex)
+        public bool PickTaxFace(string playerId, string hexId, int faceIndex)
         {
-            TaxPlan plan = HumanTaxPlan;
-            if (!IsTaxOpen || plan == null)
+            Player player = PersonInPlay(playerId);
+            TaxPlan plan = TaxPlanOf(playerId);
+            if (!IsTaxOpen || plan == null || player == null)
             {
                 return false;
             }
@@ -274,10 +581,10 @@ namespace Hexwex.Core
                 return true;
             }
 
-            string refusal = plan.PickRefusal(Human, hexId, faceIndex);
+            string refusal = plan.PickRefusal(player, hexId, faceIndex);
             if (refusal != null)
             {
-                return Refuse(refusal);
+                return Refuse(playerId, refusal);
             }
 
             plan.Pick(hexId, faceIndex);
@@ -286,184 +593,385 @@ namespace Hexwex.Core
             return true;
         }
 
-        private const string PopulationPhaseNotice = "Жителей можно перераспределять только в фазе строительства";
+        /* ---------- the scout phase ---------- */
 
-        /// <summary>
-        /// Puts <paramref name="count"/> workers into the building on the hex, or
-        /// takes them out. People move between idle, the army and the buildings only
-        /// in the build phase: the tax phase has already rolled the dice of the
-        /// working buildings, and the clear phase has already fielded the army.
-        /// </summary>
-        public bool SetHexWorkers(string hexId, int count)
+        public bool Scout(string cellId)
         {
-            if (Outcome != null || Stage != GameStage.Play)
+            return Scout(IslandGen.HumanPlayerId, cellId);
+        }
+
+        /// <summary>Spends scouting on one frontier cell and reveals what is in it.</summary>
+        public bool Scout(string playerId, string cellId)
+        {
+            Player player = PersonInPlay(playerId);
+            if (!IsExplorationOpen || player == null)
             {
                 return false;
             }
 
-            if (!IsBuildingAllowed)
+            ScoutCheck check = WorldRules.CheckScout(World, player.CellId, cellId, player.Resources[ResourceId.Scouting]);
+            if (!check.Ok)
             {
-                return Refuse(PopulationPhaseNotice);
+                return Refuse(playerId, check.Refusal);
             }
 
-            string refusal = Population.StaffRefusal(Human, hexId, count);
+            World.Get(cellId).Revealed = true;
+            player.Resources[ResourceId.Scouting] -= check.Cost;
+            RaiseChanged();
+
+            return true;
+        }
+
+        public bool MoveIsland(string cellId)
+        {
+            return MoveIsland(IslandGen.HumanPlayerId, cellId);
+        }
+
+        /// <summary>One flight per turn, and only to a free cell that touches the current one. Two people cannot take the same cell: the first one there has it.</summary>
+        public bool MoveIsland(string playerId, string cellId)
+        {
+            Player player = PersonInPlay(playerId);
+            if (!IsExplorationOpen || player == null)
+            {
+                return false;
+            }
+
+            Seat seat = SeatOf(playerId);
+            string refusal = WorldRules.MoveRefusal(World, player.CellId, cellId, seat.MovedThisTurn);
             if (refusal != null)
             {
-                return Refuse(refusal);
+                return Refuse(playerId, refusal);
             }
 
-            Population.SetStaff(Human, hexId, count);
+            WorldCell target = World.Get(cellId);
+            World.Get(player.CellId).OwnerId = null;
+            target.OwnerId = player.Id;
+            target.Revealed = true;
+            // Flying into an island cell wakes its wild islands for the cleanup.
+            target.Activated = target.Activated || target.Kind == CellKind.Island;
+            player.CellId = cellId;
+            seat.MovedThisTurn = true;
             RaiseChanged();
 
             return true;
         }
 
-        /// <summary>Moves <paramref name="delta"/> idle people into the army, or soldiers back to idle when it is negative.</summary>
-        public bool ChangeArmy(int delta)
+        /* ---------- the clear phase ---------- */
+
+        public void StepBattle(int ticks)
         {
-            if (Outcome != null || Stage != GameStage.Play)
-            {
-                return false;
-            }
-
-            if (!IsBuildingAllowed)
-            {
-                return Refuse(PopulationPhaseNotice);
-            }
-
-            Player player = Human;
-            if (delta > 0 && Population.Of(player).Idle <= 0)
-            {
-                return Refuse("Нет свободных жителей");
-            }
-
-            Population.SetArmySize(player, player.Army + delta);
-            RaiseChanged();
-
-            return true;
+            StepBattle(IslandGen.HumanPlayerId, ticks);
         }
 
-        /// <summary>Science buys technologies. Nothing else spends it.</summary>
-        public bool Research(TechId techId)
+        /// <summary>
+        /// Runs whole ticks of that person's battle. The view owns the frame loop and
+        /// asks for them. The result is taken the moment the level ends.
+        /// </summary>
+        public void StepBattle(string playerId, int ticks)
         {
-            if (Outcome != null)
+            Seat seat = SeatOf(playerId);
+            if (seat == null || seat.Battle == null)
+            {
+                return;
+            }
+
+            for (int index = 0; index < ticks && seat.Battle.Status == SimStatus.Running; index += 1)
+            {
+                seat.Battle.Step();
+            }
+
+            if (seat.Battle.Status != SimStatus.Running && seat.BattleResult == null)
+            {
+                seat.BattleResult = seat.Battle.Result();
+                RaiseChanged();
+            }
+        }
+
+        public bool CastShatter(int islandIndex, int hexIndex)
+        {
+            return CastShatter(IslandGen.HumanPlayerId, islandIndex, hexIndex);
+        }
+
+        /// <summary>Casts the battle's skill at a hex. A refused cast says why.</summary>
+        public bool CastShatter(string playerId, int islandIndex, int hexIndex)
+        {
+            Seat seat = SeatOf(playerId);
+            if (seat == null || seat.Battle == null)
             {
                 return false;
             }
 
-            Player player = Human;
-            Tech tech = Techs.Get(techId);
-            if (!Techs.IsAvailable(tech, Researched))
+            string refusal = seat.Battle.CastShatter(islandIndex, hexIndex);
+
+            return refusal == null || Refuse(playerId, refusal);
+        }
+
+        /// <summary>
+        /// Ends that person's battle with a result fought elsewhere: in a game over
+        /// the network only the person who fought runs the level, and the others
+        /// take its result. The phase then ends for that person as
+        /// <see cref="EndPhase(string)"/> ends it.
+        /// </summary>
+        public bool EndBattle(string playerId, CleanupResult result)
+        {
+            Seat seat = SeatOf(playerId);
+            if (PersonInPlay(playerId) == null || Phase != Phase.Clear || seat.Battle == null || result == null)
             {
-                return Refuse("«" + tech.Label + "» пока недоступна");
+                return false;
             }
 
-            if (player.Resources[ResourceId.Science] < tech.Cost)
+            seat.BattleResult = result;
+
+            return EndPhase(playerId);
+        }
+
+        /// <summary>
+        /// That person leaves the game: their island stays where it is, out of play,
+        /// and the phases stop waiting for them. Once nobody is left the game ends.
+        /// </summary>
+        public bool Resign(string playerId)
+        {
+            Player player = PersonInPlay(playerId);
+            if (player == null || Outcome != null)
             {
-                return Refuse("Не хватает науки на «" + tech.Label + "»: нужно " + tech.Cost + " науки");
+                return false;
             }
 
-            Researched.Add(tech.Id);
-            player.Techs += 1;
-            player.Resources[ResourceId.Science] -= tech.Cost;
+            player.Eliminated = true;
+            player.EliminatedBy = GameOutcomeReason.Left;
+            Seat seat = SeatOf(playerId);
+            seat.Battle = null;
+            seat.BattleResult = null;
+            seat.IsReady = false;
+            Tell(null, player.Nickname + " покидает игру");
+
+            bool anyoneLeft = HumanIds.Exists(IsInPlay);
+            if (!anyoneLeft)
+            {
+                // The last person has gone: the game is over for everyone.
+                Outcome = new GameOutcome { Kind = GameOutcomeKind.Defeat, Reason = GameOutcomeReason.Left, WinnerIds = new List<string>(), Turn = Turn };
+                foreach (string id in HumanIds)
+                {
+                    Outcome.Reasons[id] = PlayerOf(id).EliminatedBy ?? GameOutcomeReason.Left;
+                }
+
+                Outcome.Reason = Outcome.Reasons[HumanIds[0]];
+            }
+            else if (Stage == GameStage.Play && WaitingFor().Count == 0)
+            {
+                Advance();
+            }
+
             RaiseChanged();
 
             return true;
         }
 
         /// <summary>
-        /// The end-turn button. Ending the build phase opens the tax phase with
-        /// every die rolled. Ending the tax phase pays every player, spins the
-        /// slots and starts the next turn.
+        /// A number for the whole state that a turn can change: every player's island,
+        /// pool and standing, the world's cells, the turn and the phase. Two copies of
+        /// one game that agree on it are the same game. The peers of a network game
+        /// compare it to catch one that has drifted.
         /// </summary>
+        public uint Checksum()
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+
+                void Mix(int value)
+                {
+                    hash = (hash ^ (uint)value) * 16777619;
+                }
+
+                void MixText(string text)
+                {
+                    foreach (char letter in text ?? "")
+                    {
+                        Mix(letter);
+                    }
+
+                    Mix(-1);
+                }
+
+                Mix(Turn);
+                Mix((int)Phase);
+                Mix((int)Stage);
+                foreach (Player player in Players)
+                {
+                    MixText(player.Id);
+                    MixText(player.CellId);
+                    MixText(player.StrongholdHexId);
+                    Mix(player.Army);
+                    Mix(player.Techs);
+                    Mix(player.ToxicMeter);
+                    Mix(player.BossSlain ? 1 : 0);
+                    Mix(player.Eliminated ? 1 : 0);
+                    foreach (ResourceId id in Enum.GetValues(typeof(ResourceId)))
+                    {
+                        Mix(player.Resources[id]);
+                    }
+
+                    foreach (TechId tech in player.Researched)
+                    {
+                        Mix((int)tech);
+                    }
+
+                    foreach (HexTile hex in player.Hexes)
+                    {
+                        MixText(hex.Id);
+                        Mix((int)hex.Biome);
+                        Mix(hex.Building.HasValue ? (int)hex.Building.Value : -1);
+                        Mix(hex.Toxicity);
+                        Mix(hex.Workers);
+                        Mix(hex.DamagedKind.HasValue ? (int)hex.DamagedKind.Value : -1);
+                        Mix(hex.DamagedHp);
+                    }
+                }
+
+                foreach (WorldCell cell in World.Cells)
+                {
+                    Mix(cell.IslandCount);
+                    Mix(cell.ToxicTrail);
+                    Mix((cell.Revealed ? 1 : 0) | (cell.Activated ? 2 : 0) | (cell.Cleared ? 4 : 0));
+                    MixText(cell.OwnerId);
+                }
+
+                return hash;
+            }
+        }
+
+        /* ---------- the end of a phase ---------- */
+
         public void EndPhase()
         {
-            if (Stage != GameStage.Play || Outcome != null)
+            EndPhase(IslandGen.HumanPlayerId);
+        }
+
+        /// <summary>
+        /// The end-turn button of that person. It makes them ready; once every
+        /// person still in the game is ready the phase moves on. Ending the build
+        /// phase opens the tax phase with every die rolled. Ending the tax phase
+        /// pays every player and spins the slots. Ending the scout phase settles the
+        /// flights and starts the battles; ending a battle hands its result back.
+        /// </summary>
+        public bool EndPhase(string playerId)
+        {
+            Player player = PersonInPlay(playerId);
+            if (Stage != GameStage.Play || Outcome != null || player == null)
             {
-                return;
+                return false;
             }
 
-            if (Phase == Phase.Build)
-            {
-                foreach (Player rival in ActiveRivals())
-                {
-                    PlayRivalBuild(rival);
-                }
-
-                // A converter built this turn wins at once.
-                if (!ConcludeIfGameOver())
-                {
-                    Phase = Phase.Tax;
-                    StartTaxPhase();
-                }
-
-                RaiseChanged();
-
-                return;
-            }
-
-            if (Phase == Phase.Tax)
-            {
-                CollectTaxes();
-                // The scout phase opens: nothing is spent yet, and no flight has been made.
-                Phase = Phase.Scout;
-                MovedThisTurn = false;
-                LastTrailEvent = null;
-                RaiseChanged();
-
-                return;
-            }
-
-            HashSet<string> ruinedNow = null;
-
-            if (Phase == Phase.Scout)
-            {
-                foreach (Player rival in ActiveRivals())
-                {
-                    PlayRivalScout(rival);
-                }
-
-                // An island that did not fly leaves its toxicity in the cell it sat in.
-                SettleExploration();
-                Phase = Phase.Clear;
-
-                foreach (Player rival in ActiveRivals())
-                {
-                    PlayRivalClear(rival);
-                }
-
-                // A cell with no wild islands has nothing to clear: the turn ends at once.
-                if (WorldRules.PendingIslands(World.Get(Human.CellId), Human) > 0)
-                {
-                    EnterClearing();
-                    RaiseChanged();
-
-                    return;
-                }
-            }
-            else if (Phase == Phase.Clear)
+            Seat seat = SeatOf(playerId);
+            if (Phase == Phase.Clear && seat.Battle != null)
             {
                 // The level has to end before the turn can: the way out is through the fog.
-                if (Battle != null && Battle.Status == SimStatus.Running)
+                if (seat.Battle.Status == SimStatus.Running && seat.BattleResult == null)
                 {
-                    Refuse("Бой ещё идёт: зачистите острова или уведите остров в туман");
-
-                    return;
+                    return Refuse(playerId, "Бой ещё идёт: зачистите острова или уведите остров в туман");
                 }
 
-                ruinedNow = FinishClearing();
+                seat.RuinedNow = FinishClearing(player);
             }
 
-            FinishTurn(ruinedNow);
+            seat.IsReady = true;
+            if (WaitingFor().Count == 0)
+            {
+                Advance();
+            }
+
             RaiseChanged();
+
+            return true;
+        }
+
+        /// <summary>Every person is ready: the bots play their part and the next phase opens.</summary>
+        private void Advance()
+        {
+            foreach (Seat seat in _seats.Values)
+            {
+                seat.IsReady = false;
+            }
+
+            switch (Phase)
+            {
+                case Phase.Build:
+                    foreach (Player rival in ActiveRivals())
+                    {
+                        PlayRivalBuild(rival);
+                    }
+
+                    // A converter built this turn wins at once.
+                    if (!ConcludeIfGameOver())
+                    {
+                        Phase = Phase.Tax;
+                        StartTaxPhase();
+                    }
+
+                    return;
+                case Phase.Tax:
+                    CollectTaxes();
+                    // The scout phase opens: nothing is spent yet, and no flight has been made.
+                    Phase = Phase.Scout;
+                    foreach (Seat seat in _seats.Values)
+                    {
+                        seat.MovedThisTurn = false;
+                        seat.LastTrailEvent = null;
+                    }
+
+                    return;
+                case Phase.Scout:
+                    foreach (Player rival in ActiveRivals())
+                    {
+                        PlayRivalScout(rival);
+                    }
+
+                    // An island that did not fly leaves its toxicity in the cell it sat in.
+                    foreach (Player person in PeopleInPlay())
+                    {
+                        SettleExploration(person);
+                    }
+
+                    Phase = Phase.Clear;
+
+                    foreach (Player rival in ActiveRivals())
+                    {
+                        PlayRivalClear(rival);
+                    }
+
+                    // A cell with no wild islands has nothing to clear: that person is done at once.
+                    foreach (Player person in PeopleInPlay())
+                    {
+                        if (WorldRules.PendingIslands(World.Get(person.CellId), person) > 0)
+                        {
+                            EnterClearing(person);
+                        }
+                        else
+                        {
+                            SeatOf(person.Id).IsReady = true;
+                        }
+                    }
+
+                    if (WaitingFor().Count == 0)
+                    {
+                        FinishTurn();
+                    }
+
+                    return;
+                default:
+                    FinishTurn();
+
+                    return;
+            }
         }
 
         /// <summary>Builds the level from the cell the island is over and levies the army.</summary>
-        private void EnterClearing()
+        private void EnterClearing(Player player)
         {
-            Player player = Human;
+            Seat seat = SeatOf(player.Id);
             WorldCell cell = World.Get(player.CellId);
-            Rng rng = Rng.FromText(Nickname + ":cleanup:" + Turn);
+            Rng rng = Rng.FromText(SeedOf(player, ":cleanup:" + Turn));
             // Only the people in the army go to battle. The idle and the workers stay home.
             // Every soldier is a militiaman: the stronghold recruits nothing else.
             List<Unit> roster = Units.BuildRoster(player.Army);
@@ -480,44 +988,8 @@ namespace Hexwex.Core
                 },
                 rng);
 
-            BattleResult = null;
-            Battle = CleanupSim.Create(level, Rng.HashSeed(Nickname + ":cleanup-sim:" + Turn));
-        }
-
-        /// <summary>
-        /// Runs whole ticks of the battle. The view owns the frame loop and asks for
-        /// them. The result is taken the moment the level ends.
-        /// </summary>
-        public void StepBattle(int ticks)
-        {
-            if (Battle == null)
-            {
-                return;
-            }
-
-            for (int index = 0; index < ticks && Battle.Status == SimStatus.Running; index += 1)
-            {
-                Battle.Step();
-            }
-
-            if (Battle.Status != SimStatus.Running && BattleResult == null)
-            {
-                BattleResult = Battle.Result();
-                RaiseChanged();
-            }
-        }
-
-        /// <summary>Casts the battle's skill at a hex. A refused cast says why.</summary>
-        public bool CastShatter(int islandIndex, int hexIndex)
-        {
-            if (Battle == null)
-            {
-                return false;
-            }
-
-            string refusal = Battle.CastShatter(islandIndex, hexIndex);
-
-            return refusal == null || Refuse(refusal);
+            seat.BattleResult = null;
+            seat.Battle = CleanupSim.Create(level, Rng.HashSeed(SeedOf(player, ":cleanup-sim:" + Turn)));
         }
 
         /// <summary>
@@ -527,17 +999,17 @@ namespace Hexwex.Core
         /// still stand. Returns the strongholds ruined in this battle, which skip
         /// this turn's repair.
         /// </summary>
-        private HashSet<string> FinishClearing()
+        private HashSet<string> FinishClearing(Player player)
         {
+            Seat seat = SeatOf(player.Id);
             HashSet<string> ruinedNow = new HashSet<string>();
-            if (Battle == null)
+            if (seat.Battle == null)
             {
                 return ruinedNow;
             }
 
-            Battle.Retreat();
-            CleanupResult result = BattleResult ?? Battle.Result();
-            Player player = Human;
+            seat.Battle.Retreat();
+            CleanupResult result = seat.BattleResult ?? seat.Battle.Result();
 
             // A razed building leaves an empty hex; a razed stronghold stays as ruins at 0 hp.
             foreach (StructureResult entry in result.Structures)
@@ -595,12 +1067,12 @@ namespace Hexwex.Core
                         player.Techs += 1;
                     }
 
-                    if (!Researched.Contains(Techs.BossTechId))
+                    if (!player.Researched.Contains(Techs.BossTechId))
                     {
-                        Researched.Add(Techs.BossTechId);
+                        player.Researched.Add(Techs.BossTechId);
                     }
 
-                    Notice?.Invoke("Повелитель Мора повержен! Открыт «Центральный конвертер»");
+                    Tell(player.Id, "Повелитель Мора повержен! Открыт «Центральный конвертер»");
                 }
             }
             else if (cell != null && cell.Kind == CellKind.Island && result.TotalIslands > 0)
@@ -610,77 +1082,22 @@ namespace Hexwex.Core
                 cell.Cleared = standing == 0;
             }
 
-            LastBattleResult = result;
-            Battle = null;
-            BattleResult = null;
+            seat.LastBattleResult = result;
+            seat.Battle = null;
+            seat.BattleResult = null;
 
             return ruinedNow;
-        }
-
-        public bool IsExplorationOpen
-        {
-            get { return Stage == GameStage.Play && Phase == Phase.Scout && Outcome == null; }
-        }
-
-        /// <summary>Spends scouting on one frontier cell and reveals what is in it.</summary>
-        public bool Scout(string cellId)
-        {
-            if (!IsExplorationOpen)
-            {
-                return false;
-            }
-
-            Player player = Human;
-            ScoutCheck check = WorldRules.CheckScout(World, player.CellId, cellId, player.Resources[ResourceId.Scouting]);
-            if (!check.Ok)
-            {
-                return Refuse(check.Refusal);
-            }
-
-            World.Get(cellId).Revealed = true;
-            player.Resources[ResourceId.Scouting] -= check.Cost;
-            RaiseChanged();
-
-            return true;
-        }
-
-        /// <summary>One flight per turn, and only to a free cell that touches the current one.</summary>
-        public bool MoveIsland(string cellId)
-        {
-            if (!IsExplorationOpen)
-            {
-                return false;
-            }
-
-            Player player = Human;
-            string refusal = WorldRules.MoveRefusal(World, player.CellId, cellId, MovedThisTurn);
-            if (refusal != null)
-            {
-                return Refuse(refusal);
-            }
-
-            WorldCell target = World.Get(cellId);
-            World.Get(player.CellId).OwnerId = null;
-            target.OwnerId = player.Id;
-            target.Revealed = true;
-            // Flying into an island cell wakes its wild islands for the cleanup.
-            target.Activated = target.Activated || target.Kind == CellKind.Island;
-            player.CellId = cellId;
-            MovedThisTurn = true;
-            RaiseChanged();
-
-            return true;
         }
 
         /// <summary>
         /// Closing the scout phase. An island that did not fly leaves its whole
         /// toxicity in the cell, and the trail may throw an event back at it.
         /// </summary>
-        private void SettleExploration()
+        private void SettleExploration(Player player)
         {
-            Player player = Human;
+            Seat seat = SeatOf(player.Id);
             WorldCell here = World.Get(player.CellId);
-            if (MovedThisTurn || here == null)
+            if (seat.MovedThisTurn || here == null)
             {
                 return;
             }
@@ -689,14 +1106,14 @@ namespace Hexwex.Core
             // island's own reckoning, the trail is what it leaves in the world.
             here.ToxicTrail += Tax.TotalToxicity(player);
 
-            Rng rng = Rng.FromText(Nickname + ":trail:" + Turn);
+            Rng rng = Rng.FromText(SeedOf(player, ":trail:" + Turn));
             TrailEvent trailEvent = TrailEvents.Roll(here.ToxicTrail, rng);
             if (trailEvent == null)
             {
                 return;
             }
 
-            LastTrailEvent = trailEvent;
+            seat.LastTrailEvent = trailEvent;
             ResourcePool pool = player.Resources;
 
             switch (trailEvent.Id)
@@ -780,7 +1197,7 @@ namespace Hexwex.Core
             RivalAi.FightBoss(rival, Rng.FromText(Nickname + ":boss:" + Turn + ":" + rival.Id));
             if (rival.BossSlain)
             {
-                Notice?.Invoke(rival.Nickname + " победил Повелителя Мора");
+                Tell(null, rival.Nickname + " победил Повелителя Мора");
             }
         }
 
@@ -790,8 +1207,12 @@ namespace Hexwex.Core
         /// </summary>
         private void StartTaxPhase()
         {
-            LastPayouts = null;
-            LastSlotSpin = null;
+            foreach (Seat seat in _seats.Values)
+            {
+                seat.LastPayouts = null;
+                seat.LastSlotSpin = null;
+            }
+
             TaxPlans = new List<TaxPlan>();
 
             // The bots put their idle people to work before the dice roll.
@@ -825,7 +1246,7 @@ namespace Hexwex.Core
 
             foreach (Player rival in ActiveRivals())
             {
-                TaxPlan plan = TaxPlans.Find(candidate => candidate.PlayerId == rival.Id);
+                TaxPlan plan = TaxPlanOf(rival.Id);
                 if (plan != null)
                 {
                     plan.Collect(rival, TechEffects.None);
@@ -833,21 +1254,30 @@ namespace Hexwex.Core
                 }
             }
 
-            Player human = Human;
-            TaxPlan humanPlan = HumanTaxPlan;
-            if (humanPlan != null)
+            foreach (Player person in PeopleInPlay())
             {
-                LastPayouts = humanPlan.Collect(human, Effects);
-                LastSlotSpin = ToxicSlot.Roll(human, Turn, Nickname);
+                TaxPlan plan = TaxPlanOf(person.Id);
+                if (plan != null)
+                {
+                    Seat seat = SeatOf(person.Id);
+                    seat.LastPayouts = plan.Collect(person, EffectsOf(person.Id));
+                    seat.LastSlotSpin = ToxicSlot.Roll(person, Turn, Nickname);
+                }
             }
 
             TaxPlans = null;
         }
 
         /// <summary>The end of a turn: the free repair, the second end-of-game check, the next build phase.</summary>
-        private void FinishTurn(ICollection<string> ruinedNow)
+        private void FinishTurn()
         {
-            StructureHp.RepairIsland(Human, ruinedNow);
+            foreach (Player person in PeopleInPlay())
+            {
+                Seat seat = SeatOf(person.Id);
+                StructureHp.RepairIsland(person, (ICollection<string>)seat.RuinedNow ?? new HashSet<string>());
+                seat.RuinedNow = null;
+                seat.IsReady = false;
+            }
 
             if (ConcludeIfGameOver())
             {
@@ -864,7 +1294,7 @@ namespace Hexwex.Core
         /// </summary>
         private bool ConcludeIfGameOver()
         {
-            Outcome = GameOver.Check(Players, IslandGen.HumanPlayerId, Turn);
+            Outcome = GameOver.Check(Players, HumanIds, Turn);
 
             return Outcome != null;
         }
@@ -894,7 +1324,51 @@ namespace Hexwex.Core
             hex.DamagedKind = null;
             hex.DamagedHp = 0;
             hex.Building = converter.Id;
-            Notice?.Invoke(rival.Nickname + " строит «" + converter.Label + "»");
+            Tell(null, rival.Nickname + " строит «" + converter.Label + "»");
+        }
+
+        /* ---------- helpers ---------- */
+
+        /// <summary>
+        /// The seed of a roll that belongs to one person. Seat 0 keeps the single
+        /// player's seeds, so a single-player game rolls as it always did.
+        /// </summary>
+        private string SeedOf(Player player, string what)
+        {
+            return player.Id == IslandGen.HumanPlayerId ? Nickname + what : Nickname + what + ":" + player.Id;
+        }
+
+        /// <summary>A human seat, or <c>null</c> for a bot or an unknown id.</summary>
+        private Player Person(string playerId)
+        {
+            Player player = PlayerOf(playerId);
+
+            return player != null && player.IsHuman ? player : null;
+        }
+
+        /// <summary>A human seat that has not left the game.</summary>
+        private Player PersonInPlay(string playerId)
+        {
+            Player player = Person(playerId);
+
+            return player != null && !player.Eliminated ? player : null;
+        }
+
+        private bool IsInPlay(string playerId)
+        {
+            return PersonInPlay(playerId) != null;
+        }
+
+        private IEnumerable<Player> PeopleInPlay()
+        {
+            foreach (string id in HumanIds)
+            {
+                Player player = PersonInPlay(id);
+                if (player != null)
+                {
+                    yield return player;
+                }
+            }
         }
 
         private IEnumerable<Player> ActiveRivals()
@@ -915,9 +1389,19 @@ namespace Hexwex.Core
             player.Resources[ResourceId.Hammers] -= cost.Hammers;
         }
 
-        private bool Refuse(string message)
+        /// <summary>A message for one person, or for everyone when the id is <c>null</c>. Seat 0's go to <see cref="Notice"/> too.</summary>
+        private void Tell(string playerId, string message)
         {
-            Notice?.Invoke(message);
+            PlayerNotice?.Invoke(playerId, message);
+            if (playerId == null || playerId == IslandGen.HumanPlayerId)
+            {
+                Notice?.Invoke(message);
+            }
+        }
+
+        private bool Refuse(string playerId, string message)
+        {
+            Tell(playerId, message);
 
             return false;
         }
