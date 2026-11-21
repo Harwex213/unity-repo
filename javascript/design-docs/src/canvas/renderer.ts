@@ -1,4 +1,6 @@
+import { recordTextRuns } from "./text-layer";
 import type { TCamera } from "../core/camera";
+import type { TTextRun } from "./text-layer";
 import type { TDocument } from "../core/types";
 
 // Grid lines closer than this many CSS pixels are not drawn.
@@ -47,10 +49,11 @@ const drawGrid = (ctx: CanvasRenderingContext2D, camera: TCamera, width: number,
 
 // The canvas backing store follows the element size and devicePixelRatio,
 // so lines and text stay sharp at any zoom.
-const renderFrame = (canvas: HTMLCanvasElement, camera: TCamera, doc: TDocument | null) => {
+// The function returns the text runs of the document for the text layer.
+const renderFrame = (canvas: HTMLCanvasElement, camera: TCamera, doc: TDocument | null): TTextRun[] => {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    return;
+    return [];
   }
 
   const dpr = window.devicePixelRatio || 1;
@@ -69,14 +72,15 @@ const renderFrame = (canvas: HTMLCanvasElement, camera: TCamera, doc: TDocument 
   drawGrid(ctx, camera, width, height);
 
   if (!doc) {
-    return;
+    return [];
   }
 
   ctx.save();
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);
-  doc.draw(ctx);
+  const runs = recordTextRuns(ctx, () => doc.draw(ctx));
   ctx.restore();
+  return runs;
 };
 
 export { renderFrame };

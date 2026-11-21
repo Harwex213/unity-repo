@@ -1,5 +1,5 @@
 import { drawImageContain } from "../../kit/image";
-import { PALETTE } from "../../kit/palette";
+import { PALETTE } from "./palette";
 import { cellCenter, drawSphere, traceCell } from "./globe";
 import type { TPoint, TRect } from "../../core/types";
 import type { TImageAsset } from "../../kit/image";

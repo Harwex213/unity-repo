@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fitRect, zoomAt } from "../../core/camera";
 import { renderFrame } from "../../canvas/renderer";
+import { createTextLayer } from "../../canvas/text-layer";
 import { attachViewportInput } from "../../canvas/viewport-input";
-import type { FC } from "react";
+import type { FC, MouseEvent } from "react";
+import type { TTextLayer } from "../../canvas/text-layer";
 import type { TCamera } from "../../core/camera";
-import type { TDocument } from "../../core/types";
+import type { TDocument, TRect } from "../../core/types";
 
 type TCanvasViewProps = {
   doc: TDocument | null;
+  // The rect to show when the document opens. Null shows the whole document.
+  view: TRect | null;
 };
 
 const BUTTON_ZOOM_FACTOR = 1.25;
@@ -15,8 +19,10 @@ const BUTTON_ZOOM_FACTOR = 1.25;
 // The camera lives in a ref. Input changes it many times per frame,
 // and a React state update per event would re-render the tree too often.
 // Only the zoom label goes through React state.
-const CanvasView: FC<TCanvasViewProps> = ({ doc }) => {
+const CanvasView: FC<TCanvasViewProps> = ({ doc, view }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerElementRef = useRef<HTMLDivElement>(null);
+  const textLayerRef = useRef<TTextLayer | null>(null);
   const cameraRef = useRef<TCamera>({ x: 0, y: 0, scale: 1 });
   const docRef = useRef(doc);
   const frameRef = useRef(0);
@@ -30,7 +36,8 @@ const CanvasView: FC<TCanvasViewProps> = ({ doc }) => {
       frameRef.current = 0;
       const canvas = canvasRef.current;
       if (canvas) {
-        renderFrame(canvas, cameraRef.current, docRef.current);
+        const runs = renderFrame(canvas, cameraRef.current, docRef.current);
+        textLayerRef.current?.update(runs, cameraRef.current);
         setScale(cameraRef.current.scale);
       }
     });
@@ -60,12 +67,23 @@ const CanvasView: FC<TCanvasViewProps> = ({ doc }) => {
     }
   };
 
-  // Input listeners, resize and theme changes.
+  // A double click selects the text block under the cursor.
+  const selectTextAt = (event: MouseEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    textLayerRef.current?.selectAt(point, cameraRef.current);
+  };
+
+  // Input listeners, the text layer, resize and theme changes.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) {
+    const textLayerElement = textLayerElementRef.current;
+    if (!canvas || !textLayerElement) {
       return;
     }
+    const textLayer = createTextLayer(textLayerElement);
+    textLayerRef.current = textLayer;
+    requestRender();
     const detachInput = attachViewportInput(canvas, {
       getCamera: () => cameraRef.current,
       setCamera,
@@ -77,6 +95,8 @@ const CanvasView: FC<TCanvasViewProps> = ({ doc }) => {
 
     return () => {
       detachInput();
+      textLayer.destroy();
+      textLayerRef.current = null;
       resizeObserver.disconnect();
       colorScheme.removeEventListener("change", requestRender);
       cancelAnimationFrame(frameRef.current);
@@ -91,9 +111,20 @@ const CanvasView: FC<TCanvasViewProps> = ({ doc }) => {
     return doc?.subscribe?.(requestRender);
   }, [doc, fit, requestRender]);
 
+  // A view from the URL zooms to its rect. The effect runs after the fit above.
+  const viewKey = view ? `${view.x},${view.y},${view.width},${view.height}` : "";
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas && view) {
+      setCamera(fitRect(view, canvas.clientWidth, canvas.clientHeight));
+    }
+    // `viewKey` stands for `view`: a new object with the same rect must not move the camera.
+  }, [doc, viewKey, setCamera]);
+
   return (
     <div className="canvas-view">
-      <canvas ref={canvasRef} className="canvas" onDoubleClick={fit} />
+      <canvas ref={canvasRef} className="canvas" onDoubleClick={selectTextAt} />
+      <div ref={textLayerElementRef} className="text-layer" />
       <div className="zoom-controls">
         <button type="button" onClick={() => zoomAtCenter(1 / BUTTON_ZOOM_FACTOR)} aria-label="Отдалить">
           −

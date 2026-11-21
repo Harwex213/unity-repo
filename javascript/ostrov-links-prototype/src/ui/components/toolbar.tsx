@@ -6,30 +6,33 @@ import type {
   TExportLinksAction,
   TImportLinksAction,
   TResetLinksAction,
-  TSetViewAction,
+  TSetSectionAction,
 } from "../../domain/registry";
-import type { TView } from "../../store/ui-state";
+import type { TSection } from "../../store/ui-state";
 
 type TToolbarProps = {
   registry: {
     exportLinksAction: TExportLinksAction;
     importLinksAction: TImportLinksAction;
     resetLinksAction: TResetLinksAction;
-    setViewAction: TSetViewAction;
+    setSectionAction: TSetSectionAction;
   };
 };
 
-const VIEWS: readonly { id: TView; label: string }[] = [
-  { id: "building", label: "Здание" },
-  { id: "matrix", label: "Матрица" },
+const SECTIONS: readonly { id: TSection; label: string }[] = [
+  { id: "buildings", label: "Здания" },
+  { id: "technologies", label: "Технологии" },
+  { id: "negative-events", label: "Негативные ивенты" },
+  { id: "units", label: "Юниты" },
+  { id: "enemies", label: "Враги" },
+  { id: "artifacts", label: "Артефакты" },
 ];
 
 const Toolbar: FC<TToolbarProps> = ({ registry }) => {
   useSignals();
   const store = useStore();
-  const view = store.ui.view.value;
+  const section = store.ui.section.value;
   const notice = store.ui.notice.value;
-  const issueCount = store.derived.issues.value.length;
   const isChanged = store.derived.isChanged.value;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,17 +41,18 @@ const Toolbar: FC<TToolbarProps> = ({ registry }) => {
       <div className="toolbar-title">Ostrov · связи</div>
 
       <div className="tabs" role="tablist">
-        {VIEWS.map((item) => (
+        {SECTIONS.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
-            aria-selected={item.id === view}
-            className={item.id === view ? "tab tab--active" : "tab"}
-            onClick={() => registry.setViewAction(item.id)}
+            aria-selected={item.id === section}
+            className={item.id === section ? "tab tab--active" : "tab"}
+            onClick={() => registry.setSectionAction(item.id)}
           >
-            {item.label}
-            {item.id === "matrix" && issueCount > 0 ? <span className="badge">{issueCount}</span> : null}
+            <span className="tab-label" data-label={item.label}>
+              {item.label}
+            </span>
           </button>
         ))}
       </div>

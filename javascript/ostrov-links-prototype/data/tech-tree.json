@@ -1,0 +1,37 @@
+{
+  "format": "ostrov-board",
+  "version": 1,
+  "nodes": {
+    "technology:survival": { "x": -75, "y": -65 },
+    "technology:agriculture": { "x": -75, "y": -295 },
+    "technology:settlement": { "x": -294, "y": -136 },
+    "technology:logging": { "x": 60, "y": 121 },
+    "technology:mining": { "x": 144, "y": -136 },
+    "technology:irrigation": { "x": -75, "y": -525 },
+    "technology:mechanics": { "x": 362, "y": -207 },
+    "technology:smithing": { "x": 195, "y": 307 },
+    "technology:education": { "x": -512, "y": -207 },
+    "technology:fortification": { "x": -210, "y": 121 },
+    "technology:electrification": { "x": 581, "y": -278 },
+    "technology:ballistics": { "x": -345, "y": 307 },
+    "technology:quarantine": { "x": -395, "y": -396 },
+    "technology:astronomy": { "x": -731, "y": -278 },
+    "technology:mana_conversion": { "x": 800, "y": -349 }
+  },
+  "edges": [
+    ["technology:agriculture", "technology:survival"],
+    ["technology:agriculture", "technology:irrigation"],
+    ["technology:mining", "technology:survival"],
+    ["technology:mechanics", "technology:mining"],
+    ["technology:electrification", "technology:mechanics"],
+    ["technology:electrification", "technology:mana_conversion"],
+    ["technology:logging", "technology:survival"],
+    ["technology:logging", "technology:smithing"],
+    ["technology:fortification", "technology:survival"],
+    ["technology:ballistics", "technology:fortification"],
+    ["technology:settlement", "technology:survival"],
+    ["technology:education", "technology:settlement"],
+    ["technology:astronomy", "technology:education"],
+    ["technology:quarantine", "technology:settlement"]
+  ]
+}

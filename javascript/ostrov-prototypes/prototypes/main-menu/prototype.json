@@ -1,0 +1,6 @@
+{
+  "title": "Главное меню",
+  "description": "Кинематографичная заставка: логотип студии, взрыв планеты, остров и HUD меню",
+  "order": 1,
+  "devServer": { "hot": false, "liveReload": false }
+}

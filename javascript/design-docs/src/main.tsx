@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { DOCUMENTS } from "./documents";
+import { DOCUMENTS } from "./documents/registry";
 import { App } from "./ui/app";
 
 const main = () => {

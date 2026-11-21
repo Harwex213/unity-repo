@@ -2,22 +2,22 @@ import { traceHex } from "../../kit/hex";
 import { createImageAsset } from "../../kit/image";
 import { MONO_FONT_FAMILY, PALETTE } from "../../kit/palette";
 import { drawSheet, drawText } from "../../kit/shapes";
-import badlandsTexture from "../../assets/biomes/badlands.webp";
-import cliffsTexture from "../../assets/biomes/cliffs.webp";
-import craterTexture from "../../assets/biomes/crater.webp";
-import desertTexture from "../../assets/biomes/desert.webp";
-import forrestTexture from "../../assets/biomes/forrest.webp";
-import grasslandTexture from "../../assets/biomes/grassland.webp";
-import hillsTexture from "../../assets/biomes/hills.webp";
-import mountainsTexture from "../../assets/biomes/mountains.webp";
-import plainsTexture from "../../assets/biomes/plains.webp";
-import polarDesertTexture from "../../assets/biomes/polar_desert.webp";
-import rainforestTexture from "../../assets/biomes/rainforest.webp";
-import savannaTexture from "../../assets/biomes/savanna.webp";
-import swampTexture from "../../assets/biomes/swamp.webp";
-import taigaTexture from "../../assets/biomes/taiga.webp";
-import tundraTexture from "../../assets/biomes/tundra.webp";
-import volcanoTexture from "../../assets/biomes/volcano.webp";
+import badlandsTexture from "./assets/badlands.webp";
+import cliffsTexture from "./assets/cliffs.webp";
+import craterTexture from "./assets/crater.webp";
+import desertTexture from "./assets/desert.webp";
+import forrestTexture from "./assets/forrest.webp";
+import grasslandTexture from "./assets/grassland.webp";
+import hillsTexture from "./assets/hills.webp";
+import mountainsTexture from "./assets/mountains.webp";
+import plainsTexture from "./assets/plains.webp";
+import polarDesertTexture from "./assets/polar_desert.webp";
+import rainforestTexture from "./assets/rainforest.webp";
+import savannaTexture from "./assets/savanna.webp";
+import swampTexture from "./assets/swamp.webp";
+import taigaTexture from "./assets/taiga.webp";
+import tundraTexture from "./assets/tundra.webp";
+import volcanoTexture from "./assets/volcano.webp";
 import type { TDocument, TRect } from "../../core/types";
 import type { TImageAsset } from "../../kit/image";
 
@@ -77,6 +77,9 @@ const BIOMES: TBiome[] = [
   biome("cliffs", "Утёсы", cliffsTexture, "#7e8894", "---+"),
 ];
 
+// The background of a table header.
+const HEADER_FILL = "#f1f3f5";
+
 // Layout in world units.
 const MARGIN = 40;
 const TABLE_TOP = 160;
@@ -124,7 +127,7 @@ const LABEL_LINE = 20;
 
 // A header: the code on the first line, the meaning of the code below.
 const drawHeader = (ctx: CanvasRenderingContext2D, rect: TRect, axis: TAxisId, sign: TSign) => {
-  ctx.fillStyle = PALETTE.headerFill;
+  ctx.fillStyle = HEADER_FILL;
   ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
   ctx.strokeStyle = PALETTE.sheetBorder;
   ctx.lineWidth = 1;
@@ -236,7 +239,7 @@ const drawGrid = (ctx: CanvasRenderingContext2D) => {
 const draw = (ctx: CanvasRenderingContext2D) => {
   drawSheet(ctx, SHEET);
 
-  drawText(ctx, "Биомы гексов", MARGIN, 40, { size: 36, weight: 700 });
+  drawText(ctx, "Ostrov 2 - Biomes", MARGIN, 40, { size: 36, weight: 700 });
   drawText(
     ctx,
     "Биом — сочетание четырёх свойств. У каждого свойства два значения: «+» и «−». Каждое сочетание даёт ровно один биом.",
@@ -252,9 +255,10 @@ const draw = (ctx: CanvasRenderingContext2D) => {
   drawGrid(ctx);
 };
 
-const biomes: TDocument = {
+const doc: TDocument = {
+  order: 2,
   id: "biomes",
-  title: "Биомы гексов",
+  title: "Ostrov 2 - Biomes",
   description: "16 биомов как сочетания R, F, L, U",
   bounds: SHEET,
   draw,
@@ -268,4 +272,4 @@ const biomes: TDocument = {
   },
 };
 
-export { biomes };
+export { doc };

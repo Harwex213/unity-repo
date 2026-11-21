@@ -1,6 +1,7 @@
-import { drawTower } from "../../kit/glyphs";
+import { drawTower } from "./glyphs";
 import { axialToPoint, hatchHex, hexArea, hexCorners, traceHex } from "../../kit/hex";
-import { FONT_FAMILY, PALETTE } from "../../kit/palette";
+import { FONT_FAMILY } from "../../kit/palette";
+import { PALETTE } from "./palette";
 import type { TPoint, TRect } from "../../core/types";
 import type { TAxial } from "../../kit/hex";
 

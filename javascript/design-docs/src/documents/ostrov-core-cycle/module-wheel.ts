@@ -1,5 +1,5 @@
-import { drawHouse } from "../../kit/glyphs";
-import { PALETTE } from "../../kit/palette";
+import { drawHouse } from "./glyphs";
+import { PALETTE } from "./palette";
 import type { TPoint } from "../../core/types";
 
 // The module wheel of a building: a ring of four cells around the building.

@@ -12,14 +12,18 @@ type TBiomeCardProps = {
   onFaceChange: (patch: TFacePatch) => void;
 };
 
-/** One biome for one building: the checkbox allows the stroke, the editor sets the biome face. */
+/**
+ * One biome for one building: the checkbox allows the building, the editor sets the biome face.
+ * A building without a die has no biome face, so the card shows only the checkbox.
+ */
 const BiomeCard: FC<TBiomeCardProps> = ({ biome, building, onToggle, onFaceChange }) => {
   const biomeFace = building.biomeFaces[biome.id];
+  const isAllowed = biomeFace !== undefined;
   const faces = facesOn(building, biome.id);
 
   return (
     <div
-      className={biomeFace ? "biome-card biome-card--allowed" : "biome-card"}
+      className={isAllowed ? "biome-card biome-card--allowed" : "biome-card"}
       style={{ ["--biome-color" as string]: biome.color }}
     >
       <label className="biome-card-head" title={biome.description}>
@@ -28,7 +32,7 @@ const BiomeCard: FC<TBiomeCardProps> = ({ biome, building, onToggle, onFaceChang
           <span>{biome.label}</span>
           <span className="muted biome-id">{biome.id}</span>
         </span>
-        <input type="checkbox" checked={biomeFace !== undefined} onChange={(event) => onToggle(event.target.checked)} />
+        <input type="checkbox" checked={isAllowed} onChange={(event) => onToggle(event.target.checked)} />
       </label>
 
       {biomeFace ? (
@@ -40,7 +44,7 @@ const BiomeCard: FC<TBiomeCardProps> = ({ biome, building, onToggle, onFaceChang
           </div>
         </>
       ) : (
-        <div className="biome-card-summary muted">Строить нельзя</div>
+        <div className="biome-card-summary muted">{isAllowed ? "Строить можно" : "Строить нельзя"}</div>
       )}
     </div>
   );

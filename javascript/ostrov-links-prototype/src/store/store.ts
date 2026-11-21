@@ -1,7 +1,8 @@
 import { computed } from "@preact/signals-react";
 import { createContext, useContext } from "react";
 import { DEFAULT_LINKS } from "../core/buildings";
-import { findIssues, serializeLinks } from "../core/links";
+import { serializeLinks } from "../core/links";
+import { createBoardsState } from "./boards-state";
 import { createLinksState } from "./links-state";
 import { createUiState } from "./ui-state";
 import type { TLinksState } from "./links-state";
@@ -13,7 +14,6 @@ const DEFAULT_SERIALIZED = serializeLinks(DEFAULT_LINKS);
 const createDerived = (links: TLinksState, ui: TUiState) => {
   return {
     selectedBuilding: computed(() => links.links.value[ui.selectedBuildingId.value]),
-    issues: computed(() => findIssues(links.links.value)),
     /** The links differ from the ones copied from the prototype. */
     isChanged: computed(() => serializeLinks(links.links.value) !== DEFAULT_SERIALIZED),
   };
@@ -30,6 +30,7 @@ const createStore = () => {
   return {
     links,
     ui,
+    boards: createBoardsState(),
     derived: createDerived(links, ui),
   };
 };

@@ -11,6 +11,9 @@ const main = () => {
 
   const store = createStore();
   const registry = createRegistry(store);
+  registry.startRouteSyncAction();
+  void registry.loadBoardAction("buildings");
+  void registry.loadBoardAction("technologies");
 
   createRoot(container).render(
     <StoreProvider value={store}>
