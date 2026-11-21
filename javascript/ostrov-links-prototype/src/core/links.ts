@@ -1,6 +1,6 @@
 import { BIOMES, isBiomeId } from "./biomes";
-import { BUILDINGS, face, getBuilding, isBuildingId } from "./buildings";
-import { getResource, isResourceId, RESOURCES } from "./resources";
+import { BUILDINGS, face, getBuilding, hasDie, isBuildingId } from "./buildings";
+import { readResourceId, RESOURCES } from "./resources";
 import type { TBiomeId, TBuildingId, TBuildingLinks, TFace, TLinks, TYieldResourceId } from "./types";
 
 /**
@@ -34,10 +34,11 @@ const setYields = (links: TLinks, buildingId: TBuildingId, resource: TYieldResou
 };
 
 const addBaseFace = (links: TLinks, buildingId: TBuildingId) => {
-  return updateBuilding(links, buildingId, (building) => ({
-    ...building,
-    baseFaces: [...building.baseFaces, face(building.yields, 1, 0)],
-  }));
+  return updateBuilding(links, buildingId, (building) =>
+    building.yields === null
+      ? building
+      : { ...building, baseFaces: [...building.baseFaces, face(building.yields, 1, 0)] },
+  );
 };
 
 const updateBaseFace = (links: TLinks, buildingId: TBuildingId, index: number, patch: TFacePatch) => {
@@ -54,13 +55,18 @@ const removeBaseFace = (links: TLinks, buildingId: TBuildingId, index: number) =
   }));
 };
 
-/** A newly allowed biome gets a face of the main resource: 1 yield, 0 toxicity. */
+/**
+ * A newly allowed biome gets a face of the main resource: 1 yield, 0 toxicity.
+ * A building without a die gets `null`: the biome allows it and adds no face.
+ */
 const setBiomeAllowed = (links: TLinks, buildingId: TBuildingId, biomeId: TBiomeId, allowed: boolean) => {
   return updateBuilding(links, buildingId, (building) => {
     const biomeFaces = { ...building.biomeFaces };
 
     if (allowed) {
-      biomeFaces[biomeId] = biomeFaces[biomeId] ?? face(building.yields, 1, 0);
+      if (!(biomeId in biomeFaces)) {
+        biomeFaces[biomeId] = building.yields === null ? null : face(building.yields, 1, 0);
+      }
     } else {
       delete biomeFaces[biomeId];
     }
@@ -109,10 +115,6 @@ const allowedBiomes = (building: TBuildingLinks) => {
   return BIOMES.filter((biome) => canBuildOn(building, biome.id));
 };
 
-const buildingsOnBiome = (links: TLinks, biomeId: TBiomeId) => {
-  return BUILDINGS.filter((building) => canBuildOn(links[building.id], biomeId));
-};
-
 /** One resource a building brings: on how many base faces and on how many biomes. */
 type TResourceUse = {
   readonly resource: TYieldResourceId;
@@ -121,42 +123,13 @@ type TResourceUse = {
 };
 
 const resourceUses = (building: TBuildingLinks): readonly TResourceUse[] => {
-  const biomeFaces = Object.values(building.biomeFaces);
+  const biomeFaces = Object.values(building.biomeFaces).filter((item): item is TFace => item !== null);
 
   return RESOURCES.map((resource) => ({
     resource: resource.id,
     baseFaces: building.baseFaces.filter((item) => item.resource === resource.id).length,
     biomes: biomeFaces.filter((item) => item.resource === resource.id).length,
   })).filter((use) => use.baseFaces > 0 || use.biomes > 0);
-};
-
-/** Problems the designer should see. None of them blocks the export. */
-const findIssues = (links: TLinks): readonly string[] => {
-  const issues: string[] = [];
-
-  for (const info of BUILDINGS) {
-    const building = links[info.id];
-
-    if (allowedBiomes(building).length === 0) {
-      issues.push(`«${info.label}» нельзя построить ни на одном биоме.`);
-    }
-
-    if (building.baseFaces.length === 0) {
-      issues.push(`У «${info.label}» нет базовых граней.`);
-    }
-
-    if (!resourceUses(building).some((use) => use.resource === building.yields)) {
-      issues.push(`«${info.label}» не приносит свой основной ресурс «${getResource(building.yields).label}».`);
-    }
-  }
-
-  for (const biome of BIOMES) {
-    if (buildingsOnBiome(links, biome.id).length === 0) {
-      issues.push(`На биоме «${biome.label}» нельзя построить ни одного здания.`);
-    }
-  }
-
-  return issues;
 };
 
 /* Export and import */
@@ -190,7 +163,8 @@ const parseFace = (value: unknown, where: string): TFace => {
     throw new Error(`${where}: грань должна быть объектом.`);
   }
 
-  if (!isResourceId(value.resource)) {
+  const resource = readResourceId(value.resource);
+  if (resource === null) {
     throw new Error(`${where}: неизвестный ресурс ${JSON.stringify(value.resource)}.`);
   }
 
@@ -198,7 +172,7 @@ const parseFace = (value: unknown, where: string): TFace => {
     throw new Error(`${where}: amount и toxicity должны быть целыми числами от 0.`);
   }
 
-  return face(value.resource, value.amount, value.toxicity);
+  return face(resource, value.amount, value.toxicity);
 };
 
 const parseBuilding = (value: unknown, index: number): TBuildingLinks => {
@@ -207,9 +181,33 @@ const parseBuilding = (value: unknown, index: number): TBuildingLinks => {
     throw new Error(`${where}: неизвестное здание.`);
   }
 
-  const label = `${where} (${getBuilding(value.id).label})`;
+  const id = value.id;
+  const label = `${where} (${getBuilding(id).label})`;
 
-  if (!isResourceId(value.yields)) {
+  if (!isRecord(value.biomeFaces)) {
+    throw new Error(`${label}: biomeFaces должен быть объектом.`);
+  }
+
+  for (const biomeId of Object.keys(value.biomeFaces)) {
+    if (!isBiomeId(biomeId)) {
+      throw new Error(`${label}: неизвестный биом ${JSON.stringify(biomeId)}.`);
+    }
+  }
+
+  const biomeIds = Object.keys(value.biomeFaces) as TBiomeId[];
+
+  // A building without a die keeps only the allowed biomes, even if an old file gives it faces.
+  if (!hasDie(id)) {
+    return {
+      id,
+      yields: null,
+      baseFaces: [],
+      biomeFaces: Object.fromEntries(biomeIds.map((biomeId) => [biomeId, null])),
+    };
+  }
+
+  const yields = readResourceId(value.yields);
+  if (yields === null) {
     throw new Error(`${label}: неизвестный основной ресурс ${JSON.stringify(value.yields)}.`);
   }
 
@@ -217,22 +215,14 @@ const parseBuilding = (value: unknown, index: number): TBuildingLinks => {
     throw new Error(`${label}: baseFaces должен быть массивом.`);
   }
 
-  if (!isRecord(value.biomeFaces)) {
-    throw new Error(`${label}: biomeFaces должен быть объектом.`);
-  }
-
   const biomeFaces: Partial<Record<TBiomeId, TFace>> = {};
-  for (const [biomeId, biomeFace] of Object.entries(value.biomeFaces)) {
-    if (!isBiomeId(biomeId)) {
-      throw new Error(`${label}: неизвестный биом ${JSON.stringify(biomeId)}.`);
-    }
-
-    biomeFaces[biomeId] = parseFace(biomeFace, `${label}.biomeFaces.${biomeId}`);
+  for (const biomeId of biomeIds) {
+    biomeFaces[biomeId] = parseFace(value.biomeFaces[biomeId], `${label}.biomeFaces.${biomeId}`);
   }
 
   return {
-    id: value.id,
-    yields: value.yields,
+    id,
+    yields,
     baseFaces: value.baseFaces.map((item, faceIndex) => parseFace(item, `${label}.baseFaces[${faceIndex}]`)),
     biomeFaces,
   };
@@ -275,10 +265,8 @@ export {
   allowedBiomes,
   averageAmount,
   averageToxicity,
-  buildingsOnBiome,
   canBuildOn,
   facesOn,
-  findIssues,
   parseLinks,
   removeBaseFace,
   resourceUses,

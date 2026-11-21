@@ -1,8 +1,9 @@
 import { useSignals } from "@preact/signals-react/runtime";
 import { BIOMES } from "../../core/biomes";
-import { getBuilding } from "../../core/buildings";
+import { getBuilding, ROLE_LABELS } from "../../core/buildings";
 import { allowedBiomes, averageAmount, averageToxicity, resourceUses } from "../../core/links";
 import { getResource, RESOURCES } from "../../core/resources";
+import { technologyFor } from "../../core/technologies";
 import { useStore } from "../../store/store";
 import { formatAverage } from "../format";
 import { BiomeCard } from "./biome-card";
@@ -12,6 +13,7 @@ import type { FC } from "react";
 import type {
   TAddBaseFaceAction,
   TRemoveBaseFaceAction,
+  TSelectTechnologyAction,
   TSetBiomeAllowedAction,
   TSetYieldsAction,
   TUpdateBaseFaceAction,
@@ -23,6 +25,7 @@ type TBuildingEditorProps = {
   registry: {
     addBaseFaceAction: TAddBaseFaceAction;
     removeBaseFaceAction: TRemoveBaseFaceAction;
+    selectTechnologyAction: TSelectTechnologyAction;
     setBiomeAllowedAction: TSetBiomeAllowedAction;
     setYieldsAction: TSetYieldsAction;
     updateBaseFaceAction: TUpdateBaseFaceAction;
@@ -42,6 +45,8 @@ const BuildingEditor: FC<TBuildingEditorProps> = ({ registry }) => {
   const info = getBuilding(building.id);
   const uses = resourceUses(building);
   const allowedCount = allowedBiomes(building).length;
+  const yields = building.yields;
+  const technology = technologyFor(building.id);
 
   return (
     <div className="editor">
@@ -49,96 +54,140 @@ const BuildingEditor: FC<TBuildingEditorProps> = ({ registry }) => {
         <Icon src={info.art} size="l" className="editor-art" />
         <div>
           <h1 className="editor-title">{info.label}</h1>
-          <div className="muted">id: {building.id}</div>
-        </div>
-        <label className="yields-field">
-          <span className="muted">Основной ресурс</span>
-          <span className="yields-select">
-            <Icon src={getResource(building.yields).icon} size="m" />
-            <select
-              value={building.yields}
-              onChange={(event) => registry.setYieldsAction(building.id, event.target.value as TYieldResourceId)}
+          <div className="muted">
+            {ROLE_LABELS[info.role]} · id: {building.id}
+          </div>
+          {technology ? (
+            <button
+              type="button"
+              className="link-button muted"
+              onClick={() => registry.selectTechnologyAction(technology.id)}
             >
-              {RESOURCES.map((resource) => (
-                <option key={resource.id} value={resource.id}>
-                  {resource.label}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
+              Технология: {technology.label} · {technology.science} науки
+            </button>
+          ) : null}
+        </div>
+        {yields === null ? null : (
+          <label className="yields-field">
+            <span className="muted">Основной ресурс</span>
+            <span className="yields-select">
+              <Icon src={getResource(yields).icon} size="m" />
+              <select
+                value={yields}
+                onChange={(event) => registry.setYieldsAction(building.id, event.target.value as TYieldResourceId)}
+              >
+                {RESOURCES.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.label}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </label>
+        )}
       </header>
 
-      <section className="section">
-        <div className="section-head">
-          <h2>Какие ресурсы приносит</h2>
-          <span className="muted">
-            Здание — это кубик. Базовые грани есть на любом биоме, биом добавляет ещё одну грань.
-          </span>
-        </div>
+      {info.rules ? (
+        <section className="section">
+          <div className="section-head">
+            <h2>Особые правила</h2>
+          </div>
+          <ul className="rules-list">
+            {info.rules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-        <div className="uses">
-          {uses.length === 0 ? (
-            <span className="muted">Здание не приносит ни одного ресурса.</span>
-          ) : (
-            uses.map((use) => {
-              const resource = getResource(use.resource);
+      {yields === null ? (
+        <section className="section">
+          <div className="section-head">
+            <h2>Кубика нет</h2>
+            <span className="muted">Здание само не производит ресурсы. Его работа описана в особых правилах.</span>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="section">
+            <div className="section-head">
+              <h2>Какие ресурсы приносит</h2>
+              <span className="muted">
+                Здание — это кубик. Базовые грани есть на любом биоме, биом добавляет ещё одну грань.
+              </span>
+            </div>
 
-              return (
-                <span key={use.resource} className="use-chip">
-                  <Icon src={resource.icon} size="m" />
-                  <span>
-                    <strong>{resource.label}</strong>
-                    <span className="muted">
-                      {" "}
-                      граней: {use.baseFaces} · биомов: {use.biomes}
+            <div className="uses">
+              {uses.length === 0 ? (
+                <span className="muted">Здание не приносит ни одного ресурса.</span>
+              ) : (
+                uses.map((use) => {
+                  const resource = getResource(use.resource);
+
+                  return (
+                    <span key={use.resource} className="use-chip">
+                      <Icon src={resource.icon} size="m" />
+                      <span>
+                        <strong>{resource.label}</strong>
+                        <span className="muted">
+                          {" "}
+                          граней: {use.baseFaces} · биомов: {use.biomes}
+                        </span>
+                      </span>
                     </span>
-                  </span>
-                </span>
-              );
-            })
-          )}
-        </div>
+                  );
+                })
+              )}
+            </div>
 
-        <h3 className="subhead">
-          Базовые грани
-          <span className="muted">
-            {" "}
-            · в среднем {formatAverage(averageAmount(building.baseFaces))} ресурса и{" "}
-            {formatAverage(averageToxicity(building.baseFaces))} токсичности
-          </span>
-        </h3>
-        <ol className="face-list">
-          {building.baseFaces.map((item, index) => (
-            <li key={index} className="face-row">
-              <span className="face-index">{index + 1}</span>
-              <FaceEditor
-                face={item}
-                onChange={(patch) => registry.updateBaseFaceAction(building.id, index, patch)}
-              />
-              <button
-                type="button"
-                className="icon-button"
-                title="Удалить грань"
-                aria-label={`Удалить грань ${index + 1}`}
-                onClick={() => registry.removeBaseFaceAction(building.id, index)}
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ol>
-        <button type="button" className="button" onClick={() => registry.addBaseFaceAction(building.id)}>
-          + Добавить грань
-        </button>
-      </section>
+            <h3 className="subhead">
+              Базовые грани
+              <span className="muted">
+                {" "}
+                · в среднем {formatAverage(averageAmount(building.baseFaces))} ресурса и{" "}
+                {formatAverage(averageToxicity(building.baseFaces))} токсичности
+              </span>
+            </h3>
+            <ol className="face-list">
+              {building.baseFaces.map((item, index) => (
+                <li key={index} className="face-row">
+                  <span className="face-index">{index + 1}</span>
+                  <FaceEditor
+                    face={item}
+                    onChange={(patch) => registry.updateBaseFaceAction(building.id, index, patch)}
+                  />
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Удалить грань"
+                    aria-label={`Удалить грань ${index + 1}`}
+                    onClick={() => registry.removeBaseFaceAction(building.id, index)}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ol>
+            <button type="button" className="button" onClick={() => registry.addBaseFaceAction(building.id)}>
+              + Добавить грань
+            </button>
+          </section>
+        </>
+      )}
 
       <section className="section">
         <div className="section-head">
           <h2>
-            Где можно строить <span className="muted">· {allowedCount} из {BIOMES.length}</span>
+            Где можно строить{" "}
+            <span className="muted">
+              · {allowedCount} из {BIOMES.length}
+            </span>
           </h2>
-          <span className="muted">Отметьте биом, чтобы разрешить стройку, и задайте грань, которую биом добавляет.</span>
+          <span className="muted">
+            {yields === null
+              ? "Отметьте биом, чтобы разрешить стройку."
+              : "Отметьте биом, чтобы разрешить стройку, и задайте грань, которую биом добавляет."}
+          </span>
         </div>
 
         <div className="biome-grid">

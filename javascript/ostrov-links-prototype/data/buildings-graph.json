@@ -1,0 +1,31 @@
+{
+  "format": "ostrov-board",
+  "version": 1,
+  "nodes": {
+    "building:survivors_outpost": { "x": 12, "y": 12 },
+    "building:farm": { "x": 12, "y": 200 },
+    "building:water_tower": { "x": 392, "y": 195 },
+    "building:forge": { "x": 392, "y": 315 },
+    "building:village": { "x": 12, "y": 575 },
+    "building:mine": { "x": 682, "y": 522 },
+    "building:sawmill": { "x": 682, "y": 618 },
+    "building:masons_guild": { "x": 682, "y": 715 },
+    "building:electric_station": { "x": 12, "y": 826 },
+    "building:university": { "x": 565, "y": 1030 },
+    "building:observatory": { "x": 920, "y": 1017 },
+    "building:converter": { "x": 725, "y": 1133 },
+    "building:artillery_tower": { "x": 186, "y": 1454 },
+    "building:barricades": { "x": 201, "y": 1569 },
+    "building:cyberpsycho_ghetto": { "x": 1290, "y": 1250 },
+    "module:greenhouse": { "x": 392, "y": 46 },
+    "module:assembly_shop": { "x": 643, "y": 46 },
+    "module:saw_frame": { "x": 959, "y": 46 },
+    "module:stone_crusher": { "x": 1289, "y": 46 },
+    "module:resonator": { "x": 1666, "y": 514 },
+    "module:dynamo": { "x": 12, "y": 936 },
+    "module:turret": { "x": 572, "y": 1443 },
+    "module:tripwire": { "x": 574, "y": 1573 },
+    "module:hedonistic_paradise": { "x": 1290, "y": 1350 }
+  },
+  "edges": []
+}

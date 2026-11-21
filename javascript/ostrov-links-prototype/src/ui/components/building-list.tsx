@@ -1,5 +1,5 @@
 import { useSignals } from "@preact/signals-react/runtime";
-import { BUILDINGS } from "../../core/buildings";
+import { BUILDINGS, ROLE_LABELS } from "../../core/buildings";
 import { allowedBiomes, resourceUses } from "../../core/links";
 import { useStore } from "../../store/store";
 import { Icon } from "./icon";
@@ -17,7 +17,6 @@ const BuildingList: FC<TBuildingListProps> = ({ registry }) => {
   useSignals();
   const store = useStore();
   const links = store.links.links.value;
-  const view = store.ui.view.value;
   const selectedId = store.ui.selectedBuildingId.value;
 
   return (
@@ -25,7 +24,7 @@ const BuildingList: FC<TBuildingListProps> = ({ registry }) => {
       <div className="sidebar-title">Здания</div>
       {BUILDINGS.map((info) => {
         const building = links[info.id];
-        const isActive = view === "building" && info.id === selectedId;
+        const isActive = info.id === selectedId;
 
         return (
           <button
@@ -39,7 +38,11 @@ const BuildingList: FC<TBuildingListProps> = ({ registry }) => {
             <span className="building-item-text">
               <span className="building-item-label">{info.label}</span>
               <span className="building-item-meta">
-                <ResourceChips uses={resourceUses(building)} />
+                {info.role === "producer" ? (
+                  <ResourceChips uses={resourceUses(building)} />
+                ) : (
+                  <span className="muted">{ROLE_LABELS[info.role]}</span>
+                )}
                 <span className="muted">· биомов: {allowedBiomes(building).length}</span>
               </span>
             </span>

@@ -1,0 +1,6 @@
+node_modules
+dist
+.cache
+.snapshots
+*.log
+prototypes/*/art/shots

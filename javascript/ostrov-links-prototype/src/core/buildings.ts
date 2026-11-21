@@ -1,24 +1,103 @@
+import artilleryTowerIcon from "../assets/icons/artillery-tower.png";
+import barricadesIcon from "../assets/icons/barricades.png";
 import converterIcon from "../assets/icons/converter.png";
+import cyberpsychoGhettoIcon from "../assets/icons/cyberpsycho-ghetto.png";
+import electricStationIcon from "../assets/icons/electric-station.png";
 import farmIcon from "../assets/icons/farm.png";
+import forgeIcon from "../assets/icons/forge.png";
 import masonsGuildIcon from "../assets/icons/masons-guild.png";
 import mineIcon from "../assets/icons/mine.png";
 import observatoryIcon from "../assets/icons/observatory.png";
 import sawmillIcon from "../assets/icons/sawmill.png";
+import survivorsOutpostIcon from "../assets/icons/survivors-outpost.png";
 import universityIcon from "../assets/icons/university.png";
 import villageIcon from "../assets/icons/village.png";
+import waterTowerIcon from "../assets/icons/water-tower.png";
 import { BIOMES } from "./biomes";
-import type { TBiomeId, TBuildingId, TBuildingInfo, TBuildingLinks, TFace, TLinks, TYieldResourceId } from "./types";
+import type {
+  TBiomeId,
+  TBuildingId,
+  TBuildingInfo,
+  TBuildingLinks,
+  TBuildingRole,
+  TFace,
+  TLinks,
+  TYieldResourceId,
+} from "./types";
 
+/** The order follows the design map: production, boosters, defense. */
 const BUILDINGS: readonly TBuildingInfo[] = [
-  { id: "farm", label: "Ферма", art: farmIcon },
-  { id: "mine", label: "Рудник", art: mineIcon },
-  { id: "sawmill", label: "Лесопилка", art: sawmillIcon },
-  { id: "village", label: "Деревня", art: villageIcon },
-  { id: "masons_guild", label: "Гильдия масонов", art: masonsGuildIcon },
-  { id: "observatory", label: "Обсерватория", art: observatoryIcon },
-  { id: "university", label: "Университет", art: universityIcon },
-  { id: "converter", label: "Центральный конвертер", art: converterIcon },
+  {
+    id: "survivors_outpost",
+    label: "Форпост выживших",
+    art: survivorsOutpostIcon,
+    role: "producer",
+    rules: [
+      "Самое простое здание. Оно доступно с начала игры.",
+      "Ресурс зависит от биома: грань биома даёт ресурс, типичный для этого биома.",
+    ],
+  },
+  { id: "farm", label: "Ферма", art: farmIcon, role: "producer" },
+  {
+    id: "water_tower",
+    label: "Водонапорная башня",
+    art: waterTowerIcon,
+    role: "booster",
+    rules: ["Усиливает производство еды у зданий рядом."],
+  },
+  {
+    id: "forge",
+    label: "Кузница",
+    art: forgeIcon,
+    role: "booster",
+    rules: ["Усиливает производство дерева, камня и механизмов у зданий рядом."],
+  },
+  { id: "village", label: "Деревня", art: villageIcon, role: "producer" },
+  { id: "mine", label: "Рудник", art: mineIcon, role: "producer" },
+  { id: "sawmill", label: "Лесопилка", art: sawmillIcon, role: "producer" },
+  { id: "masons_guild", label: "Гильдия масонов", art: masonsGuildIcon, role: "producer" },
+  { id: "electric_station", label: "Электростанция", art: electricStationIcon, role: "producer" },
+  { id: "university", label: "Университет", art: universityIcon, role: "producer" },
+  {
+    id: "observatory",
+    label: "Обсерватория",
+    art: observatoryIcon,
+    role: "booster",
+    rules: ["Усиливает производство науки и маны у зданий рядом."],
+  },
+  { id: "converter", label: "Центральный конвертер", art: converterIcon, role: "producer" },
+  {
+    id: "artillery_tower",
+    label: "Артиллерийская башня",
+    art: artilleryTowerIcon,
+    role: "defense",
+    rules: ["Дальнобойная защита: башня стреляет по врагам на расстоянии."],
+  },
+  {
+    id: "barricades",
+    label: "Заграждения",
+    art: barricadesIcon,
+    role: "defense",
+    rules: ["Пассивная защита: мины и ежи мешают врагам двигаться."],
+  },
+  {
+    id: "cyberpsycho_ghetto",
+    label: "Гетто киберпсихов",
+    art: cyberpsychoGhettoIcon,
+    role: "producer",
+    rules: [
+      "В гетто можно селить только сумасшедших.",
+      "Сумасшедшие в гетто не строят модуль «Гедонистический рай».",
+      "Сумасшедшие в гетто добавляют зданию меньше фиксированной токсичности, чем в других зданиях.",
+    ],
+  },
 ];
+
+const ROLE_LABELS: Readonly<Record<TBuildingRole, string>> = {
+  producer: "Производство",
+  booster: "Усилитель",
+  defense: "Защита",
+};
 
 const BUILDING_BY_ID = new Map(BUILDINGS.map((building) => [building.id, building]));
 
@@ -35,13 +114,19 @@ const isBuildingId = (value: unknown): value is TBuildingId => {
   return typeof value === "string" && BUILDING_BY_ID.has(value as TBuildingId);
 };
 
+/** Only a producer has a die. */
+const hasDie = (id: TBuildingId) => getBuilding(id).role === "producer";
+
 const face = (resource: TYieldResourceId, amount: number, toxicity: number): TFace => ({
   resource,
   amount,
   toxicity,
 });
 
-/** Village, masons guild, observatory and university share the numbers; only the resource differs. */
+/**
+ * Village, masons guild and university share the numbers; only the resource differs.
+ * The cyberpsycho ghetto copies them too, until it gets its own numbers.
+ */
 const settlementLinks = (id: TBuildingId, resource: TYieldResourceId): TBuildingLinks => ({
   id,
   yields: resource,
@@ -58,11 +143,94 @@ const settlementLinks = (id: TBuildingId, resource: TYieldResourceId): TBuilding
   },
 });
 
+/** A building without a die: the listed biomes allow it and add no face. */
+const noDieLinks = (id: TBuildingId, biomes: readonly TBiomeId[]): TBuildingLinks => ({
+  id,
+  yields: null,
+  baseFaces: [],
+  biomeFaces: Object.fromEntries(biomes.map((biomeId) => [biomeId, null])),
+});
+
+/** The resource a biome is known for. The survivors outpost rolls it on the biome face. */
+const OUTPOST_BIOME_RESOURCES: Readonly<Record<TBiomeId, TYieldResourceId>> = {
+  grassland: "food",
+  plains: "food",
+  savanna: "food",
+  swamp: "food",
+  tundra: "food",
+  forrest: "wood",
+  rainforest: "wood",
+  taiga: "wood",
+  hills: "stone",
+  mountains: "stone",
+  cliffs: "stone",
+  crater: "stone",
+  badlands: "stone",
+  volcano: "stone",
+  desert: "stone",
+  polar_desert: "stone",
+};
+
+const ALL_BIOME_IDS = BIOMES.map((biome) => biome.id);
+
 /**
- * The links of `javascript/ostrov-prototype/src/core/buildings.ts`. The editor
+ * The first links come from `javascript/ostrov-prototype/src/core/buildings.ts`.
+ * The buildings of the design map that the prototype lacks have draft numbers. The editor
  * starts from them, and "Сбросить" returns to them.
  */
 const DEFAULT_LINKS: TLinks = {
+  survivors_outpost: {
+    id: "survivors_outpost",
+    yields: "food",
+    baseFaces: [face("food", 1, 0), face("food", 1, 0), face("wood", 1, 0), face("stone", 1, 0)],
+    biomeFaces: Object.fromEntries(
+      BIOMES.map((biome): [TBiomeId, TFace] => [biome.id, face(OUTPOST_BIOME_RESOURCES[biome.id], 2, 0)]),
+    ),
+  },
+  water_tower: noDieLinks("water_tower", [
+    "grassland",
+    "plains",
+    "savanna",
+    "swamp",
+    "tundra",
+    "hills",
+    "forrest",
+    "rainforest",
+  ]),
+  forge: noDieLinks("forge", [
+    "hills",
+    "mountains",
+    "forrest",
+    "taiga",
+    "plains",
+    "grassland",
+    "cliffs",
+    "crater",
+    "badlands",
+    "volcano",
+  ]),
+  electric_station: {
+    id: "electric_station",
+    yields: "electricity",
+    baseFaces: [
+      face("electricity", 1, 1),
+      face("electricity", 2, 2),
+      face("electricity", 3, 3),
+      face("electricity", 2, 1),
+    ],
+    biomeFaces: {
+      plains: face("electricity", 2, 1),
+      grassland: face("electricity", 2, 1),
+      hills: face("electricity", 3, 1),
+      mountains: face("electricity", 3, 2),
+      cliffs: face("electricity", 3, 1),
+      desert: face("electricity", 4, 2),
+      tundra: face("electricity", 2, 1),
+      volcano: face("electricity", 5, 3),
+    },
+  },
+  artillery_tower: noDieLinks("artillery_tower", ALL_BIOME_IDS),
+  barricades: noDieLinks("barricades", ALL_BIOME_IDS),
   farm: {
     id: "farm",
     yields: "food",
@@ -99,9 +267,19 @@ const DEFAULT_LINKS: TLinks = {
     },
   },
   village: settlementLinks("village", "population"),
-  masons_guild: settlementLinks("masons_guild", "hammers"),
-  observatory: settlementLinks("observatory", "scouting"),
+  masons_guild: settlementLinks("masons_guild", "mechanisms"),
+  observatory: noDieLinks("observatory", [
+    "hills",
+    "mountains",
+    "cliffs",
+    "desert",
+    "polar_desert",
+    "tundra",
+    "plains",
+    "grassland",
+  ]),
   university: settlementLinks("university", "science"),
+  cyberpsycho_ghetto: settlementLinks("cyberpsycho_ghetto", "mechanisms"),
   converter: {
     id: "converter",
     yields: "mana",
@@ -110,4 +288,4 @@ const DEFAULT_LINKS: TLinks = {
   },
 };
 
-export { BUILDINGS, DEFAULT_LINKS, face, getBuilding, isBuildingId };
+export { BUILDINGS, DEFAULT_LINKS, face, getBuilding, hasDie, isBuildingId, ROLE_LABELS };
